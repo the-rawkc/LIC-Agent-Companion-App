@@ -9,7 +9,7 @@ export const SAMPLE_RAW_POLICY_ROWS: RawExtractedRow[] = [
   {
     sNo: '1',
     policyNo: '242647587',
-    name: 'Ravi Mohan Rohela',
+    name: 'Rajesh Kumar',
     planTermPpt: '749/15/01',
     sumAssured: '1,81,250',
     doc: '30/06/2026',
@@ -37,7 +37,7 @@ export const SAMPLE_RAW_POLICY_ROWS: RawExtractedRow[] = [
   {
     sNo: '3',
     policyNo: '242647528',
-    name: 'CHITRANSH RUHELA',
+    name: 'CHITRANSH SHARMA',
     planTermPpt: '717/1/1',
     sumAssured: '0',
     doc: '28/06/2026',
@@ -163,7 +163,7 @@ export const SAMPLE_RAW_POLICY_ROWS: RawExtractedRow[] = [
   {
     sNo: '12',
     policyNo: '545860030',
-    name: 'ABHISHEK RUHELA',
+    name: 'ABHISHEK VERMA',
     planTermPpt: '733/22/19',
     sumAssured: '0',
     doc: '28/02/2026',
@@ -317,7 +317,7 @@ export const SAMPLE_RAW_POLICY_ROWS: RawExtractedRow[] = [
   {
     sNo: '300',
     policyNo: '228227029',
-    name: 'Ravi Mohan Ruhela',
+    name: 'Rajesh Kumar',
     planTermPpt: '814/35/35',
     sumAssured: '1,00,000',
     doc: '28/09/2019',
@@ -331,7 +331,7 @@ export const SAMPLE_RAW_POLICY_ROWS: RawExtractedRow[] = [
   {
     sNo: '301',
     policyNo: '228227030',
-    name: 'Ravi Mohan Ruhela',
+    name: 'Rajesh Kumar',
     planTermPpt: '814/34/34',
     sumAssured: '1,00,000',
     doc: '28/09/2019',

@@ -152,7 +152,7 @@ export function AgencyCloudModal({ isOpen, onClose, mode, onSuccess }: AgencyClo
               type="text"
               value={agentName}
               onChange={(e) => setAgentName(e.target.value)}
-              placeholder="e.g. Ravi Rohela"
+              placeholder="e.g. Ramesh Kumar"
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>

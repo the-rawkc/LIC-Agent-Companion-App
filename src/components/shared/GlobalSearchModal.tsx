@@ -112,7 +112,7 @@ export function GlobalSearchModal({ isOpen, onClose }: GlobalSearchModalProps) {
           {!query && (
             <div className="py-6 text-center text-xs text-slate-400 space-y-1">
               <p>Type 3+ digits for policy number, or letters for customer name.</p>
-              <p className="font-mono">e.g. "242647", "Ravi", "Ghanshyam", "736"</p>
+              <p className="font-mono">e.g. "242647", "Sharma", "Ghanshyam", "736"</p>
             </div>
           )}
 

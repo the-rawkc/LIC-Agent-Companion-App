@@ -32,7 +32,7 @@ describe('Security, Encryption & Backup Pipeline', () => {
       id: 'pol-backup-test',
       policyNumber: '242647587',
       customerId: 'cust-1',
-      customerName: 'Ravi Mohan Rohela',
+      customerName: 'Rajesh Kumar',
       planCode: '749',
       term: 15,
       premiumPayingTerm: 1,

@@ -18,7 +18,7 @@ describe('Database Repositories & Business Logic', () => {
       id: 'pol-1',
       policyNumber: '242647587',
       customerId: 'cust-1',
-      customerName: 'Ravi Mohan Rohela',
+      customerName: 'Rajesh Kumar',
       planCode: '749',
       term: 15,
       premiumPayingTerm: 1,
@@ -44,7 +44,7 @@ describe('Database Repositories & Business Logic', () => {
     const found = await policyRepository.getByPolicyNumber('242647587');
 
     expect(found).toBeDefined();
-    expect(found?.customerName).toBe('Ravi Mohan Rohela');
+    expect(found?.customerName).toBe('Rajesh Kumar');
     expect(found?.sumAssured).toBe(181250);
   });
 

@@ -69,7 +69,7 @@ export function DashboardPage() {
       if (sampleCustomer.rows[0]) {
         await reminderRepository.create({
           customerId: 'demo-customer',
-          title: 'Premium Follow-up: Ravi Mohan Rohela',
+          title: 'Premium Follow-up: Rajesh Kumar',
           description: 'Call regarding next premium verification for policy 242647587',
           dueDate: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
           reminderType: 'premium_due_verification',

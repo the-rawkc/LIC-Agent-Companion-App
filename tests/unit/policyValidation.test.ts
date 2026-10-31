@@ -6,7 +6,7 @@ describe('Policy Normalization & Validation', () => {
     const raw = {
       sNo: '1',
       policyNo: '242647587',
-      name: 'Ravi Mohan Rohela',
+      name: 'Rajesh Kumar',
       planTermPpt: '749/15/01',
       sumAssured: '1,81,250',
       doc: '30/06/2026',
@@ -37,7 +37,7 @@ describe('Policy Normalization & Validation', () => {
   it('detects duplicate policy number against existing set', () => {
     const raw = {
       policyNo: '242647587',
-      name: 'Ravi Mohan',
+      name: 'Rajesh Kumar',
       planTermPpt: '749/15/01',
       doc: '30/06/2026',
       mode: 'Single',

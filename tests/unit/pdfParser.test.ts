@@ -9,7 +9,7 @@ describe('PDF Row Reconstruction & Parser', () => {
     expect(isHeaderOrFooterLine('To Be Continued...')).toBe(true);
     expect(isHeaderOrFooterLine('i) This Report is based on the last fup updation.')).toBe(true);
     expect(isHeaderOrFooterLine('-:1 :-')).toBe(true);
-    expect(isHeaderOrFooterLine('1 242647587 Ravi Mohan Rohela 749/15/01 1,81,250 30/06/2026 Single 30/06/2027 1,45,000 30/06/2041')).toBe(false);
+    expect(isHeaderOrFooterLine('1 242647587 Rajesh Kumar 749/15/01 1,81,250 30/06/2026 Single 30/06/2027 1,45,000 30/06/2041')).toBe(false);
   });
 
   it('extracts report date from header string', () => {
@@ -18,13 +18,13 @@ describe('PDF Row Reconstruction & Parser', () => {
   });
 
   it('accurately parses standard policy row without DOB', () => {
-    const rawLine = '1 242647587 Ravi Mohan Rohela 749/15/01 1,81,250 30/06/2026 Single 30/06/2027 1,45,000 30/06/2041';
+    const rawLine = '1 242647587 Rajesh Kumar 749/15/01 1,81,250 30/06/2026 Single 30/06/2027 1,45,000 30/06/2041';
     const parsed = parseRawLine(rawLine, 1);
 
     expect(parsed).not.toBeNull();
     expect(parsed?.sNo).toBe('1');
     expect(parsed?.policyNo).toBe('242647587');
-    expect(parsed?.name).toBe('Ravi Mohan Rohela');
+    expect(parsed?.name).toBe('Rajesh Kumar');
     expect(parsed?.planTermPpt).toBe('749/15/01');
     expect(parsed?.sumAssured).toBe('1,81,250');
     expect(parsed?.doc).toBe('30/06/2026');

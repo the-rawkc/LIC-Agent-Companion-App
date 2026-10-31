@@ -251,7 +251,7 @@ export function ProfilePage() {
                 required
                 value={profile.fullName}
                 onChange={(e) => handleInputChange('fullName', e.target.value)}
-                placeholder="e.g. Ravi Mohan Rohela"
+                placeholder="e.g. Ramesh Chandra Sharma"
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -290,7 +290,7 @@ export function ProfilePage() {
                 type="email"
                 value={profile.email}
                 onChange={(e) => handleInputChange('email', e.target.value)}
-                placeholder="e.g. ravi.lic@gmail.com"
+                placeholder="e.g. advisor.lic@gmail.com"
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -484,7 +484,7 @@ export function ProfilePage() {
               rows={3}
               value={profile.whatsappSignature}
               onChange={(e) => handleInputChange('whatsappSignature', e.target.value)}
-              placeholder="e.g. With warm regards,&#10;Ravi Rohela&#10;Life Insurance Corporation of India (LIC)"
+              placeholder="e.g. With warm regards,&#10;LIC Financial Advisor&#10;Life Insurance Corporation of India (LIC)"
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
