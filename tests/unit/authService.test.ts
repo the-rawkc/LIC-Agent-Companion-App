@@ -203,4 +203,21 @@ describe('Multi-Agent Authentication & Isolated Data Tenancy', () => {
     expect(migratedPolicies).toHaveLength(1);
     expect(migratedPolicies[0].policyNumber).toBe('LEGACY-12345');
   });
+
+  it('restores and preserves personal profile data upon registration and login', async () => {
+    const { profileRepository } = await import('@/db/repositories/profileRepository');
+    
+    // Register agent with personal name & mobile
+    await authService.register({
+      agencyCode: 'PERSONAL_AGENT',
+      mobileNumber: '9876543210',
+      agentName: 'Vikramaditya Sharma',
+      pin: '9876',
+    });
+
+    const prof = await profileRepository.getProfile();
+    expect(prof.agencyCode).toBe('PERSONAL_AGENT');
+    expect(prof.fullName).toBe('Vikramaditya Sharma');
+    expect(prof.mobileNumber).toBe('9876543210');
+  });
 });

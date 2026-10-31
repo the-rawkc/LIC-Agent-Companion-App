@@ -40,19 +40,47 @@ export const DEFAULT_PROFILE: AgentProfile = {
 export const profileRepository = {
   async getProfile(): Promise<AgentProfile> {
     const saved = await settingsRepository.get<AgentProfile | null>('agent_profile', null);
+
+    // Retrieve active logged in agent account from session/local storage
+    let activeAgency = '';
+    let activeName = '';
+    let activeMobile = '';
+    try {
+      const stored = localStorage.getItem('lic_companion_current_agent');
+      if (stored) {
+        const ag = JSON.parse(stored);
+        activeAgency = ag.agencyCode || '';
+        activeName = ag.agentName && ag.agentName !== 'LIC Advisor' ? ag.agentName : '';
+        activeMobile = ag.mobile || '';
+      }
+    } catch {}
+
+    const legacyCode = await settingsRepository.get<string>('agency_code', '');
+    const legacyName = await settingsRepository.get<string>('agent_name', '');
+
+    const resolvedAgency = saved?.agencyCode || activeAgency || legacyCode || DEFAULT_PROFILE.agencyCode;
+    const resolvedName =
+      saved?.fullName && saved.fullName !== DEFAULT_PROFILE.fullName
+        ? saved.fullName
+        : activeName || legacyName || DEFAULT_PROFILE.fullName;
+    const resolvedMobile = saved?.mobileNumber || activeMobile || DEFAULT_PROFILE.mobileNumber;
+
     if (!saved) {
-      // Check if agency_code or agent_name exists in legacy settings
-      const legacyCode = await settingsRepository.get<string>('agency_code', '');
-      const legacyName = await settingsRepository.get<string>('agent_name', '');
       return {
         ...DEFAULT_PROFILE,
-        agencyCode: legacyCode || DEFAULT_PROFILE.agencyCode,
-        fullName: legacyName || DEFAULT_PROFILE.fullName,
+        agencyCode: resolvedAgency,
+        fullName: resolvedName,
+        mobileNumber: resolvedMobile,
+        whatsappNumber: resolvedMobile || DEFAULT_PROFILE.whatsappNumber,
       };
     }
+
     return {
       ...DEFAULT_PROFILE,
       ...saved,
+      agencyCode: resolvedAgency,
+      fullName: resolvedName,
+      mobileNumber: resolvedMobile,
     };
   },
 

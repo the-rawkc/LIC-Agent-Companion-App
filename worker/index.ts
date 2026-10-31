@@ -175,10 +175,36 @@ export default {
           const policies: any[] = Array.isArray(body.policies) ? body.policies : [];
           const customers: any[] = Array.isArray(body.customers) ? body.customers : [];
           const reminders: any[] = Array.isArray(body.reminders) ? body.reminders : [];
+          const profile = body.profile || null;
           const now = new Date().toISOString();
+
+          // Ensure cloud_settings table exists
+          try {
+            await env.DB.prepare(
+              `CREATE TABLE IF NOT EXISTS cloud_settings (
+                key TEXT NOT NULL,
+                agency_code TEXT NOT NULL,
+                data_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (key, agency_code)
+              )`
+            ).run();
+          } catch {}
 
           // Chunk queries to stay well within D1 batch boundaries (maximum 100 statements per batch)
           const statements: any[] = [];
+
+          if (profile) {
+            statements.push(
+              env.DB.prepare(
+                `INSERT INTO cloud_settings (key, agency_code, data_json, updated_at)
+                 VALUES (?, ?, ?, ?)
+                 ON CONFLICT(key, agency_code) DO UPDATE SET
+                   data_json = excluded.data_json,
+                   updated_at = excluded.updated_at`
+              ).bind('agent_profile', agencyCode, JSON.stringify(profile), now)
+            );
+          }
 
           for (const p of policies) {
             statements.push(
@@ -290,6 +316,18 @@ export default {
           const customers = customerRows.results.map((r) => JSON.parse(r.data_json));
           const reminders = reminderRows.results.map((r) => JSON.parse(r.data_json));
 
+          let profile = null;
+          try {
+            const profileRow = await env.DB.prepare(
+              'SELECT data_json FROM cloud_settings WHERE agency_code = ? AND key = ?'
+            )
+              .bind(agencyCode, 'agent_profile')
+              .first<{ data_json: string }>();
+            if (profileRow?.data_json) {
+              profile = JSON.parse(profileRow.data_json);
+            }
+          } catch {}
+
           return jsonResponse({
             success: true,
             agencyCode,
@@ -297,6 +335,7 @@ export default {
             policies,
             customers,
             reminders,
+            profile,
           });
         } catch (err: any) {
           return jsonResponse({ error: err.message }, 500);

@@ -44,6 +44,10 @@ export function ProfilePage() {
   async function loadProfile() {
     setIsLoading(true);
     try {
+      const current = authService.getCurrentAgent();
+      if (current?.agencyCode) {
+        await authService.restoreOrMigrateProfile(current.agencyCode);
+      }
       const data = await profileRepository.getProfile();
       setProfile(data);
     } finally {

@@ -86,6 +86,8 @@ export const d1SyncService = {
     const policies = await db.policies.toArray();
     const customers = await db.customers.toArray();
     const reminders = await db.reminders.toArray();
+    const profileItem = await db.appSettings.get('agent_profile');
+    const profile = profileItem?.value || null;
 
     const res = await fetch(`${base}/api/sync/push`, {
       method: 'POST',
@@ -96,6 +98,7 @@ export const d1SyncService = {
         policies,
         customers,
         reminders,
+        profile,
       }),
     });
 
@@ -134,9 +137,10 @@ export const d1SyncService = {
     const cloudPolicies: Policy[] = data.policies || [];
     const cloudCustomers: Customer[] = data.customers || [];
     const cloudReminders: Reminder[] = data.reminders || [];
+    const cloudProfile = data.profile || null;
 
     // Atomically restore records into IndexedDB
-    await db.transaction('rw', [db.policies, db.customers, db.reminders], async () => {
+    await db.transaction('rw', [db.policies, db.customers, db.reminders, db.appSettings], async () => {
       if (cloudCustomers.length > 0) {
         await db.customers.bulkPut(cloudCustomers);
       }
@@ -145,6 +149,20 @@ export const d1SyncService = {
       }
       if (cloudReminders.length > 0) {
         await db.reminders.bulkPut(cloudReminders);
+      }
+      if (cloudProfile) {
+        await db.appSettings.put({
+          key: 'agent_profile',
+          value: cloudProfile,
+          updatedAt: new Date().toISOString(),
+        });
+        if (cloudProfile.fullName) {
+          await db.appSettings.put({
+            key: 'agent_name',
+            value: cloudProfile.fullName,
+            updatedAt: new Date().toISOString(),
+          });
+        }
       }
     });
 

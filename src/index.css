@@ -5,11 +5,38 @@
 @layer base {
   html {
     -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
   }
   
   body {
     overflow-x: hidden;
   }
+}
+
+/* Native-feeling Smooth Page Enter & Screen Transitions */
+@keyframes pageFadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: pageFadeInUp 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+/* Fluid hardware-accelerated taps & active states */
+.tap-effect {
+  transition: transform 0.12s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.12s ease;
+}
+.tap-effect:active {
+  transform: scale(0.96);
+  opacity: 0.88;
 }
 
 /* Custom scrollbars for slick mobile-feel lists */

@@ -47,9 +47,14 @@ export function DashboardPage() {
   async function loadDashboardData() {
     setIsLoading(true);
     try {
+      const code = getActiveAgencyCode();
+      if (code) {
+        // Ensure personal credentials and profile are migrated / restored
+        await authService.restoreOrMigrateProfile(code);
+      }
+
       let data = await analyticsService.getDashboardStats();
       if (data.totalPolicies === 0) {
-        const code = getActiveAgencyCode();
         if (code) {
           const res = await authService.autoRestoreOrMigrateData(code);
           if (res.restored) {

@@ -289,19 +289,107 @@ export const authService = {
   },
 
   /**
+   * Automatically restores or migrates personal profile and settings
+   * from legacy database or registered account credentials.
+   */
+  async restoreOrMigrateProfile(agencyCode: string, pin?: string): Promise<boolean> {
+    const sanitized = agencyCode.trim().toUpperCase();
+    const agentDb = getDatabase(sanitized);
+
+    try {
+      const currentProfileItem = await agentDb.appSettings.get('agent_profile');
+      const curVal = currentProfileItem?.value as any;
+      const hasValidCurrentProfile =
+        curVal &&
+        curVal.fullName &&
+        curVal.fullName !== 'LIC Financial Advisor';
+
+      // 1. Check legacy database for saved profile or settings
+      let legacyProfile: any = null;
+      try {
+        const legacyDb = getLegacyDatabase();
+        const legacyProfileItem = await legacyDb.appSettings.get('agent_profile');
+        if (legacyProfileItem && legacyProfileItem.value) {
+          legacyProfile = legacyProfileItem.value;
+        }
+
+        // Migrate other legacy settings (theme, reportDate, etc.)
+        const legacySettings = await legacyDb.appSettings.toArray();
+        for (const item of legacySettings) {
+          const existing = await agentDb.appSettings.get(item.key);
+          if (!existing) {
+            await agentDb.appSettings.put(item);
+          }
+        }
+      } catch {}
+
+      // 2. Lookup registered account info
+      const account =
+        this.getRegisteredAgents().find((a) => a.agencyCode === sanitized) ||
+        this.getCurrentAgent();
+
+      if (!hasValidCurrentProfile) {
+        const mergedProfile = {
+          fullName: legacyProfile?.fullName || account?.agentName || 'LIC Financial Advisor',
+          agencyCode: sanitized,
+          branchName: legacyProfile?.branchName || 'Main City Branch',
+          branchCode: legacyProfile?.branchCode || '',
+          division: legacyProfile?.division || '',
+          mobileNumber: legacyProfile?.mobileNumber || account?.mobileNumber || '',
+          whatsappNumber: legacyProfile?.whatsappNumber || account?.mobileNumber || '',
+          email: legacyProfile?.email || '',
+          clubMembership: legacyProfile?.clubMembership || "Chairman's Club Member",
+          developmentOfficerName: legacyProfile?.developmentOfficerName || '',
+          developmentOfficerMobile: legacyProfile?.developmentOfficerMobile || '',
+          agencyStartDate: legacyProfile?.agencyStartDate || '2018-04-01',
+          officeAddress: legacyProfile?.officeAddress || '',
+          whatsappSignature:
+            legacyProfile?.whatsappSignature ||
+            'With warm regards,\nLIC Life Insurance Advisor\nLife Insurance Corporation of India',
+          updatedAt: new Date().toISOString(),
+        };
+
+        await agentDb.appSettings.put({
+          key: 'agent_profile',
+          value: mergedProfile,
+          updatedAt: new Date().toISOString(),
+        });
+        await agentDb.appSettings.put({
+          key: 'agent_name',
+          value: mergedProfile.fullName,
+          updatedAt: new Date().toISOString(),
+        });
+        await agentDb.appSettings.put({
+          key: 'agency_code',
+          value: sanitized,
+          updatedAt: new Date().toISOString(),
+        });
+        return true;
+      }
+    } catch (e) {
+      console.warn('Profile restore error:', e);
+    }
+    return false;
+  },
+
+  /**
    * Automatically restore or migrate policies, customers, and reminders for an agent.
    * Checks:
-   * 1. Legacy single-tenant IndexedDB ('LICAgentCompanionDB')
-   * 2. Cloudflare D1 Cloud Backup
+   * 1. Personal Profile & Settings Migration
+   * 2. Legacy single-tenant IndexedDB ('LICAgentCompanionDB')
+   * 3. Cloudflare D1 Cloud Backup
    */
   async autoRestoreOrMigrateData(
     agencyCode: string,
     pin?: string
-  ): Promise<{ restored: boolean; count: number; source: 'legacy' | 'cloud' | 'none' }> {
+  ): Promise<AutoRestoreResult> {
     const sanitized = agencyCode.trim().toUpperCase();
     const agentDb = getDatabase(sanitized);
 
-    // If agent already has policies in their DB, no restore needed
+    // Step 0: Always ensure personal profile and credentials are recovered and restored
+    await this.restoreOrMigrateProfile(sanitized, pin);
+
+    // If agent already has policies in their DB, no policy restore needed
     const currentCount = await agentDb.policies.count();
     if (currentCount > 0) {
       return { restored: false, count: currentCount, source: 'none' };
