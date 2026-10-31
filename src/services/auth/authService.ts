@@ -1,5 +1,5 @@
 import { hashPin, generateSalt, saltToHex, hexToSalt } from '@/services/security/pinService';
-import { switchAgentDatabase, getDatabase, getActiveAgencyCode } from '@/db/database';
+import { switchAgentDatabase, getDatabase, getLegacyDatabase, getActiveAgencyCode } from '@/db/database';
 import { profileRepository } from '@/db/repositories/profileRepository';
 import { d1SyncService } from '@/services/cloud/d1SyncService';
 
@@ -11,6 +11,12 @@ export interface AgentAccount {
   pinSalt: string;
   createdAt: string;
   lastLoginAt: string;
+}
+
+export interface AutoRestoreResult {
+  restored: boolean;
+  count: number;
+  source: 'legacy' | 'cloud' | 'none';
 }
 
 const REGISTRY_STORAGE_KEY = 'lic_agent_accounts_registry';
@@ -70,7 +76,7 @@ export const authService = {
     mobileNumber: string;
     agentName?: string;
     pin: string;
-  }): Promise<{ success: boolean; agent: AgentAccount; message: string }> {
+  }): Promise<{ success: boolean; agent: AgentAccount; message: string; restoredCount?: number }> {
     const agencyCode = params.agencyCode.trim().toUpperCase();
     const mobileNumber = params.mobileNumber.replace(/\D/g, '').slice(-10);
     const agentName = params.agentName?.trim() || `Agent ${agencyCode}`;
@@ -125,11 +131,12 @@ export const authService = {
       whatsappNumber: mobileNumber,
     });
 
-    // Check if legacy single-tenant DB had data and copy it over if this new DB is empty
+    // Check if legacy single-tenant DB had data or Cloudflare D1 has data and restore it!
+    let restoreResult: AutoRestoreResult = { restored: false, count: 0, source: 'none' };
     try {
-      await this.maybeMigrateLegacyData(agencyCode);
+      restoreResult = await this.autoRestoreOrMigrateData(agencyCode, pin);
     } catch (e) {
-      console.warn('Legacy migration notice:', e);
+      console.warn('Auto restore on register notice:', e);
     }
 
     // Attempt online registration with Cloudflare D1
@@ -147,7 +154,10 @@ export const authService = {
     return {
       success: true,
       agent: newAgent,
-      message: `Account created successfully for Agent ${agencyCode}!`,
+      message: restoreResult.restored
+        ? `Account created & restored ${restoreResult.count} policies for Agent ${agencyCode}!`
+        : `Account created successfully for Agent ${agencyCode}!`,
+      restoredCount: restoreResult.count,
     };
   },
 
@@ -157,7 +167,13 @@ export const authService = {
   async login(
     agencyCodeInput: string,
     pinInput: string
-  ): Promise<{ success: boolean; agent: AgentAccount; restoredFromCloud?: boolean }> {
+  ): Promise<{
+    success: boolean;
+    agent: AgentAccount;
+    restoredFromCloud?: boolean;
+    restoredFromLegacy?: boolean;
+    restoredCount?: number;
+  }> {
     const agencyCode = agencyCodeInput.trim().toUpperCase();
     const pin = pinInput.trim();
 
@@ -192,7 +208,21 @@ export const authService = {
       sessionStorage.setItem(AUTH_FLAG_KEY, 'true');
       sessionStorage.setItem(UNLOCKED_KEY, 'true');
 
-      return { success: true, agent: localAgent };
+      // Check if data needs to be restored from legacy local DB or Cloudflare D1
+      let restoreInfo: AutoRestoreResult = { restored: false, count: 0, source: 'none' };
+      try {
+        restoreInfo = await this.autoRestoreOrMigrateData(agencyCode, pin);
+      } catch (e) {
+        console.warn('Auto restore notice:', e);
+      }
+
+      return {
+        success: true,
+        agent: localAgent,
+        restoredFromCloud: restoreInfo.source === 'cloud',
+        restoredFromLegacy: restoreInfo.source === 'legacy',
+        restoredCount: restoreInfo.count,
+      };
     }
 
     // Not found locally: Check Cloudflare D1 (e.g. re-install or new device)
@@ -217,21 +247,32 @@ export const authService = {
         this.saveRegisteredAgents(agents);
         switchAgentDatabase(agencyCode);
 
-        // Pull policies & customers from Cloudflare D1
-        await d1SyncService.pullFromCloud(agencyCode, pin);
+        // Pull policies & customers from Cloudflare D1 or legacy DB
+        let restoreInfo: AutoRestoreResult = { restored: false, count: 0, source: 'none' };
+        try {
+          restoreInfo = await this.autoRestoreOrMigrateData(agencyCode, pin);
+        } catch (e) {
+          console.warn('Auto restore on cloud login notice:', e);
+        }
 
         sessionStorage.setItem(ACTIVE_AGENCY_KEY, agencyCode);
         sessionStorage.setItem(AUTH_FLAG_KEY, 'true');
         sessionStorage.setItem(UNLOCKED_KEY, 'true');
 
-        return { success: true, agent: restoredAgent, restoredFromCloud: true };
+        return {
+          success: true,
+          agent: restoredAgent,
+          restoredFromCloud: restoreInfo.source === 'cloud',
+          restoredFromLegacy: restoreInfo.source === 'legacy',
+          restoredCount: restoreInfo.count,
+        };
       }
     } catch {
       // Fall through to not found error
     }
 
     throw new Error(
-      `Agency Code "${agencyCode}" was not found. Please click "Register New Agent" to create your personal account.`
+      `Agency Code "${agencyCode}" was not found. Please click "Register First Time" to create your personal account.`
     );
   },
 
@@ -248,29 +289,72 @@ export const authService = {
   },
 
   /**
-   * Migrate legacy data if existing DB has records and new agent DB is empty
+   * Automatically restore or migrate policies, customers, and reminders for an agent.
+   * Checks:
+   * 1. Legacy single-tenant IndexedDB ('LICAgentCompanionDB')
+   * 2. Cloudflare D1 Cloud Backup
    */
-  async maybeMigrateLegacyData(agencyCode: string): Promise<void> {
-    const legacyDb = getDatabase(''); // Default single-tenant DB
-    const agentDb = getDatabase(agencyCode);
+  async autoRestoreOrMigrateData(
+    agencyCode: string,
+    pin?: string
+  ): Promise<{ restored: boolean; count: number; source: 'legacy' | 'cloud' | 'none' }> {
+    const sanitized = agencyCode.trim().toUpperCase();
+    const agentDb = getDatabase(sanitized);
 
-    const agentPolicyCount = await agentDb.policies.count();
-    if (agentPolicyCount > 0) return; // Agent already has data
+    // If agent already has policies in their DB, no restore needed
+    const currentCount = await agentDb.policies.count();
+    if (currentCount > 0) {
+      return { restored: false, count: currentCount, source: 'none' };
+    }
 
-    const legacyPolicyCount = await legacyDb.policies.count();
-    if (legacyPolicyCount === 0) return; // No legacy data to copy
+    // 1. Check legacy single-tenant database ('LICAgentCompanionDB')
+    try {
+      const legacyDb = getLegacyDatabase();
+      const legacyCount = await legacyDb.policies.count();
+      if (legacyCount > 0) {
+        const [policies, customers, reminders, auditLogs] = await Promise.all([
+          legacyDb.policies.toArray(),
+          legacyDb.customers.toArray(),
+          legacyDb.reminders.toArray(),
+          legacyDb.auditLogs.toArray(),
+        ]);
 
-    // Copy legacy policies, customers, and reminders
-    const [policies, customers, reminders] = await Promise.all([
-      legacyDb.policies.toArray(),
-      legacyDb.customers.toArray(),
-      legacyDb.reminders.toArray(),
-    ]);
+        await agentDb.transaction('rw', [agentDb.policies, agentDb.customers, agentDb.reminders, agentDb.auditLogs], async () => {
+          await agentDb.policies.bulkPut(policies);
+          await agentDb.customers.bulkPut(customers);
+          await agentDb.reminders.bulkPut(reminders);
+          await agentDb.auditLogs.bulkPut(auditLogs);
+        });
 
-    await agentDb.transaction('rw', [agentDb.policies, agentDb.customers, agentDb.reminders], async () => {
-      await agentDb.policies.bulkAdd(policies);
-      await agentDb.customers.bulkAdd(customers);
-      await agentDb.reminders.bulkAdd(reminders);
-    });
+        // Also push to Cloudflare D1 so their data is backed up to cloud under their agency code!
+        if (pin) {
+          try {
+            await d1SyncService.pushToCloud(sanitized, pin);
+          } catch {
+            // offline mode
+          }
+        }
+
+        console.log(`Successfully migrated ${policies.length} records from legacy database to ${sanitized}!`);
+        return { restored: true, count: policies.length, source: 'legacy' };
+      }
+    } catch (e) {
+      console.warn('Legacy DB migration notice:', e);
+    }
+
+    // 2. Check Cloudflare D1 if PIN is provided
+    if (pin) {
+      try {
+        const pullResult = await d1SyncService.pullFromCloud(sanitized, pin);
+        if (pullResult.policiesCount > 0) {
+          console.log(`Successfully restored ${pullResult.policiesCount} policies from Cloudflare D1 for ${sanitized}`);
+          return { restored: true, count: pullResult.policiesCount, source: 'cloud' };
+        }
+      } catch (e) {
+        console.warn('Cloud pull notice on login:', e);
+      }
+    }
+
+    return { restored: false, count: 0, source: 'none' };
   },
 };

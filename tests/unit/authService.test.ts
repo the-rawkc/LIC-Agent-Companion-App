@@ -157,4 +157,50 @@ describe('Multi-Agent Authentication & Isolated Data Tenancy', () => {
     const bobClientInAlice = aliceCustomers.find((c) => c.displayName === 'Bob Client Special');
     expect(bobClientInAlice).toBeUndefined();
   });
+
+  it('automatically migrates policies from legacy database when logging in or registering', async () => {
+    // Populate legacy database
+    const { getLegacyDatabase } = await import('@/db/database');
+    const legacyDb = getLegacyDatabase();
+    await legacyDb.policies.clear();
+    await legacyDb.policies.add({
+      id: 'legacy-pol-1',
+      policyNumber: 'LEGACY-12345',
+      customerId: 'cust-legacy-1',
+      customerName: 'Legacy Client',
+      planCode: '814',
+      term: 21,
+      premiumPayingTerm: 21,
+      originalPlanString: '814/21/21',
+      sumAssured: 500000,
+      commencementDate: '2020-01-01',
+      premiumMode: 'Yearly',
+      firstUnpaidPremiumDate: '2026-01-01',
+      premiumAmount: 25000,
+      maturityDate: '2041-01-01',
+      dateOfBirth: null,
+      sourceSerialNumber: 1,
+      sourceReportDate: 'Manual',
+      sourceImportId: null,
+      rawExtractedValues: {},
+      extractionWarnings: [],
+      recordStatus: 'active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    // New agent registers
+    const regRes = await authService.register({
+      agencyCode: 'MIGRATION_AGENT',
+      mobileNumber: '9911223344',
+      agentName: 'Migration Agent',
+      pin: '4321',
+    });
+
+    expect(regRes.restoredCount).toBe(1);
+
+    const migratedPolicies = await policyRepository.getAll();
+    expect(migratedPolicies).toHaveLength(1);
+    expect(migratedPolicies[0].policyNumber).toBe('LEGACY-12345');
+  });
 });

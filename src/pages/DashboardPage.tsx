@@ -27,6 +27,8 @@ import { analyticsService, type DashboardStats } from '@/features/analytics/anal
 import { importService } from '@/services/import/importService';
 import { SAMPLE_RAW_POLICY_ROWS } from '@/services/sampleData/licSampleRecords';
 import { reminderRepository } from '@/db/repositories/reminderRepository';
+import { authService } from '@/services/auth/authService';
+import { getActiveAgencyCode } from '@/db/database';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 
 export function DashboardPage() {
@@ -36,6 +38,7 @@ export function DashboardPage() {
   const [activeTab, setActiveTab] = useState<'fup' | 'maturities' | 'reminders'>('fup');
   const [isDemoLoading, setIsDemoLoading] = useState(false);
   const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
+  const [recoveredBanner, setRecoveredBanner] = useState<string | null>(null);
 
   useEffect(() => {
     loadDashboardData();
@@ -44,7 +47,18 @@ export function DashboardPage() {
   async function loadDashboardData() {
     setIsLoading(true);
     try {
-      const data = await analyticsService.getDashboardStats();
+      let data = await analyticsService.getDashboardStats();
+      if (data.totalPolicies === 0) {
+        const code = getActiveAgencyCode();
+        if (code) {
+          const res = await authService.autoRestoreOrMigrateData(code);
+          if (res.restored) {
+            data = await analyticsService.getDashboardStats();
+            setRecoveredBanner(`Successfully restored ${res.count} policies into your workspace!`);
+            setTimeout(() => setRecoveredBanner(null), 6000);
+          }
+        }
+      }
       setStats(data);
     } catch (err) {
       console.error('Failed to load dashboard statistics', err);
@@ -106,6 +120,14 @@ export function DashboardPage() {
 
   return (
     <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-6xl mx-auto w-full">
+      {/* Recovery Notice Banner */}
+      {recoveredBanner && (
+        <div className="p-4 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-800 rounded-2xl flex items-center gap-3 text-emerald-800 dark:text-emerald-200 text-xs font-semibold animate-in fade-in">
+          <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <span>{recoveredBanner}</span>
+        </div>
+      )}
+
       {/* Welcome Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 rounded-3xl p-5 sm:p-6 text-white shadow-xl relative overflow-hidden">
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-blue-500/10 blur-3xl rounded-full pointer-events-none" />

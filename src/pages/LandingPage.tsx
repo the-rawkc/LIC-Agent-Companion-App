@@ -120,7 +120,10 @@ export function LandingPage() {
 
     try {
       const res = await authService.login(loginAgencyCode, loginPin);
-      setAuthSuccess(`Welcome back, ${res.agent.agentName}! Loading your workspace...`);
+      const notice = res.restoredFromLegacy || res.restoredFromCloud
+        ? `Welcome back, ${res.agent.agentName}! Restored ${res.restoredCount} policies into your workspace.`
+        : `Welcome back, ${res.agent.agentName}! Loading your workspace...`;
+      setAuthSuccess(notice);
       setIsAuthenticated(true);
       setCurrentAgent(res.agent);
       setTimeout(() => {
@@ -152,7 +155,19 @@ export function LandingPage() {
           sessionStorage.setItem('lic_active_agency_code', targetAgency);
           sessionStorage.setItem('lic_authenticated', 'true');
           sessionStorage.setItem('lic_app_unlocked', 'true');
-          setAuthSuccess(`Fingerprint verified! Welcome back, ${agent.agentName}.`);
+
+          let restoredInfo = { restored: false, count: 0 };
+          try {
+            restoredInfo = await authService.autoRestoreOrMigrateData(targetAgency);
+          } catch (e) {
+            console.warn('Biometric restore notice:', e);
+          }
+
+          const notice = restoredInfo.restored
+            ? `Fingerprint verified! Restored ${restoredInfo.count} policies for ${agent.agentName}.`
+            : `Fingerprint verified! Welcome back, ${agent.agentName}.`;
+
+          setAuthSuccess(notice);
           setIsAuthenticated(true);
           setCurrentAgent(agent);
           setTimeout(() => {

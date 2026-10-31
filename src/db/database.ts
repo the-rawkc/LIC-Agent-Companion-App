@@ -56,8 +56,20 @@ export function getActiveDbName(): string {
   return 'LICAgentCompanionDB';
 }
 
+/**
+ * Access the legacy single-tenant database ('LICAgentCompanionDB')
+ * used before multi-tenant agency partitioning.
+ */
+export function getLegacyDatabase(): LICDatabase {
+  const name = 'LICAgentCompanionDB';
+  if (!dbInstances.has(name)) {
+    dbInstances.set(name, new LICDatabase(name));
+  }
+  return dbInstances.get(name)!;
+}
+
 export function getDatabase(agencyCode?: string): LICDatabase {
-  const name = agencyCode
+  const name = agencyCode && agencyCode.trim()
     ? `LICAgentCompanionDB_${agencyCode.trim().toUpperCase()}`
     : getActiveDbName();
 
