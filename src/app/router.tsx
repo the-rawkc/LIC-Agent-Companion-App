@@ -25,11 +25,24 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * Public Landing Route:
+ * If agent is already logged in, seamlessly forward to their active dashboard.
+ * If not authenticated, render the Landing and Login portal.
+ */
+function PublicLandingRoute() {
+  const isAuth = authService.isAuthenticated();
+  if (isAuth) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <LandingPage />;
+}
+
 export function AppRouter() {
   return (
     <Routes>
       {/* Public Landing & Authentication Gate */}
-      <Route path="/" element={<LandingPage />} />
+      <Route path="/" element={<PublicLandingRoute />} />
 
       {/* Authenticated Agent Workspace Routes */}
       <Route

@@ -17,6 +17,14 @@ export function useAppSecurity() {
       setIsPinConfigured(configured);
 
       if (configured) {
+        // If not authenticated or no active agent, do not display lock barrier
+        const activeCode =
+          sessionStorage.getItem('lic_active_agency_code') ||
+          localStorage.getItem('lic_active_agency_code');
+        if (!activeCode) {
+          setIsLocked(false);
+          return;
+        }
         const unlocked = pinService.isSessionUnlocked();
         setIsLocked(!unlocked);
       } else {

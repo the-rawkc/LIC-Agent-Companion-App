@@ -64,7 +64,10 @@ export const pinService = {
     await settingsRepository.set('pinHash', hash);
     await settingsRepository.set('pinSalt', saltToHex(salt));
     await settingsRepository.set('isPinEnabled', true);
-    sessionStorage.setItem('lic_app_unlocked', 'true');
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('lic_app_unlocked', 'true');
+      localStorage.setItem('lic_app_unlocked', 'true');
+    }
   },
 
   async verifyPin(pin: string): Promise<boolean> {
@@ -76,7 +79,10 @@ export const pinService = {
     const computedHash = await hashPin(pin, salt);
 
     if (computedHash === storedHash) {
-      sessionStorage.setItem('lic_app_unlocked', 'true');
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('lic_app_unlocked', 'true');
+        localStorage.setItem('lic_app_unlocked', 'true');
+      }
       return true;
     }
     return false;
@@ -86,14 +92,23 @@ export const pinService = {
     await settingsRepository.set('isPinEnabled', false);
     await settingsRepository.set('pinHash', '');
     await settingsRepository.set('pinSalt', '');
-    sessionStorage.removeItem('lic_app_unlocked');
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('lic_app_unlocked');
+      localStorage.removeItem('lic_app_unlocked');
+    }
   },
 
   isSessionUnlocked(): boolean {
-    return sessionStorage.getItem('lic_app_unlocked') === 'true';
+    if (typeof window === 'undefined') return true;
+    return (
+      sessionStorage.getItem('lic_app_unlocked') === 'true' ||
+      localStorage.getItem('lic_app_unlocked') === 'true'
+    );
   },
 
   lockSession(): void {
+    if (typeof window === 'undefined') return;
     sessionStorage.removeItem('lic_app_unlocked');
+    localStorage.removeItem('lic_app_unlocked');
   }
 };

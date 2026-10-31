@@ -127,67 +127,47 @@ export function AppLayout({ children }: AppLayoutProps) {
     { to: '/settings', label: 'Settings & Cloud Sync', icon: Settings, desc: 'D1 sync, PIN lock & preferences' },
   ];
 
+  const isLandingPage = location.pathname === '/';
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col antialiased overflow-x-hidden w-full max-w-full">
-      {/* PIN Lock Barrier */}
-      <PinLockModal isOpen={isLocked} onSuccess={unlock} />
+      {/* PIN Lock Barrier (Active only in authenticated workspace) */}
+      {!isLandingPage && <PinLockModal isOpen={isLocked} onSuccess={unlock} />}
 
-      {/* Top Header */}
-      <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 pt-safe w-full overflow-x-hidden">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-3">
-          {/* Left: Brand Logo & Title (or Profile Avatar when Authenticated) */}
-          <div className="flex items-center gap-2 shrink-0">
-            {isAuthenticated ? (
-              <>
-                {/* Clickable Profile Avatar on the Left */}
-                <button
-                  onClick={() => navigate('/profile')}
-                  title={`View Agent Profile (${agentName})`}
-                  className="flex items-center gap-1.5 p-0.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition tap-effect focus:outline-none"
-                >
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-xs flex items-center justify-center shrink-0 shadow-xs ring-2 ring-amber-400/40 hover:scale-105 transition">
-                    {agentInitials}
-                  </div>
-                </button>
-
-                {/* Logo & Title */}
-                <div
-                  className="flex items-center gap-1.5 cursor-pointer group tap-effect"
-                  onClick={() => navigate('/dashboard')}
-                  title="Go to Dashboard"
-                >
-                  <AppLogo size={28} />
-                  <div className="flex flex-col leading-tight">
-                    <span className="font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
-                      LIC Companion
-                    </span>
-                    <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium">
-                      {agencyCode ? `Agent ${agencyCode}` : 'Workspace'}
-                    </span>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div
-                className="flex items-center gap-2 cursor-pointer group tap-effect"
-                onClick={() => navigate('/')}
-                title="LIC Agent Companion"
+      {/* Top Header - Rendered strictly in authenticated workspace to avoid ghost flashes on landing */}
+      {!isLandingPage && (
+        <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 pt-safe w-full overflow-x-hidden">
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-3">
+            {/* Left: Profile Avatar & Brand Title */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => navigate('/profile')}
+                title={`View Agent Profile (${agentName})`}
+                className="flex items-center gap-1.5 p-0.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition tap-effect focus:outline-none"
               >
-                <AppLogo size={32} />
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-xs flex items-center justify-center shrink-0 shadow-xs ring-2 ring-amber-400/40 hover:scale-105 transition">
+                  {agentInitials}
+                </div>
+              </button>
+
+              <div
+                className="flex items-center gap-1.5 cursor-pointer group tap-effect"
+                onClick={() => navigate('/dashboard')}
+                title="Go to Dashboard"
+              >
+                <AppLogo size={28} />
                 <div className="flex flex-col leading-tight">
-                  <span className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
-                    LIC Agent Companion
+                  <span className="font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
+                    LIC Companion
                   </span>
-                  <span className="text-[10px] text-slate-400 font-medium">
-                    Advisor Portal
+                  <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium">
+                    {agencyCode ? `Agent ${agencyCode}` : 'Workspace'}
                   </span>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
 
-          {/* Desktop Search Bar (Wide) */}
-          {isAuthenticated && (
+            {/* Desktop Quick Search Pill */}
             <button
               onClick={() => setIsSearchOpen(true)}
               className="hidden md:flex flex-1 max-w-md mx-3 flex items-center justify-between px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200/70 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-400 border border-slate-200/80 dark:border-slate-700/60 transition text-xs sm:text-sm select-none tap-effect"
@@ -201,12 +181,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                 Ctrl+K
               </kbd>
             </button>
-          )}
 
-          {/* Right Action Icons */}
-          <div className="flex items-center gap-1 shrink-0">
-            {/* Mobile Search Icon Button */}
-            {isAuthenticated && (
+            {/* Right Action Icons */}
+            <div className="flex items-center gap-1 shrink-0">
+              {/* Mobile Search Button */}
               <button
                 onClick={() => setIsSearchOpen(true)}
                 title="Global Search (Policies & Customers)"
@@ -215,41 +193,39 @@ export function AppLayout({ children }: AppLayoutProps) {
               >
                 <Search className="w-4 h-4" />
               </button>
-            )}
 
-            {/* Offline indicator */}
-            {!isOnline && (
-              <div
-                title="Working offline"
-                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 text-xs font-medium"
-              >
-                <WifiOff className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Offline</span>
-              </div>
-            )}
+              {/* Offline indicator */}
+              {!isOnline && (
+                <div
+                  title="Working offline"
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 text-xs font-medium"
+                >
+                  <WifiOff className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Offline</span>
+                </div>
+              )}
 
-            {/* Lock button if PIN is set & Authenticated */}
-            {isAuthenticated && isPinConfigured && (
+              {/* Lock button */}
+              {isPinConfigured && (
+                <button
+                  onClick={lock}
+                  title="Lock session"
+                  className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition tap-effect"
+                >
+                  <Lock className="w-4 h-4" />
+                </button>
+              )}
+
+              {/* Dark mode toggle */}
               <button
-                onClick={lock}
-                title="Lock session"
+                onClick={toggleTheme}
+                title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
                 className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition tap-effect"
               >
-                <Lock className="w-4 h-4" />
+                {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
               </button>
-            )}
 
-            {/* Dark mode toggle */}
-            <button
-              onClick={toggleTheme}
-              title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-              className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition tap-effect"
-            >
-              {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
-            </button>
-
-            {/* Switch Agent / Logout (only if Authenticated) */}
-            {isAuthenticated && (
+              {/* Switch Agent / Logout */}
               <button
                 onClick={() => {
                   authService.logout();
@@ -260,15 +236,15 @@ export function AppLayout({ children }: AppLayoutProps) {
               >
                 <LogOut className="w-4 h-4" />
               </button>
-            )}
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
+      )}
 
       {/* Main Container Layout */}
       <div className="flex-1 max-w-7xl w-full mx-auto flex">
-        {/* Desktop Sidebar (Only when Authenticated) */}
-        {isAuthenticated && (
+        {/* Desktop Sidebar (Only in Authenticated Workspace) */}
+        {!isLandingPage && (
           <aside className="hidden lg:flex flex-col w-64 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shrink-0">
             <nav className="space-y-1">
               {navItems.map((item) => {
@@ -352,14 +328,14 @@ export function AppLayout({ children }: AppLayoutProps) {
         {/* Content Area with Silky Smooth Native Route Transition */}
         <main
           key={location.pathname}
-          className={`page-enter flex-1 flex flex-col min-w-0 ${isAuthenticated ? 'pb-20 lg:pb-8' : 'pb-8'}`}
+          className={`page-enter flex-1 flex flex-col min-w-0 ${!isLandingPage ? 'pb-20 lg:pb-8' : 'pb-0'}`}
         >
           {children}
         </main>
       </div>
 
-      {/* Mobile Bottom Navigation Bar (Shown Only when Authenticated) */}
-      {isAuthenticated && (
+      {/* Mobile Bottom Navigation Bar (Active in Workspace) */}
+      {!isLandingPage && (
         <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 pb-safe shadow-lg">
           <div className="grid grid-cols-5 h-16 items-center">
             {navItems.map((item) => {

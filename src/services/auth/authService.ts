@@ -53,9 +53,40 @@ export const authService = {
    */
   isAuthenticated(): boolean {
     if (typeof window === 'undefined') return false;
-    const isAuth = sessionStorage.getItem(AUTH_FLAG_KEY) === 'true';
-    const activeAgency = sessionStorage.getItem(ACTIVE_AGENCY_KEY);
+    const isAuth =
+      sessionStorage.getItem(AUTH_FLAG_KEY) === 'true' ||
+      localStorage.getItem(AUTH_FLAG_KEY) === 'true';
+    const activeAgency =
+      sessionStorage.getItem(ACTIVE_AGENCY_KEY) ||
+      localStorage.getItem(ACTIVE_AGENCY_KEY);
     return Boolean(isAuth && activeAgency);
+  },
+
+  /**
+   * Set active authenticated agent session (persistent across reload)
+   */
+  setSession(agencyCode: string): void {
+    if (typeof window === 'undefined') return;
+    const sanitized = agencyCode.trim().toUpperCase();
+    sessionStorage.setItem(ACTIVE_AGENCY_KEY, sanitized);
+    sessionStorage.setItem(AUTH_FLAG_KEY, 'true');
+    sessionStorage.setItem(UNLOCKED_KEY, 'true');
+    localStorage.setItem(ACTIVE_AGENCY_KEY, sanitized);
+    localStorage.setItem(AUTH_FLAG_KEY, 'true');
+    localStorage.setItem(UNLOCKED_KEY, 'true');
+  },
+
+  /**
+   * Clear active agent session on logout
+   */
+  clearSession(): void {
+    if (typeof window === 'undefined') return;
+    sessionStorage.removeItem(ACTIVE_AGENCY_KEY);
+    sessionStorage.removeItem(AUTH_FLAG_KEY);
+    sessionStorage.removeItem(UNLOCKED_KEY);
+    localStorage.removeItem(ACTIVE_AGENCY_KEY);
+    localStorage.removeItem(AUTH_FLAG_KEY);
+    localStorage.removeItem(UNLOCKED_KEY);
   },
 
   /**
@@ -146,10 +177,8 @@ export const authService = {
       // Offline mode works seamlessly
     }
 
-    // Set active session
-    sessionStorage.setItem(ACTIVE_AGENCY_KEY, agencyCode);
-    sessionStorage.setItem(AUTH_FLAG_KEY, 'true');
-    sessionStorage.setItem(UNLOCKED_KEY, 'true');
+    // Set active persistent session
+    this.setSession(agencyCode);
 
     return {
       success: true,
@@ -203,10 +232,8 @@ export const authService = {
       // Switch active database
       switchAgentDatabase(agencyCode);
 
-      // Set active session
-      sessionStorage.setItem(ACTIVE_AGENCY_KEY, agencyCode);
-      sessionStorage.setItem(AUTH_FLAG_KEY, 'true');
-      sessionStorage.setItem(UNLOCKED_KEY, 'true');
+      // Set active persistent session
+      this.setSession(agencyCode);
 
       // Check if data needs to be restored from legacy local DB or Cloudflare D1
       let restoreInfo: AutoRestoreResult = { restored: false, count: 0, source: 'none' };
@@ -255,9 +282,7 @@ export const authService = {
           console.warn('Auto restore on cloud login notice:', e);
         }
 
-        sessionStorage.setItem(ACTIVE_AGENCY_KEY, agencyCode);
-        sessionStorage.setItem(AUTH_FLAG_KEY, 'true');
-        sessionStorage.setItem(UNLOCKED_KEY, 'true');
+        this.setSession(agencyCode);
 
         return {
           success: true,
@@ -280,12 +305,7 @@ export const authService = {
    * Log out of current agent workspace
    */
   logout(): void {
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem(ACTIVE_AGENCY_KEY);
-      sessionStorage.removeItem(AUTH_FLAG_KEY);
-      sessionStorage.removeItem(UNLOCKED_KEY);
-      localStorage.removeItem(ACTIVE_AGENCY_KEY);
-    }
+    this.clearSession();
   },
 
   /**
