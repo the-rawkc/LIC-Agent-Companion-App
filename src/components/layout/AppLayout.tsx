@@ -18,7 +18,8 @@ import {
   Shield,
   HelpCircle,
   User,
-  LayoutDashboard
+  LayoutDashboard,
+  LogOut
 } from 'lucide-react';
 import { AppLogo } from '../shared/AppLogo';
 import { GlobalSearchModal } from '../shared/GlobalSearchModal';
@@ -27,6 +28,7 @@ import { useAppSecurity } from '@/hooks/useAppSecurity';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { settingsRepository } from '@/db/repositories/settingsRepository';
 import { profileRepository, type AgentProfile } from '@/db/repositories/profileRepository';
+import { authService } from '@/services/auth/authService';
 
 export interface AppLayoutProps {
   children: React.ReactNode;
@@ -40,6 +42,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [agentName, setAgentName] = useState('Advisor');
   const [agentInitials, setAgentInitials] = useState('AG');
+  const [agencyCode, setAgencyCode] = useState('');
 
   const { isPinConfigured, isLocked, unlock, lock, refreshSecurity } = useAppSecurity();
   const isOnline = useNetworkStatus();
@@ -47,6 +50,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   // Load profile initials for header
   useEffect(() => {
     profileRepository.getProfile().then((p) => {
+      if (p.agencyCode) setAgencyCode(p.agencyCode);
       if (p.fullName) {
         setAgentName(p.fullName);
         const inits = p.fullName
@@ -205,6 +209,18 @@ export function AppLayout({ children }: AppLayoutProps) {
             >
               {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
             </button>
+
+            {/* Switch Agent / Logout */}
+            <button
+              onClick={() => {
+                authService.logout();
+                navigate('/');
+              }}
+              title="Switch Agent Account / Log Out"
+              className="p-2 rounded-xl text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </header>
@@ -260,6 +276,35 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </NavLink>
               );
             })}
+
+            {/* Active Agent Session Card in Sidebar */}
+            <div className="pt-4 mt-auto">
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 space-y-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
+                    {agentInitials}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                      {agentName}
+                    </p>
+                    <p className="text-[10px] text-slate-400 font-mono truncate">
+                      {agencyCode ? `Agency: ${agencyCode}` : 'Personal Portal'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    authService.logout();
+                    navigate('/');
+                  }}
+                  className="w-full py-1.5 px-2.5 rounded-xl text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center justify-center gap-1.5 transition border border-rose-200/50 dark:border-rose-900/30"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Switch Agent</span>
+                </button>
+              </div>
+            </div>
           </nav>
         </aside>
 
@@ -344,6 +389,26 @@ export function AppLayout({ children }: AppLayoutProps) {
                   </NavLink>
                 );
               })}
+
+              {/* Mobile Switch Agent Option */}
+              <button
+                onClick={() => {
+                  setIsMoreMenuOpen(false);
+                  authService.logout();
+                  navigate('/');
+                }}
+                className="w-full flex items-center gap-3.5 p-3 rounded-2xl text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition border border-rose-200 dark:border-rose-900/60 mt-3"
+              >
+                <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                  <LogOut className="w-5 h-5" />
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-semibold">Switch Agent Account / Log Out</p>
+                  <p className="text-xs text-rose-500/80">
+                    {agencyCode ? `Active Agency: ${agencyCode}` : 'Exit personal workspace'}
+                  </p>
+                </div>
+              </button>
             </div>
           </div>
         </div>
