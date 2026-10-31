@@ -134,8 +134,8 @@ export function GlobalSearchModal({ isOpen, onClose }: GlobalSearchModalProps) {
                       <div className="w-9 h-9 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
                         <User className="w-4 h-4" />
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-white break-words">
                           {c.displayName}
                         </p>
                         <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
@@ -178,7 +178,7 @@ export function GlobalSearchModal({ isOpen, onClose }: GlobalSearchModalProps) {
                             Plan {p.planCode}
                           </Badge>
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 break-words mt-0.5">
                           {p.customerName} • Prem: {formatCurrency(p.premiumAmount)} ({p.premiumMode}) • FUP: {formatDate(p.firstUnpaidPremiumDate)}
                         </p>
                       </div>

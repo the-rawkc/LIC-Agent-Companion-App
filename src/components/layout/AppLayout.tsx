@@ -283,10 +283,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                       {agentInitials}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                      <p className="text-xs font-bold text-slate-900 dark:text-white break-words">
                         {agentName}
                       </p>
-                      <p className="text-[10px] text-slate-400 font-mono truncate">
+                      <p className="text-[10px] text-slate-400 font-mono break-words">
                         {agencyCode ? `Agency: ${agencyCode}` : 'Personal Portal'}
                       </p>
                     </div>

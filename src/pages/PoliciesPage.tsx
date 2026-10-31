@@ -57,7 +57,7 @@ export function PoliciesPage() {
 
   // Pagination / Batch Rendering
   const [currentPage, setCurrentPage] = useState(1);
-  const PAGE_SIZE = 25;
+  const [pageSize, setPageSize] = useState<number | 'all'>(25);
 
   // Add Policy Modal
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -134,11 +134,34 @@ export function PoliciesPage() {
     );
   });
 
-  const totalPages = Math.ceil(filteredPolicies.length / PAGE_SIZE);
-  const paginatedPolicies = filteredPolicies.slice(
-    (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE
-  );
+  const isShowAll = pageSize === 'all';
+  const effectivePageSize = isShowAll ? filteredPolicies.length || 1 : pageSize;
+  const totalPages = isShowAll ? 1 : Math.max(1, Math.ceil(filteredPolicies.length / effectivePageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
+  const paginatedPolicies = isShowAll
+    ? filteredPolicies
+    : filteredPolicies.slice(
+        (safeCurrentPage - 1) * effectivePageSize,
+        safeCurrentPage * effectivePageSize
+      );
+
+  const getPageNumbers = () => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    const pages: (number | string)[] = [];
+    pages.push(1);
+    if (safeCurrentPage > 3) pages.push('...');
+    const start = Math.max(2, safeCurrentPage - 1);
+    const end = Math.min(totalPages - 1, safeCurrentPage + 1);
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    if (safeCurrentPage < totalPages - 2) pages.push('...');
+    pages.push(totalPages);
+    return pages;
+  };
 
   // Extract distinct plan codes & modes for filter dropdowns
   const uniquePlans = Array.from(new Set(policies.map((p) => p.planCode))).filter(Boolean).sort();
@@ -550,26 +573,6 @@ export function PoliciesPage() {
         </div>
       )}
 
-      {/* Search Bar */}
-      <div className="relative">
-        <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Filter policies by number, customer name, plan code..."
-          className="w-full pl-10 pr-10 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
-        />
-        {searchQuery && (
-          <button
-            onClick={() => setSearchQuery('')}
-            className="p-1.5 text-slate-400 hover:text-slate-600 absolute right-3 top-1/2 -translate-y-1/2"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        )}
-      </div>
-
       {/* Multi-Selection & Quick Action Bar */}
       {filteredPolicies.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
@@ -672,8 +675,8 @@ export function PoliciesPage() {
                     <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-mono text-xs font-bold shrink-0">
                       {p.sourceSerialNumber || '#'}
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="font-bold font-mono text-base text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
                           {p.policyNumber}
                         </span>
@@ -689,21 +692,21 @@ export function PoliciesPage() {
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 font-medium">
+                      <p className="text-xs sm:text-sm text-slate-800 dark:text-slate-200 mt-1 font-semibold break-words leading-relaxed">
                         {p.customerName}
                       </p>
                     </div>
                   </div>
 
                 {/* Right side stats & Quick Mark Paid */}
-                <div className="flex items-center gap-2.5 self-end sm:self-auto text-right">
+                <div className="flex items-center gap-2.5 self-end sm:self-auto text-right shrink-0">
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       setPaymentPolicy(p);
                     }}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition shadow-xs"
                     title="Mark premium paid and advance next F.U.P."
                   >
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
@@ -711,40 +714,40 @@ export function PoliciesPage() {
                   </button>
 
                   <div>
-                    <span className="text-sm font-bold text-slate-900 dark:text-white block font-mono">
+                    <span className="text-sm font-bold text-slate-900 dark:text-white block font-mono whitespace-nowrap">
                       {formatCurrency(p.premiumAmount)}
                     </span>
-                    <span className="text-[11px] text-slate-400 block">
+                    <span className="text-[11px] text-slate-400 block whitespace-nowrap">
                       {p.premiumMode}
                     </span>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition" />
+                  <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition shrink-0" />
                 </div>
               </div>
 
               {/* Bottom detail pill grid */}
-              <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                <div>
-                  <span className="text-[10px] text-slate-400 block uppercase">Sum Assured</span>
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">
+              <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4 text-xs">
+                <div className="min-w-0">
+                  <span className="text-[10px] text-slate-400 block uppercase font-medium">Sum Assured</span>
+                  <span className="font-semibold text-slate-800 dark:text-slate-200 break-words block">
                     {p.sumAssured === 0 ? '0 (Reported)' : formatCurrency(p.sumAssured)}
                   </span>
                 </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 block uppercase">D.O.C.</span>
-                  <span className="font-medium text-slate-700 dark:text-slate-300">
+                <div className="min-w-0">
+                  <span className="text-[10px] text-slate-400 block uppercase font-medium">D.O.C.</span>
+                  <span className="font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap block">
                     {formatDate(p.commencementDate)}
                   </span>
                 </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 block uppercase">F.U.P.</span>
-                  <span className="font-semibold text-amber-600 dark:text-amber-400">
+                <div className="min-w-0">
+                  <span className="text-[10px] text-slate-400 block uppercase font-medium">F.U.P.</span>
+                  <span className="font-semibold text-amber-600 dark:text-amber-400 whitespace-nowrap block">
                     {formatDate(p.firstUnpaidPremiumDate)}
                   </span>
                 </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 block uppercase">D.O.M.</span>
-                  <span className="font-medium text-slate-700 dark:text-slate-300">
+                <div className="min-w-0">
+                  <span className="text-[10px] text-slate-400 block uppercase font-medium">D.O.M.</span>
+                  <span className="font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap block">
                     {formatDate(p.maturityDate)}
                   </span>
                 </div>
@@ -753,29 +756,99 @@ export function PoliciesPage() {
           );
         })}
 
-          {/* Pagination Bar */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between pt-4 px-2">
-              <span className="text-xs text-slate-500">
-                Page {currentPage} of {totalPages} ({filteredPolicies.length} total)
-              </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={currentPage === 1}
+          {/* Pagination Bar with Prev, Pages, Next, and All */}
+          {filteredPolicies.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-5 pb-2 px-2 border-t border-slate-200 dark:border-slate-800">
+              {/* Item count text */}
+              <div className="text-xs text-slate-600 dark:text-slate-400 font-medium text-center sm:text-left">
+                {isShowAll ? (
+                  <span>
+                    Showing <strong className="text-slate-900 dark:text-white">all {filteredPolicies.length}</strong> policies
+                  </span>
+                ) : (
+                  <span>
+                    Showing{' '}
+                    <strong className="text-slate-900 dark:text-white">
+                      {(safeCurrentPage - 1) * effectivePageSize + 1}
+                    </strong>{' '}
+                    to{' '}
+                    <strong className="text-slate-900 dark:text-white">
+                      {Math.min(safeCurrentPage * effectivePageSize, filteredPolicies.length)}
+                    </strong>{' '}
+                    of{' '}
+                    <strong className="text-slate-900 dark:text-white">
+                      {filteredPolicies.length}
+                    </strong>{' '}
+                    policies
+                  </span>
+                )}
+              </div>
+
+              {/* Navigation Controls: Prev, Numbered Pages, Next, and All Button */}
+              <div className="flex flex-wrap items-center justify-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={isShowAll || safeCurrentPage <= 1}
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold border transition disabled:opacity-40 disabled:cursor-not-allowed bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-xs"
                 >
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={currentPage >= totalPages}
+                  Prev
+                </button>
+
+                {!isShowAll && totalPages > 1 && (
+                  <div className="flex items-center gap-1">
+                    {getPageNumbers().map((pNum, idx) =>
+                      typeof pNum === 'string' ? (
+                        <span key={`dots-${idx}`} className="px-1 text-slate-400 text-xs select-none">
+                          …
+                        </span>
+                      ) : (
+                        <button
+                          key={pNum}
+                          type="button"
+                          onClick={() => setCurrentPage(pNum)}
+                          className={`min-w-8 h-8 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center ${
+                            safeCurrentPage === pNum
+                              ? 'bg-blue-600 text-white shadow-xs'
+                              : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
+                          }`}
+                        >
+                          {pNum}
+                        </button>
+                      )
+                    )}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  disabled={isShowAll || safeCurrentPage >= totalPages}
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold border transition disabled:opacity-40 disabled:cursor-not-allowed bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-xs"
                 >
                   Next
-                </Button>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isShowAll) {
+                      setPageSize(25);
+                      setCurrentPage(1);
+                    } else {
+                      setPageSize('all');
+                      setCurrentPage(1);
+                    }
+                  }}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border transition shadow-xs ${
+                    isShowAll
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-transparent'
+                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
+                  }`}
+                  title={isShowAll ? 'Switch back to pages (25 per page)' : 'Show all items on a single page'}
+                >
+                  All {isShowAll ? `(${filteredPolicies.length})` : ''}
+                </button>
               </div>
             </div>
           )}

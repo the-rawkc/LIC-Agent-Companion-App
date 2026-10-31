@@ -590,7 +590,7 @@ export function LandingPage() {
 
                 <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
                   <span className="text-[11px] text-slate-400 uppercase font-medium block">Total Sum Assured</span>
-                  <span className="text-lg sm:text-xl font-bold font-mono text-slate-900 dark:text-white block mt-1 truncate">
+                  <span className="text-lg sm:text-xl font-bold font-mono text-slate-900 dark:text-white block mt-1 break-words">
                     {formatCurrency(stats?.totalSumAssured || 0)}
                   </span>
                   <span className="text-[11px] text-blue-600 font-medium block mt-0.5">Under Protection</span>

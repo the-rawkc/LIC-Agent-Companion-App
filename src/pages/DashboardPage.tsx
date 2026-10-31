@@ -323,7 +323,7 @@ export function DashboardPage() {
                             Plan {p.originalPlanString}
                           </span>
                         </div>
-                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 truncate">
+                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 break-words">
                           {p.customerName} • Premium: {formatCurrency(p.premiumAmount)} ({p.premiumMode})
                         </p>
                       </div>
@@ -360,7 +360,7 @@ export function DashboardPage() {
                             Plan {p.originalPlanString}
                           </span>
                         </div>
-                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 truncate">
+                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 break-words">
                           {p.customerName} • Sum Assured: {formatCurrency(p.sumAssured)}
                         </p>
                       </div>
@@ -404,8 +404,8 @@ export function DashboardPage() {
                         >
                           {r.status === 'completed' && <CheckCircle2 className="w-4 h-4" />}
                         </button>
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-slate-900 dark:text-white break-words">
                             {r.title}
                           </p>
                           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
