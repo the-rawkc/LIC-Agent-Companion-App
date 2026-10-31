@@ -1,0 +1,12 @@
+name = "lic-agent-companion-app"
+main = "worker/index.ts"
+compatibility_date = "2024-04-01"
+assets = { directory = "./dist", binding = "ASSETS" }
+
+# Cloudflare D1 Database Binding
+# Run: npx wrangler d1 create lic_companion_db
+# Then replace database_id below with your generated ID
+[[d1_databases]]
+binding = "DB"
+database_name = "lic_companion_db"
+database_id = "lic_companion_db"

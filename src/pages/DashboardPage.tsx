@@ -14,12 +14,15 @@ import {
   ArrowRight,
   Clock,
   CheckCircle2,
-  Phone
+  Phone,
+  Cloud,
+  ArrowDownCircle
 } from 'lucide-react';
 import { StatCard } from '@/components/shared/StatCard';
 import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { AgencyCloudModal } from '@/components/auth/AgencyCloudModal';
 import { analyticsService, type DashboardStats } from '@/features/analytics/analyticsService';
 import { importService } from '@/services/import/importService';
 import { SAMPLE_RAW_POLICY_ROWS } from '@/services/sampleData/licSampleRecords';
@@ -32,6 +35,7 @@ export function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'fup' | 'maturities' | 'reminders'>('fup');
   const [isDemoLoading, setIsDemoLoading] = useState(false);
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
@@ -144,16 +148,43 @@ export function DashboardPage() {
 
       {/* Zero State Onboarding */}
       {!hasData ? (
-        <EmptyState
-          icon={<FileText className="w-8 h-8 text-blue-600" />}
-          title="No policy records yet"
-          description="Your local database is clean and ready. Upload your LIC agent PDF report to immediately organize and track all customer policies."
-          actionLabel="Upload PDF Report"
-          onAction={() => navigate('/import')}
-          actionIcon={<Upload className="w-4 h-4" />}
-          secondaryActionLabel={isDemoLoading ? 'Loading Sample...' : 'Load Demonstration Dataset'}
-          onSecondaryAction={handleLoadDemoData}
-        />
+        <div className="space-y-4">
+          {/* Reinstalled / Switching device banner */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 border border-blue-200 dark:border-blue-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Cloud className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Reinstalled or switching phone?
+                </h2>
+                <p className="text-xs text-slate-600 dark:text-slate-300">
+                  Restore all your previously saved policies and customers with your <strong>Agency Code</strong>.
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setIsRestoreModalOpen(true)}
+              leftIcon={<ArrowDownCircle className="w-4 h-4" />}
+            >
+              Restore from Cloud
+            </Button>
+          </div>
+
+          <EmptyState
+            icon={<FileText className="w-8 h-8 text-blue-600" />}
+            title="No policy records yet"
+            description="Your local database is clean and ready. Upload your LIC agent PDF report to immediately organize and track all customer policies."
+            actionLabel="Upload PDF Report"
+            onAction={() => navigate('/import')}
+            actionIcon={<Upload className="w-4 h-4" />}
+            secondaryActionLabel={isDemoLoading ? 'Loading Sample...' : 'Load Demonstration Dataset'}
+            onSecondaryAction={handleLoadDemoData}
+          />
+        </div>
       ) : (
         <>
           {/* Quick Stat Cards Grid */}
@@ -413,6 +444,14 @@ export function DashboardPage() {
           </div>
         </>
       )}
+
+      {/* Cloud Restore Modal */}
+      <AgencyCloudModal
+        isOpen={isRestoreModalOpen}
+        onClose={() => setIsRestoreModalOpen(false)}
+        mode="pull"
+        onSuccess={() => loadDashboardData()}
+      />
     </div>
   );
 }

@@ -15,10 +15,15 @@ import {
   AlertTriangle,
   Info,
   Calendar,
-  Smartphone
+  Smartphone,
+  Cloud,
+  RefreshCw,
+  ArrowUpCircle,
+  ArrowDownCircle
 } from 'lucide-react';
 import { pinService } from '@/services/security/pinService';
 import { backupService, type BackupPayload } from '@/services/backup/backupService';
+import { d1SyncService, type SyncConfig, type SyncStatus } from '@/services/cloud/d1SyncService';
 import { settingsRepository } from '@/db/repositories/settingsRepository';
 import { db } from '@/db/database';
 import { Button } from '@/components/shared/Button';
@@ -26,6 +31,7 @@ import { Badge } from '@/components/shared/Badge';
 import { Modal } from '@/components/shared/Modal';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { PinSetupModal } from '@/components/security/PinSetupModal';
+import { AgencyCloudModal } from '@/components/auth/AgencyCloudModal';
 import { formatDate } from '@/utils/formatters';
 
 export function SettingsPage() {
@@ -59,10 +65,32 @@ export function SettingsPage() {
   // Reset database state
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
 
+  // Cloudflare D1 Sync state
+  const [syncConfig, setSyncConfig] = useState<SyncConfig | null>(null);
+  const [d1Status, setD1Status] = useState<SyncStatus | null>(null);
+  const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
+  const [cloudModalMode, setCloudModalMode] = useState<'push' | 'pull'>('push');
+  const [isCheckingD1, setIsCheckingD1] = useState(false);
+
   useEffect(() => {
     loadSettings();
     checkStorage();
+    checkCloudStatus();
   }, []);
+
+  async function checkCloudStatus() {
+    setIsCheckingD1(true);
+    try {
+      const config = await d1SyncService.getSyncConfig();
+      setSyncConfig(config);
+      const status = await d1SyncService.checkConnection();
+      setD1Status(status);
+    } catch {
+      // ignore
+    } finally {
+      setIsCheckingD1(false);
+    }
+  }
 
   async function loadSettings() {
     const pinConfigured = await pinService.isPinConfigured();
@@ -307,6 +335,83 @@ export function SettingsPage() {
               Set 4-Digit PIN
             </Button>
           )}
+        </div>
+      </div>
+
+      {/* Cloudflare D1 Cloud Sync */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-blue-200 dark:border-blue-900/60 p-5 sm:p-6 shadow-xs space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+              <Cloud className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                  Cloudflare D1 Cloud Database (100% Free)
+                </h2>
+                <Badge variant={d1Status?.d1Ready ? 'success' : 'default'} size="sm">
+                  {d1Status?.d1Ready ? 'D1 Connected' : 'Ready to Connect'}
+                </Badge>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Automatically backup and restore all policies by your <strong>Agency Code</strong>. Never lose data if you uninstall the app or switch phones.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={checkCloudStatus}
+            disabled={isCheckingD1}
+            title="Refresh D1 connection status"
+            className="p-2 text-slate-400 hover:text-blue-600 transition"
+          >
+            <RefreshCw className={`w-4 h-4 ${isCheckingD1 ? 'animate-spin text-blue-600' : ''}`} />
+          </button>
+        </div>
+
+        {/* Agency Info bar */}
+        <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <span className="text-[11px] text-slate-400 block uppercase font-medium">Linked Agency Code</span>
+            <span className="font-mono font-bold text-slate-800 dark:text-slate-200 text-sm">
+              {syncConfig?.agencyCode || 'Not configured yet'}
+            </span>
+            {syncConfig?.agentName && (
+              <span className="text-xs text-slate-500 ml-2">({syncConfig.agentName})</span>
+            )}
+          </div>
+          <div>
+            <span className="text-[11px] text-slate-400 block uppercase font-medium">Last Cloud Backup</span>
+            <span className="font-medium text-slate-700 dark:text-slate-300">
+              {syncConfig?.lastSyncAt ? formatDate(syncConfig.lastSyncAt, 'medium') : 'Never synced'}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5 pt-1">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => {
+              setCloudModalMode('push');
+              setIsCloudModalOpen(true);
+            }}
+            leftIcon={<ArrowUpCircle className="w-4 h-4" />}
+          >
+            Sync / Backup to D1
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setCloudModalMode('pull');
+              setIsCloudModalOpen(true);
+            }}
+            leftIcon={<ArrowDownCircle className="w-4 h-4" />}
+          >
+            Restore by Agency Code
+          </Button>
         </div>
       </div>
 
@@ -677,6 +782,17 @@ export function SettingsPage() {
         title="Clear All Database Records"
         message="Are you completely sure? This will delete all policy and customer records permanently. Ensure you have exported a backup first."
         confirmLabel="Yes, Clear All"
+      />
+
+      {/* Cloudflare D1 Sync Modal */}
+      <AgencyCloudModal
+        isOpen={isCloudModalOpen}
+        onClose={() => setIsCloudModalOpen(false)}
+        mode={cloudModalMode}
+        onSuccess={() => {
+          checkCloudStatus();
+          loadSettings();
+        }}
       />
     </div>
   );
