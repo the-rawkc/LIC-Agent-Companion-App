@@ -18,10 +18,11 @@ import {
 import { policyRepository, type PolicyFilterOptions } from '@/db/repositories/policyRepository';
 import { customerRepository } from '@/db/repositories/customerRepository';
 import { backupService } from '@/services/backup/backupService';
-import { formatCurrency, formatDate } from '@/utils/formatters';
+import { formatCurrency, formatDate, advanceFupDate } from '@/utils/formatters';
 import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
 import { Modal } from '@/components/shared/Modal';
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { EmptyState } from '@/components/shared/EmptyState';
 import type { Policy, PremiumMode, PolicyRecordStatus } from '@/types';
 
@@ -34,9 +35,21 @@ export function PoliciesPage() {
   const [selectedPlan, setSelectedPlan] = useState('');
   const [selectedMode, setSelectedMode] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [selectedFupMonth, setSelectedFupMonth] = useState('');
   const [onlyWarnings, setOnlyWarnings] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Manual Payment Recording State
+  const [paymentPolicy, setPaymentPolicy] = useState<Policy | null>(null);
+  const [isRecordingPayment, setIsRecordingPayment] = useState(false);
+  const [paymentSuccessToast, setPaymentSuccessToast] = useState<string | null>(null);
+
+  // Calculated month strings for quick filters
+  const now = new Date();
+  const currentMonthIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const nextMonthIso = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}`;
 
   // Multi-selection state for export
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -70,7 +83,7 @@ export function PoliciesPage() {
 
   useEffect(() => {
     loadPolicies();
-  }, [selectedPlan, selectedMode, selectedStatus, onlyWarnings]);
+  }, [selectedPlan, selectedMode, selectedStatus, selectedFupMonth, onlyWarnings]);
 
   async function loadPolicies() {
     setIsLoading(true);
@@ -79,6 +92,7 @@ export function PoliciesPage() {
       if (selectedPlan) filters.planCode = selectedPlan;
       if (selectedMode) filters.premiumMode = selectedMode;
       if (selectedStatus) filters.recordStatus = selectedStatus as PolicyRecordStatus;
+      if (selectedFupMonth) filters.fupMonth = selectedFupMonth;
       if (onlyWarnings) filters.hasWarnings = true;
 
       const data = await policyRepository.search(searchQuery, filters);
@@ -90,6 +104,24 @@ export function PoliciesPage() {
       setIsLoading(false);
     }
   }
+
+  const handleRecordPayment = async () => {
+    if (!paymentPolicy) return;
+    setIsRecordingPayment(true);
+    try {
+      const res = await policyRepository.recordPayment(paymentPolicy.id);
+      setPaymentSuccessToast(
+        `Payment recorded for ${paymentPolicy.policyNumber}! New F.U.P.: ${formatDate(res.newFup)} (${res.policy.premiumMode}).`
+      );
+      setPaymentPolicy(null);
+      await loadPolicies();
+      setTimeout(() => setPaymentSuccessToast(null), 5000);
+    } catch (err: any) {
+      alert('Failed to record payment: ' + (err.message || String(err)));
+    } finally {
+      setIsRecordingPayment(false);
+    }
+  };
 
   // Handle client-side search typing
   const filteredPolicies = policies.filter((p) => {
@@ -190,6 +222,7 @@ export function PoliciesPage() {
     setSelectedPlan('');
     setSelectedMode('');
     setSelectedStatus('');
+    setSelectedFupMonth('');
     setOnlyWarnings(false);
     setSearchQuery('');
   };
@@ -198,6 +231,7 @@ export function PoliciesPage() {
     (selectedPlan ? 1 : 0) +
     (selectedMode ? 1 : 0) +
     (selectedStatus ? 1 : 0) +
+    (selectedFupMonth ? 1 : 0) +
     (onlyWarnings ? 1 : 0);
 
   const handleToggleSelect = (id: string, e: React.MouseEvent) => {
@@ -312,6 +346,83 @@ export function PoliciesPage() {
         </div>
       </div>
 
+      {/* Payment Success Toast */}
+      {paymentSuccessToast && (
+        <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-2xl flex items-center gap-3 text-emerald-800 dark:text-emerald-200 text-xs font-semibold animate-in fade-in">
+          <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <span>{paymentSuccessToast}</span>
+        </div>
+      )}
+
+      {/* Quick FUP & Mode Filter Pills */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs no-scrollbar">
+        <button
+          onClick={() => {
+            setSelectedFupMonth('');
+            setSelectedMode('');
+          }}
+          className={`px-3 py-1.5 rounded-xl font-medium transition shrink-0 ${
+            !selectedFupMonth && !selectedMode
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          All Policies
+        </button>
+        <button
+          onClick={() => setSelectedFupMonth(selectedFupMonth === currentMonthIso ? '' : currentMonthIso)}
+          className={`px-3 py-1.5 rounded-xl font-medium transition shrink-0 flex items-center gap-1.5 ${
+            selectedFupMonth === currentMonthIso
+              ? 'bg-amber-600 text-white shadow-xs'
+              : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+          }`}
+        >
+          <Calendar className="w-3.5 h-3.5" />
+          <span>Due This Month</span>
+        </button>
+        <button
+          onClick={() => setSelectedFupMonth(selectedFupMonth === nextMonthIso ? '' : nextMonthIso)}
+          className={`px-3 py-1.5 rounded-xl font-medium transition shrink-0 flex items-center gap-1.5 ${
+            selectedFupMonth === nextMonthIso
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/30'
+          }`}
+        >
+          <Calendar className="w-3.5 h-3.5" />
+          <span>Due Next Month</span>
+        </button>
+        <button
+          onClick={() => setSelectedMode(selectedMode === 'Monthly' ? '' : 'Monthly')}
+          className={`px-3 py-1.5 rounded-xl font-medium transition shrink-0 ${
+            selectedMode === 'Monthly'
+              ? 'bg-purple-600 text-white shadow-xs'
+              : 'bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-950/30'
+          }`}
+        >
+          Monthly Mode (MLY)
+        </button>
+
+        {/* Custom F.U.P. Month Picker */}
+        <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1 shrink-0">
+          <span className="text-[11px] font-semibold text-slate-500">F.U.P Month:</span>
+          <input
+            type="month"
+            value={selectedFupMonth}
+            onChange={(e) => setSelectedFupMonth(e.target.value)}
+            className="text-xs bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none"
+          />
+          {selectedFupMonth && (
+            <button
+              onClick={() => setSelectedFupMonth('')}
+              className="text-slate-400 hover:text-slate-600 text-xs font-bold px-1"
+              title="Clear month filter"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Filter Panel (collapsible) */}
       {isFilterOpen && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs space-y-3 animate-in fade-in duration-150">
@@ -329,7 +440,7 @@ export function PoliciesPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <div>
               <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                 Plan Code
@@ -368,6 +479,18 @@ export function PoliciesPage() {
 
             <div>
               <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                F.U.P. Month
+              </label>
+              <input
+                type="month"
+                value={selectedFupMonth}
+                onChange={(e) => setSelectedFupMonth(e.target.value)}
+                className="w-full text-xs bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-xl px-2.5 py-2 border border-slate-200 dark:border-slate-700 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                 Record Status
               </label>
               <select
@@ -382,7 +505,7 @@ export function PoliciesPage() {
               </select>
             </div>
 
-            <div className="flex items-end pb-1">
+            <div className="flex items-end pb-1 col-span-2 sm:col-span-1">
               <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-700 dark:text-slate-300">
                 <input
                   type="checkbox"
@@ -390,7 +513,7 @@ export function PoliciesPage() {
                   onChange={(e) => setOnlyWarnings(e.target.checked)}
                   className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
                 />
-                <span>Extraction Warnings Only</span>
+                <span>Warnings Only</span>
               </label>
             </div>
           </div>
@@ -542,8 +665,21 @@ export function PoliciesPage() {
                     </div>
                   </div>
 
-                {/* Right side stats */}
-                <div className="flex items-center gap-3 self-end sm:self-auto text-right">
+                {/* Right side stats & Quick Mark Paid */}
+                <div className="flex items-center gap-2.5 self-end sm:self-auto text-right">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPaymentPolicy(p);
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition"
+                    title="Mark premium paid and advance next F.U.P."
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span>Paid</span>
+                  </button>
+
                   <div>
                     <span className="text-sm font-bold text-slate-900 dark:text-white block font-mono">
                       {formatCurrency(p.premiumAmount)}
@@ -788,6 +924,18 @@ export function PoliciesPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Payment Confirmation Dialog */}
+      {paymentPolicy && (
+        <ConfirmDialog
+          isOpen={!!paymentPolicy}
+          onClose={() => setPaymentPolicy(null)}
+          onConfirm={handleRecordPayment}
+          title="Confirm Premium Payment"
+          message={`Mark premium as paid for Policy ${paymentPolicy.policyNumber} (${formatCurrency(paymentPolicy.premiumAmount)})?\n\nCustomer: ${paymentPolicy.customerName}\nCurrent F.U.P.: ${formatDate(paymentPolicy.firstUnpaidPremiumDate)}\nNew Next F.U.P.: ${formatDate(advanceFupDate(paymentPolicy.firstUnpaidPremiumDate, paymentPolicy.premiumMode))} (Mode: ${paymentPolicy.premiumMode})\n\nThis will auto-advance the due date and record an audit log.`}
+          confirmLabel={isRecordingPayment ? "Updating..." : "Confirm & Advance F.U.P."}
+        />
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { db } from '../database';
 import type { Policy, PolicyRecordStatus } from '@/types';
-import { normalizeSearchString } from '@/utils/formatters';
+import { normalizeSearchString, advanceFupDate } from '@/utils/formatters';
 
 export interface PolicyFilterOptions {
   planCode?: string;
@@ -8,7 +8,11 @@ export interface PolicyFilterOptions {
   recordStatus?: PolicyRecordStatus;
   commencementYear?: string;
   maturityYear?: string;
+  fupMonth?: string; // e.g. "2026-11"
+  fupDateFrom?: string; // YYYY-MM-DD
+  fupDateTo?: string; // YYYY-MM-DD
   hasWarnings?: boolean;
+  sortBy?: 'doc_desc' | 'doc_asc' | 'fup_asc' | 'fup_desc' | 'premium_desc' | 'policy_asc';
 }
 
 export const policyRepository = {
@@ -86,6 +90,42 @@ export const policyRepository = {
     }
   },
 
+  /**
+   * Record a premium payment: automatically advances F.U.P. date based on mode and logs audit history
+   */
+  async recordPayment(id: string): Promise<{ policy: Policy; oldFup: string; newFup: string }> {
+    const existing = await db.policies.get(id);
+    if (!existing) throw new Error(`Policy with ID ${id} not found.`);
+
+    const oldFup = existing.firstUnpaidPremiumDate || existing.commencementDate;
+    const newFup = advanceFupDate(oldFup, existing.premiumMode);
+    const now = new Date().toISOString();
+
+    const updated: Policy = {
+      ...existing,
+      firstUnpaidPremiumDate: newFup,
+      recordStatus: 'active',
+      updatedAt: now,
+    };
+
+    await db.policies.put(updated);
+
+    await db.auditLogs.add({
+      id: crypto.randomUUID(),
+      entityType: 'policy',
+      entityId: id,
+      action: 'update',
+      timestamp: now,
+      summary: `Recorded premium payment for Policy ${existing.policyNumber}. FUP updated from ${oldFup} to ${newFup} (${existing.premiumMode}).`,
+      changedFields: {
+        firstUnpaidPremiumDate: { old: oldFup, new: newFup },
+        recordStatus: { old: existing.recordStatus, new: 'active' },
+      },
+    });
+
+    return { policy: updated, oldFup, newFup };
+  },
+
   async search(query: string, filters?: PolicyFilterOptions): Promise<Policy[]> {
     let collection = await db.policies.toArray();
 
@@ -115,12 +155,45 @@ export const policyRepository = {
       if (filters.maturityYear) {
         collection = collection.filter((p) => p.maturityDate.startsWith(filters.maturityYear!));
       }
+      if (filters.fupMonth) {
+        collection = collection.filter((p) => (p.firstUnpaidPremiumDate || '').startsWith(filters.fupMonth!));
+      }
+      if (filters.fupDateFrom) {
+        collection = collection.filter((p) => (p.firstUnpaidPremiumDate || '') >= filters.fupDateFrom!);
+      }
+      if (filters.fupDateTo) {
+        collection = collection.filter((p) => (p.firstUnpaidPremiumDate || '') <= filters.fupDateTo!);
+      }
       if (filters.hasWarnings !== undefined) {
         collection = collection.filter((p) => 
           filters.hasWarnings ? p.extractionWarnings.length > 0 : p.extractionWarnings.length === 0
         );
       }
     }
+
+    // Default sorting: descending by Commencement Date (DOC - newest done comes at top)
+    const sortBy = filters?.sortBy || 'doc_desc';
+    collection.sort((a, b) => {
+      if (sortBy === 'doc_desc') {
+        return (b.commencementDate || '').localeCompare(a.commencementDate || '');
+      }
+      if (sortBy === 'doc_asc') {
+        return (a.commencementDate || '').localeCompare(b.commencementDate || '');
+      }
+      if (sortBy === 'fup_asc') {
+        return (a.firstUnpaidPremiumDate || '').localeCompare(b.firstUnpaidPremiumDate || '');
+      }
+      if (sortBy === 'fup_desc') {
+        return (b.firstUnpaidPremiumDate || '').localeCompare(a.firstUnpaidPremiumDate || '');
+      }
+      if (sortBy === 'premium_desc') {
+        return (b.premiumAmount || 0) - (a.premiumAmount || 0);
+      }
+      if (sortBy === 'policy_asc') {
+        return a.policyNumber.localeCompare(b.policyNumber);
+      }
+      return (b.commencementDate || '').localeCompare(a.commencementDate || '');
+    });
 
     return collection;
   },

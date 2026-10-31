@@ -141,3 +141,44 @@ export function parseCleanNumber(val: string | number | null | undefined): numbe
   const num = parseFloat(cleaned);
   return isNaN(num) ? 0 : num;
 }
+
+/**
+ * Automatically advance F.U.P. date when a premium payment is recorded
+ * Based on the policy premium mode (Monthly +1m, Quarterly +3m, Half-Yearly +6m, Yearly +12m)
+ */
+export function advanceFupDate(currentFupIso: string, mode: string): string {
+  const parsed = parseDateToISO(currentFupIso);
+  const baseDate = parsed ? new Date(parsed) : new Date();
+
+  // Normalize mode
+  const m = (mode || '').toLowerCase().trim();
+  let addMonths = 12; // default yearly
+  if (m.includes('month') || m === 'mly' || m === 'm') {
+    addMonths = 1;
+  } else if (m.includes('quarter') || m === 'qly' || m === 'q') {
+    addMonths = 3;
+  } else if (m.includes('half') || m === 'hly' || m === 'h') {
+    addMonths = 6;
+  } else if (m.includes('year') || m === 'yly' || m === 'y') {
+    addMonths = 12;
+  } else if (m.includes('single') || m === 'sgl') {
+    return currentFupIso; // Single premium has no recurring FUP
+  }
+
+  const currentYear = baseDate.getFullYear();
+  const currentMonth = baseDate.getMonth(); // 0-indexed
+  const currentDay = baseDate.getDate();
+
+  // Calculate target month and year
+  const targetMonthIndex = currentMonth + addMonths;
+  const targetYear = currentYear + Math.floor(targetMonthIndex / 12);
+  const targetMonth = targetMonthIndex % 12;
+
+  // Determine days in target month to avoid overflow (e.g. 31 Jan -> 28 Feb)
+  const daysInTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+  const targetDay = Math.min(currentDay, daysInTargetMonth);
+
+  const mm = String(targetMonth + 1).padStart(2, '0');
+  const dd = String(targetDay).padStart(2, '0');
+  return `${targetYear}-${mm}-${dd}`;
+}

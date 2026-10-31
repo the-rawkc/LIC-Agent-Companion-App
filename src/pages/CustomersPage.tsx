@@ -244,38 +244,8 @@ export function CustomersPage() {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
-          {/* Quick Filter Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-            <button
-              onClick={() => setFilterType('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                filterType === 'all'
-                  ? 'bg-slate-900 text-white dark:bg-blue-600'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400'
-              }`}
-            >
-              All ({customers.length})
-            </button>
-            <button
-              onClick={() => setFilterType('has_phone')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                filterType === 'has_phone'
-                  ? 'bg-slate-900 text-white dark:bg-blue-600'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400'
-              }`}
-            >
-              Has Phone ({customers.filter((c) => Boolean(c.mobileNumber)).length})
-            </button>
-            <button
-              onClick={() => setFilterType('multi_policy')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                filterType === 'multi_policy'
-                  ? 'bg-slate-900 text-white dark:bg-blue-600'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400'
-              }`}
-            >
-              Multiple Policies ({customers.filter((c) => c.policyCount > 1).length})
-            </button>
+          <div className="text-xs text-slate-500 font-medium">
+            Showing {filteredCustomers.length} of {customers.length} customer profiles
           </div>
 
           {/* Sort Selector */}

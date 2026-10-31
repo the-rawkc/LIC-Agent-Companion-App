@@ -120,47 +120,61 @@ export function AppLayout({ children }: AppLayoutProps) {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col antialiased">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col antialiased overflow-x-hidden w-full max-w-full">
       {/* PIN Lock Barrier */}
       <PinLockModal isOpen={isLocked} onSuccess={unlock} />
 
       {/* Top Header */}
-      <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 pt-safe">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-3">
-          {/* Logo & Title */}
-          <div
-            className="flex items-center gap-2.5 shrink-0 cursor-pointer group"
-            onClick={() => navigate('/')}
-            title="Go to Home"
-          >
-            <AppLogo size={36} />
-            <div>
-              <span className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white leading-tight block group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
-                LIC Companion
-              </span>
-              <span className="text-[10px] text-slate-400 block -mt-0.5 font-medium">
-                Agent Workspace
-              </span>
+      <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 pt-safe w-full overflow-x-hidden">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-3">
+          {/* Left: Profile Avatar & App Logo */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Clickable Profile Avatar on the Left */}
+            <button
+              onClick={() => navigate('/profile')}
+              title={`View Agent Profile (${agentName})`}
+              className="flex items-center gap-1.5 p-1 -ml-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition group focus:outline-none"
+            >
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-xs flex items-center justify-center shrink-0 shadow-xs ring-2 ring-amber-400/40 group-hover:scale-105 transition">
+                {agentInitials}
+              </div>
+            </button>
+
+            {/* Logo & Title */}
+            <div
+              className="flex items-center gap-1.5 cursor-pointer group"
+              onClick={() => navigate('/')}
+              title="Go to Home"
+            >
+              <AppLogo size={32} />
+              <div className="hidden min-[420px]:block">
+                <span className="font-extrabold text-sm text-slate-900 dark:text-white leading-tight block group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
+                  LIC Companion
+                </span>
+                <span className="text-[10px] text-slate-400 block -mt-0.5 font-medium">
+                  Workspace
+                </span>
+              </div>
             </div>
           </div>
 
           {/* Quick Search Pill Bar */}
           <button
             onClick={() => setIsSearchOpen(true)}
-            className="flex-1 max-w-md mx-2 sm:mx-6 flex items-center justify-between px-3 sm:px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200/70 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-400 border border-slate-200/80 dark:border-slate-700/60 transition text-xs sm:text-sm select-none"
+            className="flex-1 max-w-md mx-1 sm:mx-4 flex items-center justify-between px-2.5 sm:px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200/70 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-400 border border-slate-200/80 dark:border-slate-700/60 transition text-xs sm:text-sm select-none"
             aria-label="Search policies and customers"
           >
-            <div className="flex items-center gap-2 truncate">
-              <Search className="w-4 h-4 text-slate-400 shrink-0" />
-              <span className="truncate">Search policy, name, phone...</span>
+            <div className="flex items-center gap-1.5 truncate">
+              <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 shrink-0" />
+              <span className="truncate text-xs sm:text-sm">Search policies, name...</span>
             </div>
-            <kbd className="hidden sm:inline-block font-mono text-[10px] bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-300">
+            <kbd className="hidden md:inline-block font-mono text-[10px] bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-300">
               Ctrl+K
             </kbd>
           </button>
 
           {/* Right Action Icons */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             {/* Offline indicator */}
             {!isOnline && (
               <div
@@ -190,20 +204,6 @@ export function AppLayout({ children }: AppLayoutProps) {
               className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
             >
               {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
-            </button>
-
-            {/* Profile Avatar Button */}
-            <button
-              onClick={() => navigate('/profile')}
-              title={`View Profile (${agentName})`}
-              className="flex items-center gap-2 pl-1 pr-1 sm:pr-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 transition"
-            >
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
-                {agentInitials}
-              </div>
-              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 hidden sm:inline max-w-[85px] truncate">
-                {agentName.split(' ')[0]}
-              </span>
             </button>
           </div>
         </div>

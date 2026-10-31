@@ -21,7 +21,7 @@ import {
 import { policyRepository } from '@/db/repositories/policyRepository';
 import { customerRepository, type CustomerWithSummary } from '@/db/repositories/customerRepository';
 import { reminderRepository, type ReminderWithDetails } from '@/db/repositories/reminderRepository';
-import { formatCurrency, formatDate } from '@/utils/formatters';
+import { formatCurrency, formatDate, advanceFupDate } from '@/utils/formatters';
 import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
 import { Modal } from '@/components/shared/Modal';
@@ -36,6 +36,11 @@ export function PolicyDetailsPage() {
   const [customer, setCustomer] = useState<CustomerWithSummary | null>(null);
   const [reminders, setReminders] = useState<ReminderWithDetails[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Payment Recording State
+  const [isPaymentConfirmOpen, setIsPaymentConfirmOpen] = useState(false);
+  const [isRecordingPayment, setIsRecordingPayment] = useState(false);
+  const [paymentSuccessNotice, setPaymentSuccessNotice] = useState<string | null>(null);
 
   // Edit Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -176,6 +181,24 @@ export function PolicyDetailsPage() {
     window.print();
   };
 
+  const handleRecordPayment = async () => {
+    if (!policy) return;
+    setIsRecordingPayment(true);
+    try {
+      const result = await policyRepository.recordPayment(policy.id);
+      setPaymentSuccessNotice(
+        `Premium payment recorded! Next F.U.P. automatically advanced to ${formatDate(result.newFup)} (${result.policy.premiumMode}).`
+      );
+      setIsPaymentConfirmOpen(false);
+      await loadPolicyDetails(policy.id);
+      setTimeout(() => setPaymentSuccessNotice(null), 5000);
+    } catch (err: any) {
+      alert('Failed to record payment: ' + (err.message || String(err)));
+    } finally {
+      setIsRecordingPayment(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center p-8">
@@ -211,14 +234,23 @@ export function PolicyDetailsPage() {
           <span>Back to Policies</span>
         </button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setIsPaymentConfirmOpen(true)}
+            leftIcon={<CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />}
+            className="border-emerald-300 dark:border-emerald-800 bg-emerald-50/80 dark:bg-emerald-950/40 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 font-semibold"
+          >
+            Mark Premium Paid
+          </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={handlePrintSummary}
             leftIcon={<Printer className="w-3.5 h-3.5" />}
           >
-            Print Summary
+            Print
           </Button>
           <Button
             variant="outline"
@@ -226,7 +258,7 @@ export function PolicyDetailsPage() {
             onClick={() => setIsEditModalOpen(true)}
             leftIcon={<Edit2 className="w-3.5 h-3.5" />}
           >
-            Edit Record
+            Edit
           </Button>
           <Button
             variant="primary"
@@ -234,10 +266,18 @@ export function PolicyDetailsPage() {
             onClick={() => setIsReminderModalOpen(true)}
             leftIcon={<Bell className="w-3.5 h-3.5" />}
           >
-            Add Reminder
+            Reminder
           </Button>
         </div>
       </div>
+
+      {/* Payment Success Alert */}
+      {paymentSuccessNotice && (
+        <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-2xl flex items-center gap-3 text-emerald-800 dark:text-emerald-200 text-xs font-semibold">
+          <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <span>{paymentSuccessNotice}</span>
+        </div>
+      )}
 
       {/* Warnings Banner if any */}
       {policy.extractionWarnings.length > 0 && (
@@ -724,6 +764,18 @@ export function PolicyDetailsPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Record Payment Confirmation */}
+      {policy && (
+        <ConfirmDialog
+          isOpen={isPaymentConfirmOpen}
+          onClose={() => setIsPaymentConfirmOpen(false)}
+          onConfirm={handleRecordPayment}
+          title="Record Premium Payment"
+          message={`Confirm premium collection of ${formatCurrency(policy.premiumAmount)} for policy ${policy.policyNumber}?\n\nCurrent F.U.P.: ${formatDate(policy.firstUnpaidPremiumDate)}\nNew Next F.U.P.: ${formatDate(advanceFupDate(policy.firstUnpaidPremiumDate, policy.premiumMode))} (Mode: ${policy.premiumMode})\n\nThis will auto-advance the next due date and maintain an audit log.`}
+          confirmLabel={isRecordingPayment ? "Updating..." : "Confirm & Advance F.U.P."}
+        />
+      )}
 
       {/* Delete Confirmation */}
       <ConfirmDialog
