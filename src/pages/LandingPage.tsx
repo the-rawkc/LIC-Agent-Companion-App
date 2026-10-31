@@ -23,7 +23,8 @@ import {
   AlertCircle,
   CheckCircle2,
   LogOut,
-  RefreshCw
+  RefreshCw,
+  Fingerprint
 } from 'lucide-react';
 import { AppLogo } from '@/components/shared/AppLogo';
 import { Button } from '@/components/shared/Button';
@@ -33,6 +34,8 @@ import { GlobalSearchModal } from '@/components/shared/GlobalSearchModal';
 import { analyticsService, type DashboardStats } from '@/features/analytics/analyticsService';
 import { profileRepository, type AgentProfile, DEFAULT_PROFILE } from '@/db/repositories/profileRepository';
 import { authService, type AgentAccount } from '@/services/auth/authService';
+import { biometricService } from '@/services/security/biometricService';
+import { switchAgentDatabase } from '@/db/database';
 import { formatCurrency } from '@/utils/formatters';
 
 export function LandingPage() {
@@ -43,6 +46,11 @@ export function LandingPage() {
   const [currentAgent, setCurrentAgent] = useState<AgentAccount | null>(authService.getCurrentAgent());
   const [registeredAgents, setRegisteredAgents] = useState<AgentAccount[]>([]);
   const [authTab, setAuthTab] = useState<'login' | 'register'>('login');
+
+  // Biometric Authentication State
+  const [isBiometricHardware, setIsBiometricHardware] = useState(false);
+  const [isBiometricEnrolled, setIsBiometricEnrolled] = useState(false);
+  const [enableBiometricsOnRegister, setEnableBiometricsOnRegister] = useState(true);
 
   // Form States
   const [loginAgencyCode, setLoginAgencyCode] = useState('');
@@ -72,6 +80,11 @@ export function LandingPage() {
     setCurrentAgent(agent);
     const saved = authService.getRegisteredAgents();
     setRegisteredAgents(saved);
+
+    biometricService.isHardwareAvailable().then((available) => {
+      setIsBiometricHardware(available);
+      setIsBiometricEnrolled(biometricService.isBiometricEnabled());
+    });
 
     // If there are registered agents and none logged in, prefill the first one in login form
     if (!isAuth && saved.length > 0 && !loginAgencyCode) {
@@ -120,6 +133,44 @@ export function LandingPage() {
     }
   };
 
+  const handleBiometricLogin = async () => {
+    setAuthError(null);
+    setAuthSuccess(null);
+    setIsSubmitting(true);
+
+    try {
+      const targetAgency = loginAgencyCode.trim() || biometricService.getLastBiometricAgencyCode() || (registeredAgents[0]?.agencyCode ?? '');
+      if (!targetAgency) {
+        throw new Error('Please enter or select your Agency Code above first.');
+      }
+
+      const res = await biometricService.verifyBiometrics(targetAgency);
+      if (res.success) {
+        const agent = registeredAgents.find((a) => a.agencyCode === targetAgency);
+        if (agent) {
+          switchAgentDatabase(targetAgency);
+          sessionStorage.setItem('lic_active_agency_code', targetAgency);
+          sessionStorage.setItem('lic_authenticated', 'true');
+          sessionStorage.setItem('lic_app_unlocked', 'true');
+          setAuthSuccess(`Fingerprint verified! Welcome back, ${agent.agentName}.`);
+          setIsAuthenticated(true);
+          setCurrentAgent(agent);
+          setTimeout(() => {
+            navigate('/dashboard');
+          }, 600);
+        } else {
+          throw new Error(`Agency ${targetAgency} recognized, but account is not registered on this device.`);
+        }
+      }
+    } catch (err: any) {
+      if (err.message && !err.message.includes('canceled')) {
+        setAuthError(err.message || 'Fingerprint verification failed.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
@@ -138,6 +189,16 @@ export function LandingPage() {
         agentName: regName,
         pin: regPin,
       });
+
+      // Enroll biometrics if supported and checked
+      if (isBiometricHardware && enableBiometricsOnRegister) {
+        try {
+          await biometricService.registerBiometrics(res.agent.agencyCode, res.agent.agentName);
+        } catch (bioErr) {
+          console.warn('Biometric auto-enroll notice:', bioErr);
+        }
+      }
+
       setAuthSuccess(`Account created! Welcome to your personal portal, Agent ${res.agent.agencyCode}.`);
       setIsAuthenticated(true);
       setCurrentAgent(res.agent);
@@ -322,6 +383,20 @@ export function LandingPage() {
                     {isSubmitting ? 'Authenticating...' : 'Log In to My Workspace'}
                   </Button>
 
+                  {isBiometricHardware && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="lg"
+                      onClick={handleBiometricLogin}
+                      disabled={isSubmitting}
+                      className="w-full border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 font-bold flex items-center justify-center gap-2"
+                      leftIcon={<Fingerprint className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
+                    >
+                      Unlock with Fingerprint
+                    </Button>
+                  )}
+
                   <div className="pt-2 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
                     <button
                       type="button"
@@ -425,6 +500,21 @@ export function LandingPage() {
                       />
                     </div>
                   </div>
+
+                  {isBiometricHardware && (
+                    <label className="flex items-center gap-2.5 cursor-pointer text-xs text-slate-700 dark:text-slate-300 pt-1 select-none">
+                      <input
+                        type="checkbox"
+                        checked={enableBiometricsOnRegister}
+                        onChange={(e) => setEnableBiometricsOnRegister(e.target.checked)}
+                        className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="flex items-center gap-1.5 font-medium">
+                        <Fingerprint className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        <span>Enable Fingerprint unlock on this device</span>
+                      </span>
+                    </label>
+                  )}
 
                   <Button
                     type="submit"
