@@ -23,6 +23,18 @@ const REGISTRY_STORAGE_KEY = 'lic_agent_accounts_registry';
 const AUTH_FLAG_KEY = 'lic_authenticated';
 const ACTIVE_AGENCY_KEY = 'lic_active_agency_code';
 const UNLOCKED_KEY = 'lic_app_unlocked';
+const LAST_AGENCY_KEY = 'lic_last_agency_code';
+
+// Clean up any stale persistent auth flags from localStorage so opening in a new session/browser always requires PIN authentication
+if (typeof window !== 'undefined') {
+  try {
+    localStorage.removeItem(AUTH_FLAG_KEY);
+    localStorage.removeItem(ACTIVE_AGENCY_KEY);
+    localStorage.removeItem(UNLOCKED_KEY);
+  } catch {
+    // ignore
+  }
+}
 
 export const authService = {
   /**
@@ -49,21 +61,17 @@ export const authService = {
   },
 
   /**
-   * Check whether any agent is currently authenticated
+   * Check whether any agent is currently authenticated in the active session
    */
   isAuthenticated(): boolean {
     if (typeof window === 'undefined') return false;
-    const isAuth =
-      sessionStorage.getItem(AUTH_FLAG_KEY) === 'true' ||
-      localStorage.getItem(AUTH_FLAG_KEY) === 'true';
-    const activeAgency =
-      sessionStorage.getItem(ACTIVE_AGENCY_KEY) ||
-      localStorage.getItem(ACTIVE_AGENCY_KEY);
+    const isAuth = sessionStorage.getItem(AUTH_FLAG_KEY) === 'true';
+    const activeAgency = sessionStorage.getItem(ACTIVE_AGENCY_KEY);
     return Boolean(isAuth && activeAgency);
   },
 
   /**
-   * Set active authenticated agent session (persistent across reload)
+   * Set active authenticated agent session (session-scoped for security)
    */
   setSession(agencyCode: string): void {
     if (typeof window === 'undefined') return;
@@ -71,9 +79,11 @@ export const authService = {
     sessionStorage.setItem(ACTIVE_AGENCY_KEY, sanitized);
     sessionStorage.setItem(AUTH_FLAG_KEY, 'true');
     sessionStorage.setItem(UNLOCKED_KEY, 'true');
-    localStorage.setItem(ACTIVE_AGENCY_KEY, sanitized);
-    localStorage.setItem(AUTH_FLAG_KEY, 'true');
-    localStorage.setItem(UNLOCKED_KEY, 'true');
+    // Remember last agency for convenient login pre-fill, but never persist active auth
+    localStorage.setItem(LAST_AGENCY_KEY, sanitized);
+    localStorage.removeItem(ACTIVE_AGENCY_KEY);
+    localStorage.removeItem(AUTH_FLAG_KEY);
+    localStorage.removeItem(UNLOCKED_KEY);
   },
 
   /**

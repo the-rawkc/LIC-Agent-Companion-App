@@ -73,9 +73,14 @@ export function LandingPage() {
     const saved = authService.getRegisteredAgents();
     setRegisteredAgents(saved);
 
-    // If there are registered agents and none logged in, prefill the first one in login form
-    if (!isAuth && saved.length > 0 && !loginAgencyCode) {
-      setLoginAgencyCode(saved[0].agencyCode);
+    // If there are registered agents and none logged in, prefill the last active or first agent in login form
+    if (!isAuth && !loginAgencyCode) {
+      const lastAgency = localStorage.getItem('lic_last_agency_code');
+      if (lastAgency && saved.some((a) => a.agencyCode === lastAgency)) {
+        setLoginAgencyCode(lastAgency);
+      } else if (saved.length > 0) {
+        setLoginAgencyCode(saved[0].agencyCode);
+      }
     }
 
     if (isAuth) {

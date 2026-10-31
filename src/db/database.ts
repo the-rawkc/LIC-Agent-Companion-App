@@ -45,7 +45,7 @@ const dbInstances = new Map<string, LICDatabase>();
 
 export function getActiveAgencyCode(): string | null {
   if (typeof window === 'undefined') return null;
-  return sessionStorage.getItem('lic_active_agency_code') || localStorage.getItem('lic_active_agency_code') || null;
+  return sessionStorage.getItem('lic_active_agency_code') || null;
 }
 
 export function getActiveDbName(): string {
