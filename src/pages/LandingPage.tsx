@@ -23,8 +23,7 @@ import {
   AlertCircle,
   CheckCircle2,
   LogOut,
-  RefreshCw,
-  Fingerprint
+  RefreshCw
 } from 'lucide-react';
 import { AppLogo } from '@/components/shared/AppLogo';
 import { Button } from '@/components/shared/Button';
@@ -34,7 +33,6 @@ import { GlobalSearchModal } from '@/components/shared/GlobalSearchModal';
 import { analyticsService, type DashboardStats } from '@/features/analytics/analyticsService';
 import { profileRepository, type AgentProfile, DEFAULT_PROFILE } from '@/db/repositories/profileRepository';
 import { authService, type AgentAccount } from '@/services/auth/authService';
-import { biometricService } from '@/services/security/biometricService';
 import { switchAgentDatabase } from '@/db/database';
 import { formatCurrency } from '@/utils/formatters';
 
@@ -47,11 +45,6 @@ export function LandingPage() {
   const [registeredAgents, setRegisteredAgents] = useState<AgentAccount[]>([]);
   const [authTab, setAuthTab] = useState<'login' | 'register'>('login');
 
-  // Biometric Authentication State
-  const [isBiometricHardware, setIsBiometricHardware] = useState(false);
-  const [isBiometricEnrolled, setIsBiometricEnrolled] = useState(false);
-  const [enableBiometricsOnRegister, setEnableBiometricsOnRegister] = useState(true);
-
   // Form States
   const [loginAgencyCode, setLoginAgencyCode] = useState('');
   const [loginPin, setLoginPin] = useState('');
@@ -60,7 +53,6 @@ export function LandingPage() {
   const [regMobile, setRegMobile] = useState('');
   const [regName, setRegName] = useState('');
   const [regPin, setRegPin] = useState('');
-  const [regConfirmPin, setRegConfirmPin] = useState('');
 
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
@@ -80,11 +72,6 @@ export function LandingPage() {
     setCurrentAgent(agent);
     const saved = authService.getRegisteredAgents();
     setRegisteredAgents(saved);
-
-    biometricService.isHardwareAvailable().then((available) => {
-      setIsBiometricHardware(available);
-      setIsBiometricEnrolled(biometricService.isBiometricEnabled());
-    });
 
     // If there are registered agents and none logged in, prefill the first one in login form
     if (!isAuth && saved.length > 0 && !loginAgencyCode) {
@@ -136,63 +123,13 @@ export function LandingPage() {
     }
   };
 
-  const handleBiometricLogin = async () => {
-    setAuthError(null);
-    setAuthSuccess(null);
-    setIsSubmitting(true);
-
-    try {
-      const targetAgency = loginAgencyCode.trim() || biometricService.getLastBiometricAgencyCode() || (registeredAgents[0]?.agencyCode ?? '');
-      if (!targetAgency) {
-        throw new Error('Please enter or select your Agency Code above first.');
-      }
-
-      const res = await biometricService.verifyBiometrics(targetAgency);
-      if (res.success) {
-        const agent = registeredAgents.find((a) => a.agencyCode === targetAgency);
-        if (agent) {
-          switchAgentDatabase(targetAgency);
-          sessionStorage.setItem('lic_active_agency_code', targetAgency);
-          sessionStorage.setItem('lic_authenticated', 'true');
-          sessionStorage.setItem('lic_app_unlocked', 'true');
-
-          let restoredInfo = { restored: false, count: 0 };
-          try {
-            restoredInfo = await authService.autoRestoreOrMigrateData(targetAgency);
-          } catch (e) {
-            console.warn('Biometric restore notice:', e);
-          }
-
-          const notice = restoredInfo.restored
-            ? `Fingerprint verified! Restored ${restoredInfo.count} policies for ${agent.agentName}.`
-            : `Fingerprint verified! Welcome back, ${agent.agentName}.`;
-
-          setAuthSuccess(notice);
-          setIsAuthenticated(true);
-          setCurrentAgent(agent);
-          setTimeout(() => {
-            navigate('/dashboard');
-          }, 600);
-        } else {
-          throw new Error(`Agency ${targetAgency} recognized, but account is not registered on this device.`);
-        }
-      }
-    } catch (err: any) {
-      if (err.message && !err.message.includes('canceled')) {
-        setAuthError(err.message || 'Fingerprint verification failed.');
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
     setAuthSuccess(null);
 
-    if (regPin !== regConfirmPin) {
-      setAuthError('4-digit PIN and Confirm PIN do not match.');
+    if (!/^\d{4}$/.test(regPin)) {
+      setAuthError('Security PIN must be exactly 4 numeric digits.');
       return;
     }
 
@@ -204,15 +141,6 @@ export function LandingPage() {
         agentName: regName,
         pin: regPin,
       });
-
-      // Enroll biometrics if supported and checked
-      if (isBiometricHardware && enableBiometricsOnRegister) {
-        try {
-          await biometricService.registerBiometrics(res.agent.agencyCode, res.agent.agentName);
-        } catch (bioErr) {
-          console.warn('Biometric auto-enroll notice:', bioErr);
-        }
-      }
 
       setAuthSuccess(`Account created! Welcome to your personal portal, Agent ${res.agent.agencyCode}.`);
       setIsAuthenticated(true);
@@ -398,20 +326,6 @@ export function LandingPage() {
                     {isSubmitting ? 'Authenticating...' : 'Log In to My Workspace'}
                   </Button>
 
-                  {isBiometricHardware && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="lg"
-                      onClick={handleBiometricLogin}
-                      disabled={isSubmitting}
-                      className="w-full border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 font-bold flex items-center justify-center gap-2"
-                      leftIcon={<Fingerprint className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
-                    >
-                      Unlock with Fingerprint
-                    </Button>
-                  )}
-
                   <div className="pt-2 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
                     <button
                       type="button"
@@ -480,56 +394,25 @@ export function LandingPage() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                        Create 4-Digit PIN *
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                        Create 4-Digit Security PIN *
                       </label>
-                      <input
-                        type="password"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        maxLength={4}
-                        value={regPin}
-                        onChange={(e) => setRegPin(e.target.value.replace(/\D/g, ''))}
-                        placeholder="••••"
-                        className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-sm tracking-widest text-center focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                        required
-                      />
+                      <span className="text-[10px] text-slate-400">4 numbers (used to log in)</span>
                     </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                        Confirm PIN *
-                      </label>
-                      <input
-                        type="password"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        maxLength={4}
-                        value={regConfirmPin}
-                        onChange={(e) => setRegConfirmPin(e.target.value.replace(/\D/g, ''))}
-                        placeholder="••••"
-                        className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-sm tracking-widest text-center focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                        required
-                      />
-                    </div>
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={4}
+                      value={regPin}
+                      onChange={(e) => setRegPin(e.target.value.replace(/\D/g, ''))}
+                      placeholder="••••"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-base tracking-widest text-center focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      required
+                    />
                   </div>
-
-                  {isBiometricHardware && (
-                    <label className="flex items-center gap-2.5 cursor-pointer text-xs text-slate-700 dark:text-slate-300 pt-1 select-none">
-                      <input
-                        type="checkbox"
-                        checked={enableBiometricsOnRegister}
-                        onChange={(e) => setEnableBiometricsOnRegister(e.target.checked)}
-                        className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="flex items-center gap-1.5 font-medium">
-                        <Fingerprint className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                        <span>Enable Fingerprint unlock on this device</span>
-                      </span>
-                    </label>
-                  )}
 
                   <Button
                     type="submit"

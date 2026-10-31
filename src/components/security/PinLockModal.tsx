@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Lock, Delete, Fingerprint } from 'lucide-react';
+import { Lock, Delete } from 'lucide-react';
 import { pinService } from '@/services/security/pinService';
-import { biometricService } from '@/services/security/biometricService';
 
 export interface PinLockModalProps {
   isOpen: boolean;
@@ -13,49 +12,14 @@ export function PinLockModal({ isOpen, onSuccess }: PinLockModalProps) {
   const [error, setError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
-  const [isBiometricSupported, setIsBiometricSupported] = useState(false);
-  const [isBiometricEnabled, setIsBiometricEnabled] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setPin('');
       setError(false);
       setErrorMessage('');
-      checkBiometrics();
     }
   }, [isOpen]);
-
-  async function checkBiometrics() {
-    const available = await biometricService.isHardwareAvailable();
-    setIsBiometricSupported(available);
-    const enabled = biometricService.isBiometricEnabled();
-    setIsBiometricEnabled(enabled);
-
-    // Auto-prompt biometrics if enabled
-    if (available && enabled) {
-      handleBiometricUnlock();
-    }
-  }
-
-  const handleBiometricUnlock = async () => {
-    setIsVerifying(true);
-    setError(false);
-    setErrorMessage('');
-    try {
-      const res = await biometricService.verifyBiometrics();
-      if (res.success) {
-        onSuccess();
-      }
-    } catch (err: any) {
-      // Don't show hard error if simply canceled
-      if (err.message && !err.message.includes('canceled')) {
-        setError(true);
-        setErrorMessage(err.message);
-      }
-    } finally {
-      setIsVerifying(false);
-    }
-  };
 
   if (!isOpen) return null;
 
@@ -107,7 +71,7 @@ export function PinLockModal({ isOpen, onSuccess }: PinLockModalProps) {
           LIC Agent Companion
         </h2>
         <p className="text-xs text-slate-400 mt-1">
-          Enter PIN or use Fingerprint to unlock
+          Enter 4-digit PIN to unlock
         </p>
 
         {/* PIN Dots */}
@@ -132,7 +96,7 @@ export function PinLockModal({ isOpen, onSuccess }: PinLockModalProps) {
           </p>
         )}
 
-        {/* Numeric Keypad with Fingerprint button */}
+        {/* Numeric Keypad */}
         <div className="grid grid-cols-3 gap-3.5 w-full">
           {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
             <button
@@ -144,18 +108,7 @@ export function PinLockModal({ isOpen, onSuccess }: PinLockModalProps) {
             </button>
           ))}
 
-          {/* Biometric Fingerprint Button */}
-          {isBiometricSupported ? (
-            <button
-              onClick={handleBiometricUnlock}
-              title="Unlock using Fingerprint"
-              className="h-14 rounded-2xl bg-blue-950/60 hover:bg-blue-900/80 text-blue-400 hover:text-blue-200 border border-blue-800/80 active:scale-95 transition flex items-center justify-center shadow-xs"
-            >
-              <Fingerprint className="w-6 h-6" />
-            </button>
-          ) : (
-            <div />
-          )}
+          <div />
 
           <button
             onClick={() => handleDigit('0')}
@@ -172,17 +125,6 @@ export function PinLockModal({ isOpen, onSuccess }: PinLockModalProps) {
             <Delete className="w-5 h-5" />
           </button>
         </div>
-
-        {/* Quick Fingerprint tap prompt */}
-        {isBiometricSupported && (
-          <button
-            onClick={handleBiometricUnlock}
-            className="mt-6 flex items-center gap-2 text-xs font-semibold text-blue-400 hover:text-blue-300 transition"
-          >
-            <Fingerprint className="w-4 h-4" />
-            <span>Tap to unlock with Fingerprint</span>
-          </button>
-        )}
       </div>
     </div>
   );

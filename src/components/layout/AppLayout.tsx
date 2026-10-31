@@ -7,7 +7,6 @@ import {
   Bell,
   Menu,
   Search,
-  Lock,
   WifiOff,
   BarChart3,
   Upload,
@@ -23,8 +22,6 @@ import {
 } from 'lucide-react';
 import { AppLogo } from '../shared/AppLogo';
 import { GlobalSearchModal } from '../shared/GlobalSearchModal';
-import { PinLockModal } from '../security/PinLockModal';
-import { useAppSecurity } from '@/hooks/useAppSecurity';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { settingsRepository } from '@/db/repositories/settingsRepository';
 import { profileRepository, type AgentProfile } from '@/db/repositories/profileRepository';
@@ -45,7 +42,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [agentInitials, setAgentInitials] = useState('AG');
   const [agencyCode, setAgencyCode] = useState('');
 
-  const { isPinConfigured, isLocked, unlock, lock, refreshSecurity } = useAppSecurity();
   const isOnline = useNetworkStatus();
 
   // Load auth state & profile details on route change
@@ -131,9 +127,6 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col antialiased overflow-x-hidden w-full max-w-full">
-      {/* PIN Lock Barrier (Active only in authenticated workspace) */}
-      {!isLandingPage && <PinLockModal isOpen={isLocked} onSuccess={unlock} />}
-
       {/* Top Header - Rendered strictly in authenticated workspace to avoid ghost flashes on landing */}
       {!isLandingPage && (
         <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 pt-safe w-full overflow-x-hidden">
@@ -203,17 +196,6 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <WifiOff className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Offline</span>
                 </div>
-              )}
-
-              {/* Lock button */}
-              {isPinConfigured && (
-                <button
-                  onClick={lock}
-                  title="Lock session"
-                  className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition tap-effect"
-                >
-                  <Lock className="w-4 h-4" />
-                </button>
               )}
 
               {/* Dark mode toggle */}

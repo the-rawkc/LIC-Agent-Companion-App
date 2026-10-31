@@ -19,11 +19,9 @@ import {
   Cloud,
   RefreshCw,
   ArrowUpCircle,
-  ArrowDownCircle,
-  Fingerprint
+  ArrowDownCircle
 } from 'lucide-react';
 import { pinService } from '@/services/security/pinService';
-import { biometricService } from '@/services/security/biometricService';
 import { backupService, type BackupPayload } from '@/services/backup/backupService';
 import { d1SyncService, type SyncConfig, type SyncStatus } from '@/services/cloud/d1SyncService';
 import { settingsRepository } from '@/db/repositories/settingsRepository';
@@ -42,12 +40,6 @@ export function SettingsPage() {
   const [isPinEnabled, setIsPinEnabled] = useState(false);
   const [isPinSetupModalOpen, setIsPinSetupModalOpen] = useState(false);
   const [isPinChangeModalOpen, setIsPinChangeModalOpen] = useState(false);
-
-  // Biometrics State
-  const [isBiometricHardware, setIsBiometricHardware] = useState(false);
-  const [isBiometricEnabled, setIsBiometricEnabled] = useState(false);
-  const [biometricNotice, setBiometricNotice] = useState<string | null>(null);
-  const [isBiometricTesting, setIsBiometricTesting] = useState(false);
 
   // Backup state
   const [backupPassword, setBackupPassword] = useState('');
@@ -104,11 +96,6 @@ export function SettingsPage() {
     const pinConfigured = await pinService.isPinConfigured();
     setIsPinEnabled(pinConfigured);
 
-    // Biometrics support & status
-    const bioHardware = await biometricService.isHardwareAvailable();
-    setIsBiometricHardware(bioHardware);
-    setIsBiometricEnabled(biometricService.isBiometricEnabled());
-
     const savedTheme = await settingsRepository.get<string>('theme', 'light');
     setTheme(savedTheme === 'dark' ? 'dark' : 'light');
 
@@ -143,44 +130,6 @@ export function SettingsPage() {
     if (confirm('Are you sure you want to disable PIN protection?')) {
       await pinService.disablePin();
       setIsPinEnabled(false);
-    }
-  };
-
-  const handleEnableBiometrics = async () => {
-    try {
-      const code = getActiveAgencyCode() || 'AGENT';
-      await biometricService.registerBiometrics(code);
-      setIsBiometricEnabled(true);
-      setBiometricNotice('Fingerprint biometric authentication enabled successfully!');
-      setTimeout(() => setBiometricNotice(null), 4000);
-    } catch (err: any) {
-      alert(err.message || 'Failed to register fingerprint.');
-    }
-  };
-
-  const handleTestBiometrics = async () => {
-    setIsBiometricTesting(true);
-    try {
-      const res = await biometricService.verifyBiometrics();
-      if (res.success) {
-        setBiometricNotice('Biometric verification successful! Fingerprint recognized.');
-        setTimeout(() => setBiometricNotice(null), 4000);
-      }
-    } catch (err: any) {
-      if (err.message && !err.message.includes('canceled')) {
-        alert(err.message || 'Biometric verification failed.');
-      }
-    } finally {
-      setIsBiometricTesting(false);
-    }
-  };
-
-  const handleDisableBiometrics = () => {
-    if (confirm('Disable fingerprint biometric access for this agency?')) {
-      biometricService.disableBiometrics();
-      setIsBiometricEnabled(false);
-      setBiometricNotice('Biometric access disabled.');
-      setTimeout(() => setBiometricNotice(null), 3000);
     }
   };
 
@@ -384,72 +333,6 @@ export function SettingsPage() {
               leftIcon={<KeyRound className="w-4 h-4" />}
             >
               Set 4-Digit PIN
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Biometric & Fingerprint Authentication Card */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-              <Fingerprint className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                Biometric & Fingerprint Unlock
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Unlock your workspace instantly with your mobile fingerprint scanner or platform biometrics
-              </p>
-            </div>
-          </div>
-          <Badge variant={!isBiometricHardware ? 'default' : isBiometricEnabled ? 'success' : 'warning'}>
-            {!isBiometricHardware ? 'Hardware Unavailable' : isBiometricEnabled ? 'Biometrics Active' : 'Not Enrolled'}
-          </Badge>
-        </div>
-
-        {biometricNotice && (
-          <div className="p-3 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 rounded-xl text-xs text-purple-800 dark:text-purple-300 font-medium">
-            {biometricNotice}
-          </div>
-        )}
-
-        <div className="pt-2 flex flex-wrap items-center gap-2.5">
-          {!isBiometricHardware ? (
-            <p className="text-xs text-slate-400">
-              Your current device or browser does not support WebAuthn platform biometrics. PIN access is active.
-            </p>
-          ) : isBiometricEnabled ? (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleTestBiometrics}
-                disabled={isBiometricTesting}
-                leftIcon={<Fingerprint className="w-3.5 h-3.5 text-purple-600" />}
-              >
-                {isBiometricTesting ? 'Scanning...' : 'Test Fingerprint Sensor'}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleDisableBiometrics}
-                className="text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
-              >
-                Disable Biometrics
-              </Button>
-            </>
-          ) : (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleEnableBiometrics}
-              className="bg-purple-600 hover:bg-purple-500 text-white"
-              leftIcon={<Fingerprint className="w-4 h-4" />}
-            >
-              Enroll Device Fingerprint
             </Button>
           )}
         </div>
