@@ -1,29 +1,58 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0b192c" />
-      <stop offset="100%" stop-color="#1e3e62" />
+    <linearGradient id="shieldBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#061224" />
+      <stop offset="50%" stop-color="#0b1e38" />
+      <stop offset="100%" stop-color="#142c4d" />
     </linearGradient>
-    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#fbbf24" />
-      <stop offset="100%" stop-color="#d97706" />
+
+    <linearGradient id="goldStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="35%" stop-color="#f59e0b" />
+      <stop offset="70%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#92400e" />
+    </linearGradient>
+
+    <linearGradient id="flameGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#ef4444" />
+      <stop offset="40%" stop-color="#f97316" />
+      <stop offset="80%" stop-color="#fde047" />
+      <stop offset="100%" stop-color="#ffffff" />
+    </linearGradient>
+
+    <linearGradient id="innerGlow" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#1e3a8a" stop-opacity="0" />
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="128" fill="url(#bgGrad)" />
-  
-  <!-- Outer shield contour -->
-  <path d="M256 72 C350 72, 400 110, 400 210 C400 326, 256 420, 256 440 C256 440, 112 326, 112 210 C112 110, 162 72, 256 72 Z" 
-        fill="none" stroke="url(#goldGrad)" stroke-width="24" stroke-linejoin="round" />
 
-  <!-- Hands / Protection Symbol -->
-  <path d="M190 280 C200 240, 240 220, 256 220 C272 220, 312 240, 322 280 C332 320, 290 350, 256 360 C222 350, 180 320, 190 280 Z" 
-        fill="#ffffff" opacity="0.95" />
-  
-  <!-- Central Flame / Lamp of security -->
-  <path d="M256 140 C264 165, 280 185, 280 205 C280 222, 269 235, 256 235 C243 235, 232 222, 232 205 C232 185, 248 165, 256 140 Z" 
-        fill="url(#goldGrad)" />
-        
-  <!-- Star accents -->
-  <circle cx="210" cy="180" r="8" fill="#38bdf8" />
-  <circle cx="302" cy="180" r="8" fill="#38bdf8" />
+  <!-- Squircle Base -->
+  <rect x="16" y="16" width="480" height="480" rx="128" fill="url(#shieldBg)" stroke="url(#goldStroke)" stroke-width="18" />
+
+  <!-- Ambient Glow -->
+  <circle cx="256" cy="180" r="160" fill="url(#innerGlow)" />
+
+  <!-- Shield Contour -->
+  <path d="M256 64 C352 64, 404 102, 404 200 C404 316, 256 424, 256 440 C256 440, 108 316, 108 200 C108 102, 160 64, 256 64 Z" 
+        fill="none" stroke="url(#goldStroke)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" />
+
+  <!-- Supporting Hands (Yogakshemam Vahamyaham) -->
+  <path d="M168 286 C180 236, 224 212, 256 212 C288 212, 332 236, 344 286 C354 326, 308 358, 256 368 C204 358, 158 326, 168 286 Z" 
+        fill="#ffffff" fill-opacity="0.95" />
+
+  <!-- Hand detail cuts -->
+  <path d="M200 300 C216 270, 240 256, 256 256 C272 256, 296 270, 312 300" 
+        fill="none" stroke="#0f2744" stroke-width="6" stroke-linecap="round" />
+
+  <!-- Eternal Flame (Security & Trust) -->
+  <path d="M256 120 C270 156, 292 186, 292 216 C292 242, 276 260, 256 260 C236 260, 220 242, 220 216 C220 186, 242 156, 256 120 Z" 
+        fill="url(#flameGrad)" />
+
+  <!-- Inner Flame Core -->
+  <path d="M256 160 C264 185, 274 202, 274 220 C274 235, 266 245, 256 245 C246 245, 238 235, 238 220 C238 202, 248 185, 256 160 Z" 
+        fill="#ffffff" />
+
+  <!-- Sparkles -->
+  <polygon points="184,170 187,178 195,181 187,184 184,192 181,184 173,181 181,178" fill="#fbbf24" />
+  <polygon points="328,170 331,178 339,181 331,184 328,192 325,184 317,181 325,178" fill="#fbbf24" />
 </svg>

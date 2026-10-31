@@ -1,5 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { LandingPage } from '@/pages/LandingPage';
 import { DashboardPage } from '@/pages/DashboardPage';
+import { ProfilePage } from '@/pages/ProfilePage';
 import { CustomersPage } from '@/pages/CustomersPage';
 import { CustomerDetailsPage } from '@/pages/CustomerDetailsPage';
 import { PoliciesPage } from '@/pages/PoliciesPage';
@@ -12,7 +14,9 @@ import { SettingsPage } from '@/pages/SettingsPage';
 export function AppRouter() {
   return (
     <Routes>
-      <Route path="/" element={<DashboardPage />} />
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/dashboard" element={<DashboardPage />} />
+      <Route path="/profile" element={<ProfilePage />} />
       <Route path="/customers" element={<CustomersPage />} />
       <Route path="/customers/:id" element={<CustomerDetailsPage />} />
       <Route path="/policies" element={<PoliciesPage />} />

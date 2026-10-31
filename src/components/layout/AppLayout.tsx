@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home,
   Users,
@@ -16,13 +16,17 @@ import {
   Sun,
   Moon,
   Shield,
-  HelpCircle
+  HelpCircle,
+  User,
+  LayoutDashboard
 } from 'lucide-react';
+import { AppLogo } from '../shared/AppLogo';
 import { GlobalSearchModal } from '../shared/GlobalSearchModal';
 import { PinLockModal } from '../security/PinLockModal';
 import { useAppSecurity } from '@/hooks/useAppSecurity';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { settingsRepository } from '@/db/repositories/settingsRepository';
+import { profileRepository, type AgentProfile } from '@/db/repositories/profileRepository';
 
 export interface AppLayoutProps {
   children: React.ReactNode;
@@ -30,12 +34,31 @@ export interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [agentName, setAgentName] = useState('Advisor');
+  const [agentInitials, setAgentInitials] = useState('AG');
 
   const { isPinConfigured, isLocked, unlock, lock, refreshSecurity } = useAppSecurity();
   const isOnline = useNetworkStatus();
+
+  // Load profile initials for header
+  useEffect(() => {
+    profileRepository.getProfile().then((p) => {
+      if (p.fullName) {
+        setAgentName(p.fullName);
+        const inits = p.fullName
+          .split(' ')
+          .map((n) => n[0])
+          .slice(0, 2)
+          .join('')
+          .toUpperCase();
+        setAgentInitials(inits || 'AG');
+      }
+    });
+  }, [location.pathname]);
 
   // Initialize theme from settings
   useEffect(() => {
@@ -81,16 +104,19 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const navItems = [
     { to: '/', label: 'Home', icon: Home, exact: true },
+    { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/customers', label: 'Customers', icon: Users },
     { to: '/policies', label: 'Policies', icon: FileText },
     { to: '/reminders', label: 'Reminders', icon: Bell },
   ];
 
   const moreItems = [
+    { to: '/reminders', label: 'Follow-ups & Reminders', icon: Bell, desc: 'F.U.P. & customer contact schedules' },
+    { to: '/profile', label: 'Agent Profile', icon: User, desc: 'Personal credentials, branch & signatures' },
     { to: '/analytics', label: 'Analytics', icon: BarChart3, desc: 'Portfolio distribution & trends' },
     { to: '/import', label: 'Import PDF', icon: Upload, desc: 'Import policy records from PDF' },
     { to: '/settings', label: 'Export & Backup', icon: HardDrive, desc: 'Encrypted backup & CSV export' },
-    { to: '/settings', label: 'Settings & Security', icon: Settings, desc: 'PIN lock, preferences & storage' },
+    { to: '/settings', label: 'Settings & Cloud Sync', icon: Settings, desc: 'D1 sync, PIN lock & preferences' },
   ];
 
   return (
@@ -102,16 +128,18 @@ export function AppLayout({ children }: AppLayoutProps) {
       <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 pt-safe">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-3">
           {/* Logo & Title */}
-          <div className="flex items-center gap-2.5 shrink-0">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-slate-900 to-blue-800 dark:from-blue-600 dark:to-indigo-500 flex items-center justify-center text-white shadow-sm shadow-blue-900/20">
-              <Shield className="w-5 h-5 text-amber-400" />
-            </div>
+          <div
+            className="flex items-center gap-2.5 shrink-0 cursor-pointer group"
+            onClick={() => navigate('/')}
+            title="Go to Home"
+          >
+            <AppLogo size={36} />
             <div>
-              <span className="font-bold text-sm sm:text-base text-slate-900 dark:text-white leading-tight block">
+              <span className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white leading-tight block group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
                 LIC Companion
               </span>
-              <span className="text-[10px] text-slate-400 block -mt-0.5">
-                Private Mobile Workspace
+              <span className="text-[10px] text-slate-400 block -mt-0.5 font-medium">
+                Agent Workspace
               </span>
             </div>
           </div>
@@ -162,6 +190,20 @@ export function AppLayout({ children }: AppLayoutProps) {
               className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
             >
               {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
+            </button>
+
+            {/* Profile Avatar Button */}
+            <button
+              onClick={() => navigate('/profile')}
+              title={`View Profile (${agentName})`}
+              className="flex items-center gap-2 pl-1 pr-1 sm:pr-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 transition"
+            >
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
+                {agentInitials}
+              </div>
+              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 hidden sm:inline max-w-[85px] truncate">
+                {agentName.split(' ')[0]}
+              </span>
             </button>
           </div>
         </div>
@@ -230,7 +272,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* Mobile Bottom Navigation Bar (5 tabs) */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 pb-safe">
         <div className="grid grid-cols-5 h-16 items-center">
-          {navItems.map((item) => {
+          {navItems.slice(0, 4).map((item) => {
             const Icon = item.icon;
             return (
               <NavLink
@@ -255,7 +297,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <button
             onClick={() => setIsMoreMenuOpen(true)}
             className={`flex flex-col items-center justify-center h-full transition-all select-none ${
-              isMoreMenuOpen || location.pathname.startsWith('/analytics') || location.pathname.startsWith('/import') || location.pathname.startsWith('/settings')
+              isMoreMenuOpen || location.pathname.startsWith('/reminders') || location.pathname.startsWith('/profile') || location.pathname.startsWith('/analytics') || location.pathname.startsWith('/import') || location.pathname.startsWith('/settings')
                 ? 'text-blue-600 dark:text-blue-400 font-semibold'
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
