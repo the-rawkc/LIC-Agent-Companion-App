@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Upload,
   FileText,
+  FileSpreadsheet,
   AlertTriangle,
   CheckCircle2,
   XCircle,
@@ -15,6 +16,7 @@ import {
   Check
 } from 'lucide-react';
 import { extractPoliciesFromPdf } from '@/services/pdf/extractPdfText';
+import { extractPoliciesFromExcel } from '@/services/excel/extractExcelData';
 import { importService, type CommitImportOptions } from '@/services/import/importService';
 import { db } from '@/db/database';
 import { SAMPLE_RAW_POLICY_ROWS } from '@/services/sampleData/licSampleRecords';
@@ -31,6 +33,7 @@ export function ImportPage() {
 
   const [activeTab, setActiveTab] = useState<'upload' | 'history'>('upload');
   const [file, setFile] = useState<File | null>(null);
+  const [fileType, setFileType] = useState<'pdf' | 'excel' | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState<{ page: number; total: number; percentage: number } | null>(null);
   const [preview, setPreview] = useState<ImportPreviewSummary | null>(null);
@@ -58,13 +61,53 @@ export function ImportPage() {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
 
-    if (!selectedFile.name.toLowerCase().endsWith('.pdf')) {
-      alert('Please select a valid PDF file.');
+    const name = selectedFile.name.toLowerCase();
+    const isPdf = name.endsWith('.pdf');
+    const isExcel = name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv');
+
+    if (!isPdf && !isExcel) {
+      alert('Please select a valid PDF report (.pdf) or Excel spreadsheet (.xlsx, .xls, .csv).');
       return;
     }
 
     setFile(selectedFile);
-    await processPdf(selectedFile);
+    if (isExcel) {
+      setFileType('excel');
+      await processExcel(selectedFile);
+    } else {
+      setFileType('pdf');
+      await processPdf(selectedFile);
+    }
+  };
+
+  const processExcel = async (fileToProcess: File) => {
+    setIsProcessing(true);
+    setProgress({ page: 1, total: 1, percentage: 50 });
+    setPreview(null);
+
+    try {
+      const extracted = await extractPoliciesFromExcel(fileToProcess);
+      setProgress({ page: 1, total: 1, percentage: 95 });
+
+      const detectedKeys = Object.keys(extracted.matchedColumns);
+      const previewSummary = await importService.preparePreview(
+        extracted.extractedRows,
+        1,
+        [
+          `Imported from worksheet "${extracted.sheetName}".`,
+          `Detected columns: ${detectedKeys.join(', ')}`,
+          ...extracted.warnings,
+        ]
+      );
+
+      setPreview(previewSummary);
+    } catch (err) {
+      console.error('Excel extraction failed', err);
+      alert('Failed to read Excel spreadsheet: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setIsProcessing(false);
+      setProgress(null);
+    }
   };
 
   const processPdf = async (fileToProcess: File | ArrayBuffer, customFilename = 'LIC_Agent_Report.pdf') => {
@@ -214,22 +257,27 @@ export function ImportPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,application/pdf"
+                accept=".pdf,.xlsx,.xls,.csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
                 onChange={handleFileSelect}
                 className="hidden"
               />
-              <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto mb-4 group-hover:scale-105 transition shadow-inner">
-                <Upload className="w-8 h-8" />
+              <div className="flex items-center justify-center gap-2 mb-4">
+                <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:scale-105 transition shadow-inner">
+                  <FileText className="w-7 h-7" />
+                </div>
+                <div className="w-14 h-14 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center group-hover:scale-105 transition shadow-inner">
+                  <FileSpreadsheet className="w-7 h-7" />
+                </div>
               </div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                Select your LIC Agent PDF Report
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+                Upload LIC Report (PDF or Excel)
               </h3>
-              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1.5 max-w-sm mx-auto">
-                Tap to choose file from your phone storage or drag & drop here. 100% processed privately in your browser.
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1.5 max-w-md mx-auto">
+                Supports official LIC PDF agent reports and Excel registers (<strong>.xlsx</strong>, <strong>.xls</strong>, <strong>.csv</strong>). 100% processed privately on your device.
               </p>
               <div className="mt-5 flex items-center justify-center gap-3">
-                <Button variant="primary" size="sm" onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>
-                  Choose PDF File
+                <Button variant="primary" size="sm" onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }} leftIcon={<Upload className="w-3.5 h-3.5" />}>
+                  Choose Document (PDF / Excel)
                 </Button>
                 <Button
                   variant="outline"
@@ -247,14 +295,18 @@ export function ImportPage() {
           {isProcessing && progress && (
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 text-center space-y-4 shadow-sm">
               <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto animate-bounce">
-                <FileText className="w-6 h-6" />
+                {fileType === 'excel' ? (
+                  <FileSpreadsheet className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                ) : (
+                  <FileText className="w-6 h-6" />
+                )}
               </div>
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  Extracting PDF Table Data...
+                  {fileType === 'excel' ? 'Extracting Excel Spreadsheet Data...' : 'Extracting PDF Table Data...'}
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Parsing Page {progress.page} of {progress.total}
+                  {fileType === 'excel' ? 'Parsing columns and validating policy rows...' : `Parsing Page ${progress.page} of ${progress.total}`}
                 </p>
               </div>
 
@@ -280,10 +332,14 @@ export function ImportPage() {
                   <div>
                     <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                       <span>Import Preview</span>
-                      <Badge variant="info">{preview.totalRowsDetected} Rows Extracted</Badge>
+                      <Badge variant={fileType === 'excel' ? 'success' : 'info'}>
+                        {fileType === 'excel' ? 'Excel Spreadsheet' : 'PDF Report'}
+                      </Badge>
+                      <Badge variant="purple">{preview.totalRowsDetected} Rows</Badge>
                     </h2>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      File: <strong>{file?.name || 'Report'}</strong> • {preview.pagesProcessed} Pages processed
+                      File: <strong>{file?.name || 'Report'}</strong>
+                      {fileType !== 'excel' && ` • ${preview.pagesProcessed} Pages processed`}
                     </p>
                   </div>
 
