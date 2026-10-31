@@ -11,9 +11,13 @@ import {
   ArrowUpDown,
   GitMerge,
   ChevronRight,
-  ExternalLink
+  ExternalLink,
+  Download,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { customerRepository, type CustomerWithSummary } from '@/db/repositories/customerRepository';
+import { backupService } from '@/services/backup/backupService';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
@@ -28,6 +32,10 @@ export function CustomersPage() {
   const [filterType, setFilterType] = useState<'all' | 'has_phone' | 'multi_policy'>('all');
   const [sortBy, setSortBy] = useState<'name_asc' | 'name_desc' | 'policies_desc' | 'premium_desc'>('name_asc');
   const [isLoading, setIsLoading] = useState(true);
+
+  // Multi-selection state for export
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isExporting, setIsExporting] = useState(false);
 
   // New Customer Modal
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -120,6 +128,63 @@ export function CustomersPage() {
     }
   };
 
+  const handleToggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = new Set(selectedIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setSelectedIds(next);
+  };
+
+  const handleSelectAllVisible = () => {
+    const next = new Set(selectedIds);
+    const visibleIds = filteredCustomers.map((c) => c.id);
+    const allSelected = visibleIds.length > 0 && visibleIds.every((id) => next.has(id));
+
+    if (allSelected) {
+      visibleIds.forEach((id) => next.delete(id));
+    } else {
+      visibleIds.forEach((id) => next.add(id));
+    }
+    setSelectedIds(next);
+  };
+
+  const downloadFile = (content: string, filename: string, mimeType: string) => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportAllCsv = async () => {
+    setIsExporting(true);
+    try {
+      const csv = await backupService.exportCustomersToCsv();
+      downloadFile(csv, `LIC_Customers_All_${customers.length}_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportSelectedCsv = async () => {
+    if (selectedIds.size === 0) return;
+    setIsExporting(true);
+    try {
+      const csv = await backupService.exportCustomersToCsv(Array.from(selectedIds));
+      downloadFile(csv, `LIC_Customers_Selected_${selectedIds.size}_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-5 max-w-6xl mx-auto w-full">
       {/* Page Title & Actions */}
@@ -135,6 +200,15 @@ export function CustomersPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportAllCsv}
+            disabled={customers.length === 0 || isExporting}
+            leftIcon={<Download className="w-3.5 h-3.5" />}
+          >
+            Export All (CSV)
+          </Button>
           {customers.length >= 2 && (
             <Button
               variant="outline"
@@ -221,6 +295,52 @@ export function CustomersPage() {
         </div>
       </div>
 
+      {/* Multi-Selection & Quick Action Bar */}
+      {filteredCustomers.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleSelectAllVisible}
+              className="flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400"
+            >
+              {filteredCustomers.length > 0 && filteredCustomers.every((c) => selectedIds.has(c.id)) ? (
+                <CheckSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              ) : (
+                <Square className="w-4 h-4 text-slate-400" />
+              )}
+              <span>Select all visible ({filteredCustomers.length})</span>
+            </button>
+            {selectedIds.size > 0 && (
+              <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-full font-semibold">
+                {selectedIds.size} selected
+              </span>
+            )}
+          </div>
+
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleExportSelectedCsv}
+                disabled={isExporting}
+                leftIcon={<Download className="w-3.5 h-3.5" />}
+              >
+                Export CSV ({selectedIds.size})
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedIds(new Set())}
+              >
+                Clear
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Customers List */}
       {isLoading ? (
         <div className="py-12 text-center text-sm text-slate-400">
@@ -240,26 +360,46 @@ export function CustomersPage() {
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-          {filteredCustomers.map((c) => (
-            <div
-              key={c.id}
-              onClick={() => navigate(`/customers/${c.id}`)}
-              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600 rounded-2xl p-4 sm:p-5 shadow-xs transition-all duration-150 cursor-pointer flex flex-col justify-between group active:scale-[0.99]"
-            >
-              <div>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="font-bold text-base text-slate-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
-                      {c.displayName}
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Customer ID: <span className="font-mono">{c.id.substring(0, 8)}</span>
-                    </p>
+          {filteredCustomers.map((c) => {
+            const isSelected = selectedIds.has(c.id);
+            return (
+              <div
+                key={c.id}
+                onClick={() => navigate(`/customers/${c.id}`)}
+                className={`bg-white dark:bg-slate-900 border ${
+                  isSelected
+                    ? 'border-blue-500 dark:border-blue-500 ring-2 ring-blue-500/20'
+                    : 'border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600'
+                } rounded-2xl p-4 sm:p-5 shadow-xs transition-all duration-150 cursor-pointer flex flex-col justify-between group active:scale-[0.99]`}
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2.5 min-w-0">
+                      <button
+                        type="button"
+                        onClick={(e) => handleToggleSelect(c.id, e)}
+                        className="p-1 -ml-1 text-slate-400 hover:text-blue-600 transition"
+                        aria-label={isSelected ? 'Deselect customer' : 'Select customer'}
+                      >
+                        {isSelected ? (
+                          <CheckSquare className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                        ) : (
+                          <Square className="w-5 h-5 text-slate-300 dark:text-slate-600" />
+                        )}
+                      </button>
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-base text-slate-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
+                          {c.displayName}
+                        </h3>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Customer ID: <span className="font-mono">{c.id.substring(0, 8)}</span>
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant={c.policyCount > 1 ? 'purple' : 'info'} size="sm">
+                      {c.policyCount} {c.policyCount === 1 ? 'Policy' : 'Policies'}
+                    </Badge>
                   </div>
-                  <Badge variant={c.policyCount > 1 ? 'purple' : 'info'} size="sm">
-                    {c.policyCount} {c.policyCount === 1 ? 'Policy' : 'Policies'}
-                  </Badge>
-                </div>
 
                 {/* Financial Summary */}
                 <div className="grid grid-cols-2 gap-2 mt-4 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs">
@@ -319,7 +459,8 @@ export function CustomersPage() {
                 </div>
               </div>
             </div>
-          ))}
+          );
+        })}
         </div>
       )}
 

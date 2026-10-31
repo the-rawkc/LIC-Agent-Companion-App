@@ -246,10 +246,14 @@ export const backupService = {
   },
 
   /**
-   * Export policies as CSV
+   * Export policies as CSV (supports selected or all)
    */
-  async exportPoliciesToCsv(): Promise<string> {
-    const policies = await db.policies.toArray();
+  async exportPoliciesToCsv(selectedPolicyIds?: string[]): Promise<string> {
+    let policies = await db.policies.toArray();
+    if (selectedPolicyIds && selectedPolicyIds.length > 0) {
+      const idSet = new Set(selectedPolicyIds);
+      policies = policies.filter((p) => idSet.has(p.id));
+    }
     const headers = [
       'Policy Number',
       'Customer Name',
@@ -282,6 +286,53 @@ export const backupService = {
       escapeCsv(formatDate(p.maturityDate)),
       escapeCsv(p.dateOfBirth ? formatDate(p.dateOfBirth) : '00/00/0000'),
       escapeCsv(p.recordStatus),
+    ].join(','));
+
+    return [headers.join(','), ...rows].join('\n');
+  },
+
+  /**
+   * Export policies as JSON (supports selected or all)
+   */
+  async exportPoliciesToJson(selectedPolicyIds?: string[]): Promise<string> {
+    let policies = await db.policies.toArray();
+    if (selectedPolicyIds && selectedPolicyIds.length > 0) {
+      const idSet = new Set(selectedPolicyIds);
+      policies = policies.filter((p) => idSet.has(p.id));
+    }
+    return JSON.stringify(policies, null, 2);
+  },
+
+  /**
+   * Export customers as CSV (supports selected or all)
+   */
+  async exportCustomersToCsv(selectedCustomerIds?: string[]): Promise<string> {
+    let customers = await db.customers.toArray();
+    if (selectedCustomerIds && selectedCustomerIds.length > 0) {
+      const idSet = new Set(selectedCustomerIds);
+      customers = customers.filter((c) => idSet.has(c.id));
+    }
+
+    const policies = await db.policies.toArray();
+    const policyCountMap = new Map<string, number>();
+    for (const p of policies) {
+      policyCountMap.set(p.customerId, (policyCountMap.get(p.customerId) || 0) + 1);
+    }
+
+    const headers = ['Customer Name', 'Mobile Number', 'Email', 'Address', 'Policies Count', 'Notes'];
+    const escapeCsv = (val: string | number | null | undefined) => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const rows = customers.map((c) => [
+      escapeCsv(c.displayName),
+      escapeCsv(c.mobileNumber || ''),
+      escapeCsv(c.email || ''),
+      escapeCsv(c.address || ''),
+      escapeCsv(policyCountMap.get(c.id) || 0),
+      escapeCsv(c.notes || ''),
     ].join(','));
 
     return [headers.join(','), ...rows].join('\n');

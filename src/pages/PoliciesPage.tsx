@@ -10,10 +10,14 @@ import {
   AlertTriangle,
   Calendar,
   CheckCircle2,
-  Clock
+  Clock,
+  Download,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { policyRepository, type PolicyFilterOptions } from '@/db/repositories/policyRepository';
 import { customerRepository } from '@/db/repositories/customerRepository';
+import { backupService } from '@/services/backup/backupService';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
@@ -33,6 +37,10 @@ export function PoliciesPage() {
   const [onlyWarnings, setOnlyWarnings] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Multi-selection state for export
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isExporting, setIsExporting] = useState(false);
 
   // Pagination / Batch Rendering
   const [currentPage, setCurrentPage] = useState(1);
@@ -192,6 +200,74 @@ export function PoliciesPage() {
     (selectedStatus ? 1 : 0) +
     (onlyWarnings ? 1 : 0);
 
+  const handleToggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = new Set(selectedIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setSelectedIds(next);
+  };
+
+  const handleSelectAllVisible = () => {
+    const next = new Set(selectedIds);
+    const visibleIds = paginatedPolicies.map((p) => p.id);
+    const allSelected = visibleIds.every((id) => next.has(id));
+
+    if (allSelected) {
+      visibleIds.forEach((id) => next.delete(id));
+    } else {
+      visibleIds.forEach((id) => next.add(id));
+    }
+    setSelectedIds(next);
+  };
+
+  const downloadFile = (content: string, filename: string, mimeType: string) => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportSelectedCsv = async () => {
+    if (selectedIds.size === 0) return;
+    setIsExporting(true);
+    try {
+      const csv = await backupService.exportPoliciesToCsv(Array.from(selectedIds));
+      downloadFile(csv, `LIC_Policies_Selected_${selectedIds.size}_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportAllCsv = async () => {
+    setIsExporting(true);
+    try {
+      const csv = await backupService.exportPoliciesToCsv();
+      downloadFile(csv, `LIC_Policies_All_${policies.length}_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportSelectedJson = async () => {
+    if (selectedIds.size === 0) return;
+    setIsExporting(true);
+    try {
+      const json = await backupService.exportPoliciesToJson(Array.from(selectedIds));
+      downloadFile(json, `LIC_Policies_Selected_${selectedIds.size}_${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-5 max-w-6xl mx-auto w-full">
       {/* Header */}
@@ -207,6 +283,15 @@ export function PoliciesPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportAllCsv}
+            disabled={policies.length === 0 || isExporting}
+            leftIcon={<Download className="w-3.5 h-3.5" />}
+          >
+            Export All (CSV)
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -332,6 +417,60 @@ export function PoliciesPage() {
         )}
       </div>
 
+      {/* Multi-Selection & Quick Action Bar */}
+      {filteredPolicies.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleSelectAllVisible}
+              className="flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400"
+            >
+              {paginatedPolicies.length > 0 && paginatedPolicies.every((p) => selectedIds.has(p.id)) ? (
+                <CheckSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              ) : (
+                <Square className="w-4 h-4 text-slate-400" />
+              )}
+              <span>Select all on page ({paginatedPolicies.length})</span>
+            </button>
+            {selectedIds.size > 0 && (
+              <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-full font-semibold">
+                {selectedIds.size} selected
+              </span>
+            )}
+          </div>
+
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleExportSelectedCsv}
+                disabled={isExporting}
+                leftIcon={<Download className="w-3.5 h-3.5" />}
+              >
+                Export CSV ({selectedIds.size})
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportSelectedJson}
+                disabled={isExporting}
+              >
+                JSON
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedIds(new Set())}
+              >
+                Clear
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Policies List */}
       {isLoading ? (
         <div className="py-12 text-center text-sm text-slate-400">
@@ -351,39 +490,57 @@ export function PoliciesPage() {
         />
       ) : (
         <div className="space-y-3">
-          {paginatedPolicies.map((p) => (
-            <div
-              key={p.id}
-              onClick={() => navigate(`/policies/${p.id}`)}
-              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600 rounded-2xl p-4 sm:p-5 shadow-xs transition-all duration-150 cursor-pointer flex flex-col justify-between group active:scale-[0.99]"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                <div className="flex items-start sm:items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-mono text-xs font-bold shrink-0">
-                    {p.sourceSerialNumber || '#'}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold font-mono text-base text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
-                        {p.policyNumber}
-                      </span>
-                      <Badge variant="info" size="sm">
-                        Plan {p.originalPlanString}
-                      </Badge>
-                      {p.extractionWarnings.length > 0 && (
-                        <span title={p.extractionWarnings.join(', ')}>
-                          <Badge variant="warning" size="sm">
-                            <AlertTriangle className="w-3 h-3 mr-1" />
-                            Warning
-                          </Badge>
-                        </span>
+          {paginatedPolicies.map((p) => {
+            const isSelected = selectedIds.has(p.id);
+            return (
+              <div
+                key={p.id}
+                onClick={() => navigate(`/policies/${p.id}`)}
+                className={`bg-white dark:bg-slate-900 border ${
+                  isSelected
+                    ? 'border-blue-500 dark:border-blue-500 ring-2 ring-blue-500/20'
+                    : 'border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600'
+                } rounded-2xl p-4 sm:p-5 shadow-xs transition-all duration-150 cursor-pointer flex flex-col justify-between group active:scale-[0.99]`}
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div className="flex items-start sm:items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={(e) => handleToggleSelect(p.id, e)}
+                      className="p-1 -ml-1 text-slate-400 hover:text-blue-600 transition"
+                      aria-label={isSelected ? 'Deselect policy' : 'Select policy'}
+                    >
+                      {isSelected ? (
+                        <CheckSquare className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      ) : (
+                        <Square className="w-5 h-5 text-slate-300 dark:text-slate-600" />
                       )}
+                    </button>
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-mono text-xs font-bold shrink-0">
+                      {p.sourceSerialNumber || '#'}
                     </div>
-                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 font-medium">
-                      {p.customerName}
-                    </p>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold font-mono text-base text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
+                          {p.policyNumber}
+                        </span>
+                        <Badge variant="info" size="sm">
+                          Plan {p.originalPlanString}
+                        </Badge>
+                        {p.extractionWarnings.length > 0 && (
+                          <span title={p.extractionWarnings.join(', ')}>
+                            <Badge variant="warning" size="sm">
+                              <AlertTriangle className="w-3 h-3 mr-1" />
+                              Warning
+                            </Badge>
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 font-medium">
+                        {p.customerName}
+                      </p>
+                    </div>
                   </div>
-                </div>
 
                 {/* Right side stats */}
                 <div className="flex items-center gap-3 self-end sm:self-auto text-right">
@@ -427,7 +584,8 @@ export function PoliciesPage() {
                 </div>
               </div>
             </div>
-          ))}
+          );
+        })}
 
           {/* Pagination Bar */}
           {totalPages > 1 && (
