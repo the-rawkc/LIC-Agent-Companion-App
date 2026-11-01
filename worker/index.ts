@@ -331,6 +331,7 @@ export default {
           return jsonResponse({
             success: true,
             agencyCode,
+            agentName: existing.agent_name || 'Agent ' + agencyCode,
             lastSyncAt: existing.last_sync_at,
             policies,
             customers,

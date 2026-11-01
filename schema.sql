@@ -43,3 +43,12 @@ CREATE TABLE IF NOT EXISTS cloud_reminders (
 );
 
 CREATE INDEX IF NOT EXISTS idx_reminders_agency ON cloud_reminders (agency_code);
+
+CREATE TABLE IF NOT EXISTS cloud_settings (
+  key TEXT NOT NULL,
+  agency_code TEXT NOT NULL,
+  data_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (key, agency_code),
+  FOREIGN KEY (agency_code) REFERENCES agents (agency_code) ON DELETE CASCADE
+);

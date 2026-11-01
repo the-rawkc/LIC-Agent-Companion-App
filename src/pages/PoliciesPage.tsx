@@ -18,7 +18,7 @@ import {
 import { policyRepository, type PolicyFilterOptions } from '@/db/repositories/policyRepository';
 import { customerRepository } from '@/db/repositories/customerRepository';
 import { backupService } from '@/services/backup/backupService';
-import { formatCurrency, formatDate, advanceFupDate } from '@/utils/formatters';
+import { formatCurrency, formatDate, advanceFupDate, generateUUID } from '@/utils/formatters';
 import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
 import { Modal } from '@/components/shared/Modal';
@@ -193,7 +193,7 @@ export function PoliciesPage() {
       const ppt = planParts.length >= 3 ? parseInt(planParts[2], 10) : null;
 
       const newPolicy: Policy = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         policyNumber: addPolicyNo.trim(),
         customerId,
         customerName: addCustomerName.trim(),

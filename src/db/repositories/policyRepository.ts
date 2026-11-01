@@ -1,6 +1,7 @@
 import { db } from '../database';
 import type { Policy, PolicyRecordStatus } from '@/types';
-import { normalizeSearchString, advanceFupDate } from '@/utils/formatters';
+import { normalizeSearchString, advanceFupDate, generateUUID } from '@/utils/formatters';
+import { d1SyncService } from '@/services/cloud/d1SyncService';
 
 export interface PolicyFilterOptions {
   planCode?: string;
@@ -35,13 +36,14 @@ export const policyRepository = {
   async create(policy: Policy): Promise<string> {
     await db.policies.add(policy);
     await db.auditLogs.add({
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       entityType: 'policy',
       entityId: policy.id,
       action: 'create',
       timestamp: new Date().toISOString(),
       summary: `Created policy ${policy.policyNumber} for customer ${policy.customerName}`,
     });
+    d1SyncService.triggerAutoSync();
     return policy.id;
   },
 
@@ -59,7 +61,7 @@ export const policyRepository = {
     await db.policies.put(updatedPolicy);
 
     await db.auditLogs.add({
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       entityType: 'policy',
       entityId: id,
       action: 'update',
@@ -73,6 +75,7 @@ export const policyRepository = {
         return acc;
       }, {} as Record<string, { old: unknown; new: unknown }>),
     });
+    d1SyncService.triggerAutoSync();
   },
 
   async delete(id: string): Promise<void> {
@@ -80,13 +83,14 @@ export const policyRepository = {
     if (existing) {
       await db.policies.delete(id);
       await db.auditLogs.add({
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         entityType: 'policy',
         entityId: id,
         action: 'delete',
         timestamp: new Date().toISOString(),
         summary: `Deleted policy ${existing.policyNumber}`,
       });
+      d1SyncService.triggerAutoSync();
     }
   },
 
@@ -111,7 +115,7 @@ export const policyRepository = {
     await db.policies.put(updated);
 
     await db.auditLogs.add({
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       entityType: 'policy',
       entityId: id,
       action: 'update',
@@ -122,6 +126,7 @@ export const policyRepository = {
         recordStatus: { old: existing.recordStatus, new: 'active' },
       },
     });
+    d1SyncService.triggerAutoSync();
 
     return { policy: updated, oldFup, newFup };
   },

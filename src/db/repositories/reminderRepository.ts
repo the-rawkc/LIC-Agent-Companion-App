@@ -1,5 +1,7 @@
 import { db } from '../database';
 import type { Reminder, ReminderStatus, ReminderType } from '@/types';
+import { generateUUID } from '@/utils/formatters';
+import { d1SyncService } from '@/services/cloud/d1SyncService';
 
 export interface ReminderWithDetails extends Reminder {
   customerName?: string;
@@ -41,7 +43,7 @@ export const reminderRepository = {
   },
 
   async create(reminder: Omit<Reminder, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
-    const id = crypto.randomUUID();
+    const id = generateUUID();
     const now = new Date().toISOString();
     const newReminder: Reminder = {
       ...reminder,
@@ -53,7 +55,7 @@ export const reminderRepository = {
     await db.reminders.add(newReminder);
 
     await db.auditLogs.add({
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       entityType: 'reminder',
       entityId: id,
       action: 'create',
@@ -61,6 +63,7 @@ export const reminderRepository = {
       summary: `Created reminder: "${reminder.title}" for ${reminder.dueDate}`,
     });
 
+    d1SyncService.triggerAutoSync();
     return id;
   },
 
@@ -73,10 +76,12 @@ export const reminderRepository = {
       ...updates,
       updatedAt: now,
     });
+    d1SyncService.triggerAutoSync();
   },
 
   async delete(id: string): Promise<void> {
     await db.reminders.delete(id);
+    d1SyncService.triggerAutoSync();
   },
 
   async toggleStatus(id: string): Promise<ReminderStatus> {

@@ -2,7 +2,8 @@ import { db } from '@/db/database';
 import { policyRepository } from '@/db/repositories/policyRepository';
 import { customerRepository } from '@/db/repositories/customerRepository';
 import { normalizeAndValidateExtractedRow } from '../pdf/validatePolicy';
-import { parseCleanNumber } from '@/utils/formatters';
+import { parseCleanNumber, generateUUID } from '@/utils/formatters';
+import { d1SyncService } from '@/services/cloud/d1SyncService';
 import type { 
   RawExtractedRow, 
   StagedPolicyRow, 
@@ -84,7 +85,7 @@ export const importService = {
    * Commit verified and approved rows into IndexedDB
    */
   async commitImport(options: CommitImportOptions): Promise<CommitImportResult> {
-    const importId = crypto.randomUUID();
+    const importId = generateUUID();
     const now = new Date().toISOString();
 
     const existingPolicies = await policyRepository.getAll();
@@ -152,7 +153,7 @@ export const importService = {
         let customer = customerMapByName.get(normalizedName);
 
         if (!customer) {
-          const customerId = crypto.randomUUID();
+          const customerId = generateUUID();
           customer = {
             id: customerId,
             displayName: row.customerName,
@@ -172,7 +173,7 @@ export const importService = {
           status = 'needs_verification';
         }
 
-        const newPolicyId = crypto.randomUUID();
+        const newPolicyId = generateUUID();
         const newPolicy: Policy = {
           id: newPolicyId,
           policyNumber: row.policyNumber,
@@ -226,7 +227,7 @@ export const importService = {
 
       // Audit Log
       await db.auditLogs.add({
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         entityType: 'import',
         entityId: importId,
         action: 'import',
@@ -234,6 +235,8 @@ export const importService = {
         summary: `Imported ${options.filename}: ${createdCount} created, ${updatedCount} updated, ${skippedCount} skipped, ${newCustomersCount} new customers created.`,
       });
     });
+
+    d1SyncService.triggerAutoSync(500);
 
     return {
       importId,
@@ -266,7 +269,7 @@ export const importService = {
       await db.importHistory.delete(importId);
 
       await db.auditLogs.add({
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         entityType: 'import',
         entityId: importId,
         action: 'rollback',
@@ -274,6 +277,8 @@ export const importService = {
         summary: `Rolled back import ${history.filename} (ID: ${importId}). Removed ${deletedPolicies} created policies.`,
       });
     });
+
+    d1SyncService.triggerAutoSync(500);
 
     return { deletedPolicies };
   }

@@ -1,6 +1,7 @@
 import { db } from '../database';
 import type { Customer, Policy } from '@/types';
-import { normalizeSearchString } from '@/utils/formatters';
+import { normalizeSearchString, generateUUID } from '@/utils/formatters';
+import { d1SyncService } from '@/services/cloud/d1SyncService';
 
 export interface CustomerWithSummary extends Customer {
   policyCount: number;
@@ -79,7 +80,7 @@ export const customerRepository = {
   },
 
   async create(customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): Promise<Customer> {
-    const id = customer.id || crypto.randomUUID();
+    const id = customer.id || generateUUID();
     const now = new Date().toISOString();
     const newCustomer: Customer = {
       ...customer,
@@ -92,7 +93,7 @@ export const customerRepository = {
     await db.customers.add(newCustomer);
 
     await db.auditLogs.add({
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       entityType: 'customer',
       entityId: id,
       action: 'create',
@@ -100,6 +101,7 @@ export const customerRepository = {
       summary: `Created customer profile for "${customer.displayName}"`,
     });
 
+    d1SyncService.triggerAutoSync();
     return newCustomer;
   },
 
@@ -118,13 +120,15 @@ export const customerRepository = {
     await db.customers.put(updated);
 
     await db.auditLogs.add({
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       entityType: 'customer',
       entityId: id,
       action: 'update',
       timestamp: now,
       summary: `Updated customer "${existing.displayName}"`,
     });
+
+    d1SyncService.triggerAutoSync();
   },
 
   async mergeCustomers(sourceCustomerId: string, targetCustomerId: string): Promise<void> {
@@ -164,13 +168,14 @@ export const customerRepository = {
       await db.customers.delete(sourceCustomerId);
 
       await db.auditLogs.add({
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         entityType: 'customer',
         entityId: targetCustomerId,
         action: 'merge',
         timestamp: now,
         summary: `Merged customer "${source.displayName}" (ID: ${source.id}) into "${target.displayName}" (ID: ${target.id}). Reassigned ${policies.length} policies.`,
       });
+      d1SyncService.triggerAutoSync();
     });
   },
 
@@ -183,13 +188,14 @@ export const customerRepository = {
       }
       await db.customers.delete(id);
       await db.auditLogs.add({
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         entityType: 'customer',
         entityId: id,
         action: 'delete',
         timestamp: new Date().toISOString(),
         summary: `Deleted customer "${existing.displayName}"`,
       });
+      d1SyncService.triggerAutoSync();
     }
   },
 

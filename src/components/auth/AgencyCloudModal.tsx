@@ -32,6 +32,10 @@ export function AgencyCloudModal({ isOpen, onClose, mode, onSuccess }: AgencyClo
       const config = await d1SyncService.getSyncConfig();
       if (config.agencyCode) setAgencyCode(config.agencyCode);
       if (config.agentName) setAgentName(config.agentName);
+      if (typeof window !== 'undefined') {
+        const sessionPin = sessionStorage.getItem('lic_session_pin');
+        if (sessionPin) setPin(sessionPin);
+      }
     } catch {
       // ignore
     }
@@ -53,6 +57,10 @@ export function AgencyCloudModal({ isOpen, onClose, mode, onSuccess }: AgencyClo
     setSuccessMessage(null);
 
     try {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('lic_session_pin', pin.trim());
+      }
+
       if (mode === 'push') {
         // Authenticate/Register first
         await d1SyncService.authenticate(agencyCode, pin, agentName);

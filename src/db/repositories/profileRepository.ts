@@ -1,4 +1,5 @@
 import { settingsRepository } from './settingsRepository';
+import { d1SyncService } from '@/services/cloud/d1SyncService';
 
 export interface AgentProfile {
   fullName: string;
@@ -101,6 +102,8 @@ export const profileRepository = {
     if (updated.fullName) {
       await settingsRepository.set('agent_name', updated.fullName);
     }
+
+    d1SyncService.triggerAutoSync(500);
 
     return updated;
   },

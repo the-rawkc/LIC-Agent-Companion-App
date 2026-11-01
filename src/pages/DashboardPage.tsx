@@ -56,7 +56,8 @@ export function DashboardPage() {
       let data = await analyticsService.getDashboardStats();
       if (data.totalPolicies === 0) {
         if (code) {
-          const res = await authService.autoRestoreOrMigrateData(code);
+          const pin = sessionStorage.getItem('lic_session_pin') || undefined;
+          const res = await authService.autoRestoreOrMigrateData(code, pin);
           if (res.restored) {
             data = await analyticsService.getDashboardStats();
             setRecoveredBanner(`Successfully restored ${res.count} policies into your workspace!`);

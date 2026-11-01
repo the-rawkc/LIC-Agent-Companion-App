@@ -71,11 +71,19 @@ export function SettingsPage() {
   const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
   const [cloudModalMode, setCloudModalMode] = useState<'push' | 'pull'>('push');
   const [isCheckingD1, setIsCheckingD1] = useState(false);
+  const [apiUrlInput, setApiUrlInput] = useState('');
+  const [apiUrlSaved, setApiUrlSaved] = useState(false);
 
   useEffect(() => {
     loadSettings();
     checkStorage();
     checkCloudStatus();
+
+    const handleSynced = () => {
+      checkCloudStatus();
+    };
+    window.addEventListener('lic_cloud_synced', handleSynced);
+    return () => window.removeEventListener('lic_cloud_synced', handleSynced);
   }, []);
 
   async function checkCloudStatus() {
@@ -83,6 +91,7 @@ export function SettingsPage() {
     try {
       const config = await d1SyncService.getSyncConfig();
       setSyncConfig(config);
+      setApiUrlInput(config.apiUrl || '');
       const status = await d1SyncService.checkConnection();
       setD1Status(status);
     } catch {
@@ -91,6 +100,13 @@ export function SettingsPage() {
       setIsCheckingD1(false);
     }
   }
+
+  const handleSaveApiUrl = async () => {
+    await d1SyncService.setApiBaseUrl(apiUrlInput);
+    setApiUrlSaved(true);
+    setTimeout(() => setApiUrlSaved(false), 2500);
+    await checkCloudStatus();
+  };
 
   async function loadSettings() {
     const pinConfigured = await pinService.isPinConfigured();
@@ -412,6 +428,36 @@ export function SettingsPage() {
           >
             Restore by Agency Code
           </Button>
+        </div>
+
+        {/* Cloud Sync Server URL Configuration */}
+        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 text-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div>
+              <span className="font-semibold text-slate-800 dark:text-slate-200 block">
+                Sync Server URL
+              </span>
+              <span className="text-[11px] text-slate-400">
+                Leave blank to sync with current origin, or set your custom Cloudflare Worker address.
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={apiUrlInput}
+                onChange={(e) => setApiUrlInput(e.target.value)}
+                placeholder="https://... (default: current host)"
+                className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs w-64 focus:ring-2 focus:ring-blue-500 font-mono text-[11px]"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSaveApiUrl}
+              >
+                {apiUrlSaved ? 'Saved!' : 'Save'}
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 

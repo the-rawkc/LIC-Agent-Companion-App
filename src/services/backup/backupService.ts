@@ -1,5 +1,5 @@
 import { db } from '@/db/database';
-import { formatDate } from '@/utils/formatters';
+import { formatDate, generateUUID } from '@/utils/formatters';
 import type { Policy, Customer, Reminder, ImportHistory, AuditLog } from '@/types';
 
 export interface BackupPayload {
@@ -230,7 +230,7 @@ export const backupService = {
       }
 
       await db.auditLogs.add({
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         entityType: 'import',
         entityId: 'backup-restore',
         action: 'import',
