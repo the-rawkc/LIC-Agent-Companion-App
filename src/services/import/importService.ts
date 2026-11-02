@@ -110,8 +110,8 @@ export const importService = {
 
     await db.transaction('rw', [db.policies, db.customers, db.importHistory, db.auditLogs], async () => {
       for (const row of rowsToProcess) {
-        // Resolve customer accurately (using full stitched name and DOB disambiguation)
-        const cleanName = (row.customerName || 'Unknown Customer').trim();
+        // Resolve customer accurately (using full stitched name, cleaned punctuation, and DOB disambiguation)
+        const cleanName = (row.customerName || 'Unknown Customer').replace(/^[,\s;]+|[,\s;]+$/g, '').replace(/\s+/g, ' ').trim();
         const normalizedName = cleanName.toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
         const disambiguatedKey = row.dob ? `${normalizedName}_${row.dob}` : normalizedName;
 

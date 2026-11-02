@@ -625,18 +625,21 @@ function matchScore(cellText: string, def: ColumnDef): number {
  * Parses Excel (.xlsx, .xls, .csv) file and extracts RawExtractedRow records in exact sequential order
  */
 export async function extractPoliciesFromExcel(
-  fileOrBuffer: File | ArrayBuffer
+  fileOrBuffer: File | ArrayBuffer | Uint8Array
 ): Promise<ExcelExtractionResult> {
   const warnings: string[] = [];
 
-  let arrayBuffer: ArrayBuffer;
-  if (fileOrBuffer instanceof File) {
-    arrayBuffer = await fileOrBuffer.arrayBuffer();
+  let uint8Array: Uint8Array;
+  if (typeof File !== 'undefined' && fileOrBuffer instanceof File) {
+    const ab = await fileOrBuffer.arrayBuffer();
+    uint8Array = new Uint8Array(ab);
+  } else if (fileOrBuffer instanceof Uint8Array) {
+    uint8Array = fileOrBuffer;
   } else {
-    arrayBuffer = fileOrBuffer;
+    uint8Array = new Uint8Array(fileOrBuffer as ArrayBuffer);
   }
 
-  const workbook = XLSX.read(arrayBuffer, {
+  const workbook = XLSX.read(uint8Array, {
     type: 'array',
     cellDates: true,
   });
@@ -862,6 +865,9 @@ export async function extractPoliciesFromExcel(
     } else if (propName) {
       customerName = propName;
     }
+
+    // Sanitize customer name: remove leading/trailing commas, semicolons, extra whitespace
+    customerName = customerName.replace(/^[,\s;]+|[,\s;]+$/g, '').replace(/\s+/g, ' ').trim();
 
     // Handle Plan / Term / PPT: check composite planTermPpt or separate term/ppt columns
     let planTermPpt = bestColumnMap.planTermPpt !== undefined ? formatCell(row[bestColumnMap.planTermPpt]) : '';
