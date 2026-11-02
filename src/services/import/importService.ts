@@ -110,6 +110,36 @@ export const importService = {
 
     await db.transaction('rw', [db.policies, db.customers, db.importHistory, db.auditLogs], async () => {
       for (const row of rowsToProcess) {
+        // Resolve customer accurately (using full stitched name and DOB disambiguation)
+        const cleanName = (row.customerName || 'Unknown Customer').trim();
+        const normalizedName = cleanName.toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        const disambiguatedKey = row.dob ? `${normalizedName}_${row.dob}` : normalizedName;
+
+        let customer = customerMapByName.get(disambiguatedKey) || customerMapByName.get(normalizedName);
+
+        // If an existing customer has the same name but a different recorded DOB, do not misallocate
+        if (customer && customer.dateOfBirth && row.dob && customer.dateOfBirth !== row.dob) {
+          customer = customerMapByName.get(disambiguatedKey);
+        }
+
+        if (!customer) {
+          const customerId = generateUUID();
+          customer = {
+            id: customerId,
+            displayName: cleanName,
+            normalizedName,
+            dateOfBirth: row.dob,
+            createdAt: now,
+            updatedAt: now,
+          };
+          await db.customers.add(customer);
+          customerMapByName.set(disambiguatedKey, customer);
+          if (!customerMapByName.has(normalizedName)) {
+            customerMapByName.set(normalizedName, customer);
+          }
+          newCustomersCount++;
+        }
+
         const existingPolicy = policyMapByNumber.get(row.policyNumber);
 
         if (existingPolicy) {
@@ -119,10 +149,11 @@ export const importService = {
           }
 
           if (options.duplicateHandling === 'update') {
-            // Update existing policy while preserving manually verified fields
+            // Update existing policy while correcting customer link and names
             const updatedRecord: Policy = {
               ...existingPolicy,
-              customerName: row.customerName,
+              customerId: customer.id,
+              customerName: cleanName,
               planCode: row.planCode,
               term: row.term ?? existingPolicy.term,
               premiumPayingTerm: row.ppt ?? existingPolicy.premiumPayingTerm,
@@ -148,25 +179,6 @@ export const importService = {
           }
         }
 
-        // New Policy: Find or create customer
-        const normalizedName = row.customerName.toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
-        let customer = customerMapByName.get(normalizedName);
-
-        if (!customer) {
-          const customerId = generateUUID();
-          customer = {
-            id: customerId,
-            displayName: row.customerName,
-            normalizedName,
-            dateOfBirth: row.dob,
-            createdAt: now,
-            updatedAt: now,
-          };
-          await db.customers.add(customer);
-          customerMapByName.set(normalizedName, customer);
-          newCustomersCount++;
-        }
-
         // Determine record status
         let status: PolicyRecordStatus = 'active';
         if (row.warnings.length > 0) {
@@ -178,7 +190,7 @@ export const importService = {
           id: newPolicyId,
           policyNumber: row.policyNumber,
           customerId: customer.id,
-          customerName: row.customerName,
+          customerName: cleanName,
           planCode: row.planCode,
           term: row.term,
           premiumPayingTerm: row.ppt,

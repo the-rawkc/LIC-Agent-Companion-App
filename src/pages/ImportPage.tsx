@@ -89,13 +89,15 @@ export function ImportPage() {
       const extracted = await extractPoliciesFromExcel(fileToProcess);
       setProgress({ page: 1, total: 1, percentage: 95 });
 
-      const detectedKeys = Object.keys(extracted.matchedColumns);
+      const detectedKeys = Object.entries(extracted.matchedColumns).map(
+        ([colLabel, sourceHeader]) => `${colLabel}: "${sourceHeader}"`
+      );
       const previewSummary = await importService.preparePreview(
         extracted.extractedRows,
         1,
         [
-          `Imported from worksheet "${extracted.sheetName}".`,
-          `Detected columns: ${detectedKeys.join(', ')}`,
+          `Worksheet: "${extracted.sheetName}" (${extracted.totalRows} policies extracted in exact row sequence).`,
+          `Uniform Column Mapping: ${detectedKeys.join(' • ')}`,
           ...extracted.warnings,
         ]
       );
@@ -463,14 +465,18 @@ export function ImportPage() {
                           )}
                         </div>
 
-                        {/* Financial and dates line */}
-                        <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+                        {/* Financial and dates line with uniform column labels */}
+                        <div className="flex flex-wrap items-center gap-2.5 mt-1.5 text-xs text-slate-500 dark:text-slate-400">
                           <span>
-                            Sum Assured: <strong>{formatCurrency(r.sumAssured)}</strong>
+                            Sum Assured (₹): <strong>{formatCurrency(r.sumAssured)}</strong>
                           </span>
                           <span>•</span>
                           <span>
-                            Premium: <strong>{formatCurrency(r.premium)}</strong> ({r.mode})
+                            Premium (₹): <strong>{formatCurrency(r.premium)}</strong>
+                          </span>
+                          <span>•</span>
+                          <span>
+                            Mode: <strong>{r.mode}</strong>
                           </span>
                           <span>•</span>
                           <span>
@@ -482,8 +488,16 @@ export function ImportPage() {
                           </span>
                           <span>•</span>
                           <span>
-                            Maturity: <strong>{formatDate(r.dom)}</strong>
+                            D.O.M.: <strong>{formatDate(r.dom)}</strong>
                           </span>
+                          {r.dob && (
+                            <>
+                              <span>•</span>
+                              <span>
+                                D.O.B.: <strong>{formatDate(r.dob)}</strong>
+                              </span>
+                            </>
+                          )}
                         </div>
 
                         {/* Error or Warning details */}
@@ -550,7 +564,7 @@ export function ImportPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Policy Number
+                      Policy No <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -562,7 +576,7 @@ export function ImportPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Customer Name
+                      Customer Name <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -574,22 +588,23 @@ export function ImportPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-3 gap-2.5">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Plan String
+                      Plan / Term / PPT <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type="text"
                       value={editingRow.originalPlan}
                       onChange={(e) => setEditingRow({ ...editingRow, originalPlan: e.target.value })}
+                      placeholder="e.g. 814/21/21"
                       className="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono"
                       required
                     />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Sum Assured
+                      Sum Assured (₹)
                     </label>
                     <input
                       type="number"
@@ -601,7 +616,7 @@ export function ImportPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Premium
+                      Premium (₹)
                     </label>
                     <input
                       type="number"
@@ -613,10 +628,10 @@ export function ImportPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-3 gap-2.5">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Mode
+                      Premium Mode
                     </label>
                     <input
                       type="text"
@@ -628,26 +643,56 @@ export function ImportPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      F.U.P. Date
+                      D.O.C. (Commencement)
                     </label>
                     <input
                       type="text"
-                      value={editingRow.fup}
-                      onChange={(e) => setEditingRow({ ...editingRow, fup: e.target.value })}
+                      value={editingRow.doc}
+                      onChange={(e) => setEditingRow({ ...editingRow, doc: e.target.value })}
+                      placeholder="DD/MM/YYYY"
                       className="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
                       required
                     />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      D.O.M.
+                      F.U.P. (Due Date)
+                    </label>
+                    <input
+                      type="text"
+                      value={editingRow.fup}
+                      onChange={(e) => setEditingRow({ ...editingRow, fup: e.target.value })}
+                      placeholder="DD/MM/YYYY"
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      D.O.M. (Maturity Date)
                     </label>
                     <input
                       type="text"
                       value={editingRow.dom}
                       onChange={(e) => setEditingRow({ ...editingRow, dom: e.target.value })}
+                      placeholder="DD/MM/YYYY"
                       className="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
                       required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      D.O.B. (Date of Birth)
+                    </label>
+                    <input
+                      type="text"
+                      value={editingRow.dob || ''}
+                      onChange={(e) => setEditingRow({ ...editingRow, dob: e.target.value })}
+                      placeholder="DD/MM/YYYY"
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
                     />
                   </div>
                 </div>

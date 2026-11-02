@@ -156,9 +156,9 @@ export function AgencyCloudModal({ isOpen, onClose, mode = 'sync', onSuccess }: 
         </>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-3">
         {error && (
-          <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl flex items-start gap-2.5 text-xs text-rose-700 dark:text-rose-300">
+          <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl flex items-start gap-2 text-xs text-rose-700 dark:text-rose-300">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
             <div className="flex-1 leading-relaxed">
               <span>{error}</span>
@@ -167,15 +167,15 @@ export function AgencyCloudModal({ isOpen, onClose, mode = 'sync', onSuccess }: 
         )}
 
         {successMessage && (
-          <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-start gap-2.5 text-xs text-emerald-800 dark:text-emerald-300">
+          <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-start gap-2 text-xs text-emerald-800 dark:text-emerald-300">
             <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-            <div className="flex-1 space-y-2">
+            <div className="flex-1 space-y-1.5">
               <p className="leading-relaxed font-medium">{successMessage}</p>
               {policiesRestored !== null && policiesRestored > 0 && (
                 <button
                   type="button"
                   onClick={handleGoToDashboard}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-xs transition shadow-xs"
+                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-xs transition shadow-xs"
                 >
                   <span>Open Dashboard to view policies</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -195,11 +195,8 @@ export function AgencyCloudModal({ isOpen, onClose, mode = 'sync', onSuccess }: 
             value={agencyCode}
             onChange={(e) => setAgencyCode(e.target.value)}
             placeholder="e.g. 08345678"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <p className="text-[11px] text-slate-400 mt-1">
-            Records are multi-tenant and strictly isolated by Agency Code.
-          </p>
         </div>
 
         <div>
@@ -212,11 +209,8 @@ export function AgencyCloudModal({ isOpen, onClose, mode = 'sync', onSuccess }: 
             value={pin}
             onChange={(e) => setPin(e.target.value)}
             placeholder="Enter your registered PIN"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <p className="text-[11px] text-slate-400 mt-1">
-            The same 4-digit PIN you use to unlock or log into the application.
-          </p>
         </div>
 
         {mode !== 'pull' && (
@@ -229,7 +223,7 @@ export function AgencyCloudModal({ isOpen, onClose, mode = 'sync', onSuccess }: 
               value={agentName}
               onChange={(e) => setAgentName(e.target.value)}
               placeholder="e.g. Ramesh Kumar"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         )}

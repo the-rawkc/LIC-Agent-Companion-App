@@ -103,7 +103,7 @@ describe('Security, Encryption & Backup Pipeline', () => {
     await policyRepository.create(policy);
 
     const csv = await backupService.exportPoliciesToCsv();
-    expect(csv).toContain('Policy Number,Customer Name,Plan/Term/PPT,Sum Assured');
+    expect(csv).toContain('S.No,Policy No,Customer Name,Plan / Term / PPT,Sum Assured (₹),Installment Premium (₹)');
     expect(csv).toContain('"242647527","VEER SINGH","736/15/0"');
   });
 });

@@ -55,9 +55,14 @@ function normalizeHeader(str: string): string {
     .replace(/\s+/g, ' ');
 }
 
-type ColumnKey =
+export type ColumnKey =
   | 'policyNo'
   | 'name'
+  | 'firstName'
+  | 'middleName'
+  | 'lastName'
+  | 'lifeAssuredName'
+  | 'proposerName'
   | 'planTermPpt'
   | 'term'
   | 'ppt'
@@ -69,6 +74,27 @@ type ColumnKey =
   | 'dom'
   | 'dob'
   | 'sNo';
+
+export const UNIFORM_COLUMN_LABELS: Record<ColumnKey, string> = {
+  sNo: 'S.No',
+  policyNo: 'Policy No',
+  name: 'Customer Name',
+  firstName: 'First Name',
+  middleName: 'Middle Name',
+  lastName: 'Second / Last Name',
+  lifeAssuredName: 'Life Assured Name',
+  proposerName: 'Proposer Name',
+  planTermPpt: 'Plan / Term / PPT',
+  term: 'Policy Term',
+  ppt: 'Premium Paying Term',
+  premium: 'Installment Premium (₹)',
+  mode: 'Premium Mode',
+  sumAssured: 'Sum Assured (₹)',
+  doc: 'D.O.C. (Commencement Date)',
+  fup: 'F.U.P. (Next Due Date)',
+  dom: 'D.O.M. (Maturity Date)',
+  dob: 'D.O.B. (Date of Birth)',
+};
 
 interface ColumnDef {
   key: ColumnKey;
@@ -110,37 +136,164 @@ const COLUMN_DEFS: ColumnDef[] = [
       /party/i,
       /status/i,
       /type/i,
+      /first/i,
+      /second/i,
+      /last/i,
+      /sur/i,
+      /proposal/i,
+      /mobile/i,
+      /phone/i,
+      /contact/i,
+      /pin/i,
+      /branch/i,
+      /agency/i,
+      /doc/i,
+      /dom/i,
+      /fup/i,
+      /prem/i,
+      /mode/i,
     ],
   },
 
-  // 2. Customer Name (Strict: must not match Agent Name, Branch Name, Plan Name)
+  // 2. Split Name - First Name / Given Name
+  {
+    key: 'firstName',
+    priority: 97,
+    exact: [
+      'first name',
+      'first_name',
+      'firstname',
+      'f.name',
+      'fname',
+      'given name',
+      'name 1',
+      'first',
+      'f name',
+    ],
+    patterns: [
+      /\bfirst\s*name\b/i,
+      /\bf\.?name\b/i,
+      /\bgiven\s*name\b/i,
+      /\bname\s*1\b/i,
+    ],
+    negativePatterns: [/agent/i, /branch/i, /nominee/i, /father/i, /plan/i],
+  },
+
+  // 3. Split Name - Middle Name
+  {
+    key: 'middleName',
+    priority: 96,
+    exact: [
+      'middle name',
+      'middle_name',
+      'middlename',
+      'm.name',
+      'mname',
+      'middle',
+      'm name',
+    ],
+    patterns: [
+      /\bmiddle\s*name\b/i,
+      /\bm\.?name\b/i,
+    ],
+    negativePatterns: [/agent/i, /branch/i, /nominee/i, /father/i, /plan/i],
+  },
+
+  // 4. Split Name - Last Name / Second Name / Surname
+  {
+    key: 'lastName',
+    priority: 97,
+    exact: [
+      'second name',
+      'second_name',
+      'secondname',
+      'last name',
+      'last_name',
+      'lastname',
+      'surname',
+      'sur name',
+      'l.name',
+      'lname',
+      'name 2',
+      'last',
+      'l name',
+    ],
+    patterns: [
+      /\b(last|second|sur)\s*name\b/i,
+      /\bl\.?name\b/i,
+      /\bsurname\b/i,
+      /\bname\s*2\b/i,
+    ],
+    negativePatterns: [/agent/i, /branch/i, /nominee/i, /father/i, /plan/i],
+  },
+
+  // 5. Life Assured Name (when separated from Proposer)
+  {
+    key: 'lifeAssuredName',
+    priority: 98,
+    exact: [
+      'life assured name',
+      'name of life assured',
+      'life assured',
+      'assured name',
+      'insured name',
+      'name of insured',
+      'la name',
+      'l.a. name',
+      'l.a.',
+    ],
+    patterns: [
+      /\blife\s*assured\s*(name)?\b/i,
+      /\bname\s*of\s*life\s*assured\b/i,
+      /\b(insured|assured)\s*name\b/i,
+    ],
+    negativePatterns: [/agent/i, /branch/i, /nominee/i, /father/i, /plan/i],
+  },
+
+  // 6. Proposer Name
+  {
+    key: 'proposerName',
+    priority: 94,
+    exact: [
+      'proposer name',
+      'name of proposer',
+      'proposer',
+    ],
+    patterns: [
+      /\bproposer\s*(name)?\b/i,
+      /\bname\s*of\s*proposer\b/i,
+    ],
+    negativePatterns: [/agent/i, /branch/i, /nominee/i, /father/i, /plan/i, /life\s*assured/i],
+  },
+
+  // 7. Full Customer Name (Combined single column)
   {
     key: 'name',
-    priority: 95,
+    priority: 93,
     exact: [
       'customer name',
       'client name',
       'policyholder name',
       'policy holder name',
-      'name of life assured',
       'name of policyholder',
-      'life assured name',
-      'insured name',
-      'proposer name',
-      'name of proposer',
       'party name',
       'holder name',
-      'insured',
-      'proposer',
+      'full name',
+      'name of customer',
       'customer',
+      'client',
       'name',
     ],
     patterns: [
-      /\b(customer|client|policyholder|insured|proposer|holder|party)\s*name\b/i,
-      /\blife\s*assured\b/i,
+      /\b(customer|client|policyholder|holder|party|full)\s*name\b/i,
       /\bname\b/i,
     ],
     negativePatterns: [
+      /first/i,
+      /second/i,
+      /last/i,
+      /middle/i,
+      /sur/i,
       /agent/i,
       /branch/i,
       /plan/i,
@@ -150,6 +303,8 @@ const COLUMN_DEFS: ColumnDef[] = [
       /officer/i,
       /doctor/i,
       /appointee/i,
+      /policy/i,
+      /prem/i,
     ],
   },
 
@@ -546,7 +701,8 @@ export async function extractPoliciesFromExcel(
     }
 
     // Require at least policyNo and (name or doc or premium) or at least 3 distinct matches
-    const hasCore = rowMap.policyNo !== undefined && (rowMap.name !== undefined || rowMap.premium !== undefined);
+    const hasNameCol = rowMap.name !== undefined || rowMap.firstName !== undefined || rowMap.lifeAssuredName !== undefined;
+    const hasCore = rowMap.policyNo !== undefined && (hasNameCol || rowMap.premium !== undefined);
     if ((hasCore && matchedCount >= 2) || matchedCount >= 3) {
       if (matchedCount > bestScore) {
         bestScore = matchedCount;
@@ -605,7 +761,6 @@ export async function extractPoliciesFromExcel(
           }
           if (looksLikePolicy / sampleDataRows.length >= 0.5) {
             // Found true policy column!
-            // If the old polCol looks like name, assign name to polCol
             if (bestColumnMap.name === undefined || bestColumnMap.name === c) {
               bestColumnMap.name = polCol;
               bestMatchedNames.name = String(rawMatrix[bestHeaderRowIndex][polCol] || 'Name');
@@ -618,11 +773,24 @@ export async function extractPoliciesFromExcel(
       }
     }
 
-    // 2. Verify name column: should contain letters
-    if (bestColumnMap.name === undefined) {
-      // Find a column containing names (letters, not purely digits or dates)
+    // 2. Verify customer name column: if none matched, search for a column containing text names
+    const hasAnyName =
+      bestColumnMap.name !== undefined ||
+      bestColumnMap.firstName !== undefined ||
+      bestColumnMap.lifeAssuredName !== undefined;
+
+    if (!hasAnyName) {
       for (let c = 0; c < (rawMatrix[bestHeaderRowIndex] || []).length; c++) {
-        if (c === bestColumnMap.policyNo || c === bestColumnMap.doc || c === bestColumnMap.fup || c === bestColumnMap.dom) continue;
+        if (
+          c === bestColumnMap.policyNo ||
+          c === bestColumnMap.doc ||
+          c === bestColumnMap.fup ||
+          c === bestColumnMap.dom ||
+          c === bestColumnMap.premium ||
+          c === bestColumnMap.sumAssured
+        ) {
+          continue;
+        }
         let isTextName = 0;
         for (const row of sampleDataRows) {
           const val = formatCell(row[c]);
@@ -670,7 +838,30 @@ export async function extractPoliciesFromExcel(
       continue;
     }
 
-    const customerName = bestColumnMap.name !== undefined ? formatCell(row[bestColumnMap.name]) : '';
+    // Extract Customer Name: handles First Name + Second/Last Name, Life Assured vs Proposer, or single Name column
+    const firstName = bestColumnMap.firstName !== undefined ? formatCell(row[bestColumnMap.firstName]) : '';
+    const middleName = bestColumnMap.middleName !== undefined ? formatCell(row[bestColumnMap.middleName]) : '';
+    const lastName = bestColumnMap.lastName !== undefined ? formatCell(row[bestColumnMap.lastName]) : '';
+    const stitchedSplitName = [firstName, middleName, lastName].filter(Boolean).join(' ').trim();
+
+    const laName = bestColumnMap.lifeAssuredName !== undefined ? formatCell(row[bestColumnMap.lifeAssuredName]) : '';
+    const propName = bestColumnMap.proposerName !== undefined ? formatCell(row[bestColumnMap.proposerName]) : '';
+    const rawFullName = bestColumnMap.name !== undefined ? formatCell(row[bestColumnMap.name]) : '';
+
+    let customerName = '';
+    if (stitchedSplitName) {
+      customerName = stitchedSplitName;
+    } else if (laName) {
+      if (propName && propName.toLowerCase() !== laName.toLowerCase()) {
+        customerName = `${laName} (Proposer: ${propName})`;
+      } else {
+        customerName = laName;
+      }
+    } else if (rawFullName) {
+      customerName = rawFullName;
+    } else if (propName) {
+      customerName = propName;
+    }
 
     // Handle Plan / Term / PPT: check composite planTermPpt or separate term/ppt columns
     let planTermPpt = bestColumnMap.planTermPpt !== undefined ? formatCell(row[bestColumnMap.planTermPpt]) : '';
@@ -712,11 +903,18 @@ export async function extractPoliciesFromExcel(
     throw new Error('No valid policy data rows could be extracted from this Excel file.');
   }
 
+  // Create clean uniform labels for matched columns display
+  const uniformMatchedColumns: Record<string, string> = {};
+  for (const [key, origName] of Object.entries(bestMatchedNames)) {
+    const uniformLabel = UNIFORM_COLUMN_LABELS[key as ColumnKey] || key;
+    uniformMatchedColumns[uniformLabel] = origName;
+  }
+
   return {
     extractedRows,
     totalRows: extractedRows.length,
     sheetName,
-    matchedColumns: bestMatchedNames,
+    matchedColumns: uniformMatchedColumns,
     warnings,
   };
 }

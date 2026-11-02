@@ -255,16 +255,17 @@ export const backupService = {
       policies = policies.filter((p) => idSet.has(p.id));
     }
     const headers = [
-      'Policy Number',
+      'S.No',
+      'Policy No',
       'Customer Name',
-      'Plan/Term/PPT',
-      'Sum Assured',
+      'Plan / Term / PPT',
+      'Sum Assured (₹)',
+      'Installment Premium (₹)',
+      'Premium Mode',
       'D.O.C.',
-      'Mode',
       'F.U.P.',
-      'Premium',
       'D.O.M.',
-      'DOB',
+      'D.O.B.',
       'Status',
     ];
 
@@ -274,17 +275,18 @@ export const backupService = {
       return `"${str}"`;
     };
 
-    const rows = policies.map((p) => [
+    const rows = policies.map((p, idx) => [
+      escapeCsv(p.sourceSerialNumber || idx + 1),
       escapeCsv(p.policyNumber),
       escapeCsv(p.customerName),
       escapeCsv(p.originalPlanString),
       escapeCsv(p.sumAssured),
-      escapeCsv(formatDate(p.commencementDate)),
-      escapeCsv(p.premiumMode),
-      escapeCsv(formatDate(p.firstUnpaidPremiumDate)),
       escapeCsv(p.premiumAmount),
+      escapeCsv(p.premiumMode),
+      escapeCsv(formatDate(p.commencementDate)),
+      escapeCsv(formatDate(p.firstUnpaidPremiumDate)),
       escapeCsv(formatDate(p.maturityDate)),
-      escapeCsv(p.dateOfBirth ? formatDate(p.dateOfBirth) : '00/00/0000'),
+      escapeCsv(p.dateOfBirth ? formatDate(p.dateOfBirth) : ''),
       escapeCsv(p.recordStatus),
     ].join(','));
 

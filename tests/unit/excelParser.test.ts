@@ -95,4 +95,59 @@ describe('Excel Policy Data Extraction', () => {
     expect(result.extractedRows[2].mode).toBe('QLY');
     expect(result.extractedRows[2].premium).toBe('4600');
   });
+
+  it('correctly stitches split "First Name" and "Second Name / Last Name" columns without data loss', async () => {
+    const data = [
+      ['S.No', 'Policy No', 'First Name', 'Second Name', 'Plan', 'Installment Premium', 'Due Date'],
+      ['1', '112233445', 'RAJESH', 'KUMAR', '914/20/20', '15000', '10/11/2026'],
+      ['2', '998877665', 'RAJESH', 'SHARMA', '814/15/15', '22000', '12/12/2026'],
+      ['3', '554433221', 'SUNIL', 'VERMA', '945/25/20', '8500', '05/01/2027'],
+    ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'SplitNames');
+
+    const buffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
+    const result = await extractPoliciesFromExcel(buffer);
+
+    expect(result.extractedRows.length).toBe(3);
+    // Verified: First Name + Second Name are combined properly
+    expect(result.extractedRows[0].name).toBe('RAJESH KUMAR');
+    expect(result.extractedRows[0].policyNo).toBe('112233445');
+
+    // Second man with same first name retains his distinct second name!
+    expect(result.extractedRows[1].name).toBe('RAJESH SHARMA');
+    expect(result.extractedRows[1].policyNo).toBe('998877665');
+
+    expect(result.extractedRows[2].name).toBe('SUNIL VERMA');
+    expect(result.extractedRows[2].policyNo).toBe('554433221');
+
+    // Uniform labels check
+    expect(result.matchedColumns['Policy No']).toBe('Policy No');
+    expect(result.matchedColumns['First Name']).toBe('First Name');
+    expect(result.matchedColumns['Second / Last Name']).toBe('Second Name');
+  });
+
+  it('handles distinct "Life Assured Name" and "Proposer Name" without collision', async () => {
+    const data = [
+      ['S.No', 'Policy No', 'Life Assured Name', 'Proposer Name', 'Plan', 'Premium', 'Due Date'],
+      ['1', '667788990', 'AARAV SHARMA', 'SUNIL SHARMA', '914/20/20', '18000', '15/12/2026'],
+      ['2', '889900112', 'MANISH GUPTA', 'MANISH GUPTA', '814/15/15', '12500', '20/12/2026'],
+    ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'LAandProposer');
+
+    const buffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
+    const result = await extractPoliciesFromExcel(buffer);
+
+    expect(result.extractedRows.length).toBe(2);
+    expect(result.extractedRows[0].name).toBe('AARAV SHARMA (Proposer: SUNIL SHARMA)');
+    expect(result.extractedRows[0].policyNo).toBe('667788990');
+
+    expect(result.extractedRows[1].name).toBe('MANISH GUPTA');
+    expect(result.extractedRows[1].policyNo).toBe('889900112');
+  });
 });
