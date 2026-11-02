@@ -50,4 +50,49 @@ describe('Excel Policy Data Extraction', () => {
     expect(result.extractedRows[0].name).toBe('AMIT VERMA');
     expect(result.extractedRows[0].sumAssured).toBe('250000');
   });
+
+  it('correctly distinguishes Policyholder Name from Policy Number and Premium Mode from Premium Amount in exact row order', async () => {
+    const data = [
+      ['POLICY STATEMENT REPORT - LIC OF INDIA', '', '', '', '', '', '', '', ''],
+      ['Agency Code: 08345678', 'Agent Name: RAMESH KUMAR', '', '', '', '', '', '', ''],
+      ['Sl No', 'Policyholder Name', 'Policy Number', 'Plan', 'Term', 'PPT', 'Premium Mode', 'Installment Premium', 'Due Date'],
+      ['1', 'PRIYA SHARMA', '334455667', '914', '20', '20', 'HLY', '14250', '15/11/2026'],
+      ['2', 'VIJAY VERMA', '778899001', '814', '15', '15', 'YLY', '28900', '28/12/2026'],
+      ['3', 'ANITA DEVI', '445566778', '945', '21', '18', 'QLY', '4600', '10/01/2027'],
+    ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'BranchReport');
+
+    const buffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
+    const result = await extractPoliciesFromExcel(buffer);
+
+    expect(result.extractedRows.length).toBe(3);
+
+    // Row 1
+    expect(result.extractedRows[0].sNo).toBe('1');
+    expect(result.extractedRows[0].policyNo).toBe('334455667');
+    expect(result.extractedRows[0].name).toBe('PRIYA SHARMA');
+    expect(result.extractedRows[0].planTermPpt).toBe('914/20/20');
+    expect(result.extractedRows[0].mode).toBe('HLY');
+    expect(result.extractedRows[0].premium).toBe('14250');
+    expect(result.extractedRows[0].fup).toBe('15/11/2026');
+
+    // Row 2 (Sequential order preserved)
+    expect(result.extractedRows[1].sNo).toBe('2');
+    expect(result.extractedRows[1].policyNo).toBe('778899001');
+    expect(result.extractedRows[1].name).toBe('VIJAY VERMA');
+    expect(result.extractedRows[1].planTermPpt).toBe('814/15/15');
+    expect(result.extractedRows[1].mode).toBe('YLY');
+    expect(result.extractedRows[1].premium).toBe('28900');
+
+    // Row 3 (Sequential order preserved)
+    expect(result.extractedRows[2].sNo).toBe('3');
+    expect(result.extractedRows[2].policyNo).toBe('445566778');
+    expect(result.extractedRows[2].name).toBe('ANITA DEVI');
+    expect(result.extractedRows[2].planTermPpt).toBe('945/21/18');
+    expect(result.extractedRows[2].mode).toBe('QLY');
+    expect(result.extractedRows[2].premium).toBe('4600');
+  });
 });

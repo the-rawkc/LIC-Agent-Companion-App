@@ -62,6 +62,32 @@ export function parseDateToISO(raw: string | null | undefined): string | null {
     }
   }
 
+  // Check Excel serial number (integers between 20000 and 60000: years ~1954 to 2064)
+  if (/^\d{5}$/.test(trimmed)) {
+    const serial = parseInt(trimmed, 10);
+    if (serial >= 20000 && serial <= 60000) {
+      const date = new Date(Math.round((serial - 25569) * 86400 * 1000));
+      if (!isNaN(date.getTime())) {
+        const yyyy = date.getUTCFullYear();
+        const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const dd = String(date.getUTCDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+      }
+    }
+  }
+
+  // Check text month names like "15-May-2026" or "15/May/2026" or "May 15, 2026"
+  const parsedTimestamp = Date.parse(trimmed);
+  if (!isNaN(parsedTimestamp)) {
+    const date = new Date(parsedTimestamp);
+    if (date.getFullYear() >= 1940 && date.getFullYear() <= 2100) {
+      const yyyy = date.getFullYear();
+      const mm = String(date.getMonth() + 1).padStart(2, '0');
+      const dd = String(date.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+  }
+
   return null;
 }
 

@@ -13,12 +13,18 @@ export interface PolicyFilterOptions {
   fupDateFrom?: string; // YYYY-MM-DD
   fupDateTo?: string; // YYYY-MM-DD
   hasWarnings?: boolean;
-  sortBy?: 'doc_desc' | 'doc_asc' | 'fup_asc' | 'fup_desc' | 'premium_desc' | 'policy_asc';
+  sortBy?: 'serial_asc' | 'doc_desc' | 'doc_asc' | 'fup_asc' | 'fup_desc' | 'premium_desc' | 'policy_asc' | 'name_asc';
 }
 
 export const policyRepository = {
   async getAll(): Promise<Policy[]> {
-    return await db.policies.toArray();
+    const list = await db.policies.toArray();
+    return list.sort((a, b) => {
+      const sA = a.sourceSerialNumber ?? 9999999;
+      const sB = b.sourceSerialNumber ?? 9999999;
+      if (sA !== sB) return sA - sB;
+      return (b.commencementDate || '').localeCompare(a.commencementDate || '');
+    });
   },
 
   async getById(id: string): Promise<Policy | undefined> {
@@ -202,9 +208,15 @@ export const policyRepository = {
       }
     }
 
-    // Default sorting: descending by Commencement Date (DOC - newest done comes at top)
-    const sortBy = filters?.sortBy || 'doc_desc';
+    // Default sorting: Preserves exact original Excel/report row order (sourceSerialNumber: 1, 2, 3...)
+    const sortBy = filters?.sortBy || 'serial_asc';
     collection.sort((a, b) => {
+      if (sortBy === 'serial_asc') {
+        const sA = a.sourceSerialNumber ?? 9999999;
+        const sB = b.sourceSerialNumber ?? 9999999;
+        if (sA !== sB) return sA - sB;
+        return (b.commencementDate || '').localeCompare(a.commencementDate || '');
+      }
       if (sortBy === 'doc_desc') {
         return (b.commencementDate || '').localeCompare(a.commencementDate || '');
       }
@@ -223,7 +235,12 @@ export const policyRepository = {
       if (sortBy === 'policy_asc') {
         return a.policyNumber.localeCompare(b.policyNumber);
       }
-      return (b.commencementDate || '').localeCompare(a.commencementDate || '');
+      if (sortBy === 'name_asc') {
+        return (a.customerName || '').localeCompare(b.customerName || '');
+      }
+      const sA = a.sourceSerialNumber ?? 9999999;
+      const sB = b.sourceSerialNumber ?? 9999999;
+      return sA - sB;
     });
 
     return collection;
