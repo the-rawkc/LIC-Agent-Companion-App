@@ -13,7 +13,8 @@ import {
   Clock,
   Download,
   CheckSquare,
-  Square
+  Square,
+  Trash2
 } from 'lucide-react';
 import { policyRepository, type PolicyFilterOptions } from '@/db/repositories/policyRepository';
 import { customerRepository } from '@/db/repositories/customerRepository';
@@ -51,9 +52,15 @@ export function PoliciesPage() {
   const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const nextMonthIso = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}`;
 
-  // Multi-selection state for export
+  // Multi-selection state for export and bulk actions
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isExporting, setIsExporting] = useState(false);
+
+  // Policy Deletion State
+  const [policyToDelete, setPolicyToDelete] = useState<Policy | null>(null);
+  const [isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteNotice, setDeleteNotice] = useState<string | null>(null);
 
   // Pagination / Batch Rendering
   const [currentPage, setCurrentPage] = useState(1);
@@ -241,6 +248,39 @@ export function PoliciesPage() {
     setAddDob('');
   };
 
+  const handleDeletePolicy = async () => {
+    if (!policyToDelete) return;
+    setIsDeleting(true);
+    try {
+      await policyRepository.delete(policyToDelete.id);
+      setDeleteNotice(`Policy ${policyToDelete.policyNumber} (${policyToDelete.customerName}) deleted successfully.`);
+      setPolicyToDelete(null);
+      await loadPolicies();
+      setTimeout(() => setDeleteNotice(null), 4000);
+    } catch (err: any) {
+      alert('Failed to delete policy: ' + (err.message || String(err)));
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleBulkDeletePolicies = async () => {
+    if (selectedIds.size === 0) return;
+    setIsDeleting(true);
+    try {
+      const count = await policyRepository.bulkDelete(Array.from(selectedIds));
+      setDeleteNotice(`Successfully deleted ${count} selected policies.`);
+      setSelectedIds(new Set());
+      setIsBulkDeleteConfirmOpen(false);
+      await loadPolicies();
+      setTimeout(() => setDeleteNotice(null), 4000);
+    } catch (err: any) {
+      alert('Failed to delete selected policies: ' + (err.message || String(err)));
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const clearAllFilters = () => {
     setSelectedPlan('');
     setSelectedMode('');
@@ -374,6 +414,14 @@ export function PoliciesPage() {
         <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-2xl flex items-center gap-3 text-emerald-800 dark:text-emerald-200 text-xs font-semibold animate-in fade-in">
           <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
           <span>{paymentSuccessToast}</span>
+        </div>
+      )}
+
+      {/* Policy Deletion Notice Toast */}
+      {deleteNotice && (
+        <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 rounded-2xl flex items-center gap-3 text-rose-800 dark:text-rose-200 text-xs font-semibold animate-in fade-in">
+          <Trash2 className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />
+          <span>{deleteNotice}</span>
         </div>
       )}
 
@@ -599,6 +647,15 @@ export function PoliciesPage() {
           {selectedIds.size > 0 && (
             <div className="flex items-center gap-2">
               <Button
+                variant="danger"
+                size="sm"
+                onClick={() => setIsBulkDeleteConfirmOpen(true)}
+                disabled={isDeleting}
+                leftIcon={<Trash2 className="w-3.5 h-3.5" />}
+              >
+                Delete ({selectedIds.size})
+              </Button>
+              <Button
                 variant="primary"
                 size="sm"
                 onClick={handleExportSelectedCsv}
@@ -698,8 +755,8 @@ export function PoliciesPage() {
                     </div>
                   </div>
 
-                {/* Right side stats & Quick Mark Paid */}
-                <div className="flex items-center gap-2.5 self-end sm:self-auto text-right shrink-0">
+                {/* Right side stats & Quick Mark Paid & Delete */}
+                <div className="flex items-center gap-2 self-end sm:self-auto text-right shrink-0">
                   <button
                     type="button"
                     onClick={(e) => {
@@ -711,6 +768,19 @@ export function PoliciesPage() {
                   >
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                     <span>Paid</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPolicyToDelete(p);
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800 transition shadow-xs"
+                    title="Delete policy record"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                    <span className="hidden sm:inline">Delete</span>
                   </button>
 
                   <div>
@@ -855,15 +925,26 @@ export function PoliciesPage() {
         </div>
       )}
 
-      {/* Add Policy Modal */}
+      {/* Add Policy Modal - True popup with docked submit bar */}
       <Modal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         title="Add Policy Record"
         description="Manually record a policy into the local database"
         maxWidth="md"
+        onSubmit={handleCreatePolicy}
+        footer={
+          <>
+            <Button type="button" variant="outline" size="sm" onClick={() => setIsAddModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" size="sm">
+              Save Policy
+            </Button>
+          </>
+        }
       >
-        <form onSubmit={handleCreatePolicy} className="space-y-3.5">
+        <div className="space-y-3.5">
           {addError && (
             <div className="p-2.5 bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 text-xs rounded-xl border border-rose-200">
               {addError}
@@ -1016,16 +1097,7 @@ export function PoliciesPage() {
               />
             </div>
           </div>
-
-          <div className="sticky -bottom-4 sm:-bottom-5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs pt-3 pb-1 mt-4 border-t border-slate-100 dark:border-slate-800 -mx-4 -mb-4 px-4 sm:-mx-5 sm:-mb-5 sm:px-5 flex items-center justify-end gap-2.5 z-10 shrink-0">
-            <Button type="button" variant="outline" size="sm" onClick={() => setIsAddModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" size="sm">
-              Save Policy
-            </Button>
-          </div>
-        </form>
+        </div>
       </Modal>
 
       {/* Payment Confirmation Dialog */}
@@ -1037,6 +1109,34 @@ export function PoliciesPage() {
           title="Confirm Premium Payment"
           message={`Mark premium as paid for Policy ${paymentPolicy.policyNumber} (${formatCurrency(paymentPolicy.premiumAmount)})?\n\nCustomer: ${paymentPolicy.customerName}\nCurrent F.U.P.: ${formatDate(paymentPolicy.firstUnpaidPremiumDate)}\nNew Next F.U.P.: ${formatDate(advanceFupDate(paymentPolicy.firstUnpaidPremiumDate, paymentPolicy.premiumMode))} (Mode: ${paymentPolicy.premiumMode})\n\nThis will auto-advance the due date and record an audit log.`}
           confirmLabel={isRecordingPayment ? "Updating..." : "Confirm & Advance F.U.P."}
+        />
+      )}
+
+      {/* Single Policy Delete Confirmation Dialog */}
+      {policyToDelete && (
+        <ConfirmDialog
+          isOpen={!!policyToDelete}
+          onClose={() => setPolicyToDelete(null)}
+          onConfirm={handleDeletePolicy}
+          title="Delete Policy Record"
+          message={`Are you sure you want to permanently delete Policy ${policyToDelete.policyNumber} for ${policyToDelete.customerName}? All associated reminders will also be deleted.`}
+          confirmLabel={isDeleting ? "Deleting..." : "Delete Policy"}
+          variant="danger"
+          isLoading={isDeleting}
+        />
+      )}
+
+      {/* Bulk Delete Selected Policies Confirmation Dialog */}
+      {isBulkDeleteConfirmOpen && (
+        <ConfirmDialog
+          isOpen={isBulkDeleteConfirmOpen}
+          onClose={() => setIsBulkDeleteConfirmOpen(false)}
+          onConfirm={handleBulkDeletePolicies}
+          title="Delete Selected Policies"
+          message={`Are you sure you want to permanently delete ${selectedIds.size} selected policies? All associated reminders for these policies will also be deleted.`}
+          confirmLabel={isDeleting ? "Deleting..." : `Delete ${selectedIds.size} Policies`}
+          variant="danger"
+          isLoading={isDeleting}
         />
       )}
     </div>

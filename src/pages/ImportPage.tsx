@@ -526,19 +526,27 @@ export function ImportPage() {
               title="Edit Row Before Import"
               description="Make corrections directly to this record"
               maxWidth="md"
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSaveEditedRow({
+                  ...editingRow,
+                  isValid: true,
+                  validationErrors: [],
+                  userEdited: true,
+                });
+              }}
+              footer={
+                <>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setEditingRow(null)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" variant="primary" size="sm">
+                    Save Changes
+                  </Button>
+                </>
+              }
             >
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleSaveEditedRow({
-                    ...editingRow,
-                    isValid: true,
-                    validationErrors: [],
-                    userEdited: true,
-                  });
-                }}
-                className="space-y-3"
-              >
+              <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -643,16 +651,7 @@ export function ImportPage() {
                     />
                   </div>
                 </div>
-
-                <div className="flex justify-end gap-2 pt-3">
-                  <Button type="button" variant="outline" size="sm" onClick={() => setEditingRow(null)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" variant="primary" size="sm">
-                    Save Changes
-                  </Button>
-                </div>
-              </form>
+              </div>
             </Modal>
           )}
 
@@ -663,6 +662,21 @@ export function ImportPage() {
             title="Confirm Database Import"
             description="Commit staged policies to your private IndexedDB storage"
             maxWidth="sm"
+            footer={
+              <>
+                <Button variant="outline" size="sm" onClick={() => setIsCommitModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="success"
+                  size="sm"
+                  isLoading={isCommitting}
+                  onClick={handleExecuteCommit}
+                >
+                  Commit to Database
+                </Button>
+              </>
+            }
           >
             <div className="space-y-4">
               <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl text-xs space-y-1">
@@ -719,20 +733,6 @@ export function ImportPage() {
                   </div>
                 </div>
               )}
-
-              <div className="flex justify-end gap-2.5 pt-2">
-                <Button variant="outline" size="sm" onClick={() => setIsCommitModalOpen(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  variant="success"
-                  size="sm"
-                  isLoading={isCommitting}
-                  onClick={handleExecuteCommit}
-                >
-                  Commit to Database
-                </Button>
-              </div>
             </div>
           </Modal>
         </div>

@@ -70,8 +70,25 @@ export function PinSetupModal({
       title={isChange ? 'Change Security PIN' : 'Set Application PIN'}
       description="Protect customer records when you hand your phone to someone"
       maxWidth="sm"
+      onSubmit={handleSubmit}
+      footer={
+        <>
+          <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            size="sm"
+            isLoading={isSubmitting}
+            leftIcon={<KeyRound className="w-4 h-4" />}
+          >
+            {isChange ? 'Update PIN' : 'Enable PIN'}
+          </Button>
+        </>
+      }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-4">
         <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl flex items-start gap-3 border border-blue-100 dark:border-blue-900/50">
           <ShieldCheck className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
           <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
@@ -134,22 +151,7 @@ export function PinSetupModal({
             {error}
           </p>
         )}
-
-        <div className="sticky -bottom-4 sm:-bottom-5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs pt-3 pb-1 mt-4 border-t border-slate-100 dark:border-slate-800 -mx-4 -mb-4 px-4 sm:-mx-5 sm:-mb-5 sm:px-5 flex items-center justify-end gap-2.5 z-10 shrink-0">
-          <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            size="sm"
-            isLoading={isSubmitting}
-            leftIcon={<KeyRound className="w-4 h-4" />}
-          >
-            {isChange ? 'Update PIN' : 'Enable PIN'}
-          </Button>
-        </div>
-      </form>
+      </div>
     </Modal>
   );
 }

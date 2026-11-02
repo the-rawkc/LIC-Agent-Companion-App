@@ -693,8 +693,19 @@ export function SettingsPage() {
         title="Password-Protected Backup"
         description="Choose a strong password to encrypt your customer data"
         maxWidth="sm"
+        onSubmit={handleExportEncrypted}
+        footer={
+          <>
+            <Button type="button" variant="outline" size="sm" onClick={() => setIsEncryptedExportModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="success" size="sm" isLoading={isExporting}>
+              Encrypt & Download
+            </Button>
+          </>
+        }
       >
-        <form onSubmit={handleExportEncrypted} className="space-y-4">
+        <div className="space-y-4">
           <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-100 dark:border-emerald-900 text-xs text-emerald-800 dark:text-emerald-300">
             Uses authenticated <strong>AES-GCM 256-bit</strong> encryption. Please remember or safely record this password; it cannot be recovered if lost.
           </div>
@@ -713,16 +724,7 @@ export function SettingsPage() {
               minLength={4}
             />
           </div>
-
-          <div className="sticky -bottom-4 sm:-bottom-5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs pt-3 pb-1 mt-4 border-t border-slate-100 dark:border-slate-800 -mx-4 -mb-4 px-4 sm:-mx-5 sm:-mb-5 sm:px-5 flex items-center justify-end gap-2.5 z-10 shrink-0">
-            <Button type="button" variant="outline" size="sm" onClick={() => setIsEncryptedExportModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="success" size="sm" isLoading={isExporting}>
-              Encrypt & Download
-            </Button>
-          </div>
-        </form>
+        </div>
       </Modal>
 
       {/* Decrypt Password Modal for Restoration */}
@@ -735,8 +737,27 @@ export function SettingsPage() {
         title="Enter Backup Password"
         description="This backup file is encrypted"
         maxWidth="sm"
+        onSubmit={handleDecryptAndPreview}
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setIsPasswordModalOpen(false);
+                setRestoreFileContent(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" size="sm">
+              Decrypt Backup
+            </Button>
+          </>
+        }
       >
-        <form onSubmit={handleDecryptAndPreview} className="space-y-4">
+        <div className="space-y-4">
           {decryptError && (
             <div className="p-2.5 bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 text-xs rounded-xl border border-rose-200">
               {decryptError}
@@ -756,24 +777,7 @@ export function SettingsPage() {
               required
             />
           </div>
-
-          <div className="sticky -bottom-4 sm:-bottom-5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs pt-3 pb-1 mt-4 border-t border-slate-100 dark:border-slate-800 -mx-4 -mb-4 px-4 sm:-mx-5 sm:-mb-5 sm:px-5 flex items-center justify-end gap-2.5 z-10 shrink-0">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setIsPasswordModalOpen(false);
-                setRestoreFileContent(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" size="sm">
-              Decrypt Backup
-            </Button>
-          </div>
-        </form>
+        </div>
       </Modal>
 
       {/* Restore Preview Confirmation Modal */}
@@ -783,6 +787,21 @@ export function SettingsPage() {
         title="Confirm Backup Restoration"
         description="Review backup contents before overwriting current data"
         maxWidth="sm"
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setRestorePayload(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              isLoading={isRestoring}
+              onClick={handleConfirmRestore}
+            >
+              Replace & Restore
+            </Button>
+          </>
+        }
       >
         <div className="space-y-4">
           <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-900/60 text-xs text-amber-800 dark:text-amber-300 space-y-1">
@@ -803,20 +822,6 @@ export function SettingsPage() {
           <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">
             Warning: Restoring this backup will replace any currently stored policies on this device.
           </p>
-
-          <div className="sticky -bottom-4 sm:-bottom-5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs pt-3 pb-1 mt-4 border-t border-slate-100 dark:border-slate-800 -mx-4 -mb-4 px-4 sm:-mx-5 sm:-mb-5 sm:px-5 flex items-center justify-end gap-2.5 z-10 shrink-0">
-            <Button variant="outline" size="sm" onClick={() => setRestorePayload(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              isLoading={isRestoring}
-              onClick={handleConfirmRestore}
-            >
-              Replace & Restore
-            </Button>
-          </div>
         </div>
       </Modal>
 

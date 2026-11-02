@@ -82,6 +82,7 @@ export const policyRepository = {
     const existing = await db.policies.get(id);
     if (existing) {
       await db.policies.delete(id);
+      await db.reminders.where('policyId').equals(id).delete();
       await db.auditLogs.add({
         id: generateUUID(),
         entityType: 'policy',
@@ -92,6 +93,31 @@ export const policyRepository = {
       });
       d1SyncService.triggerAutoSync();
     }
+  },
+
+  async bulkDelete(ids: string[]): Promise<number> {
+    if (!ids || ids.length === 0) return 0;
+    let deletedCount = 0;
+    for (const id of ids) {
+      const existing = await db.policies.get(id);
+      if (existing) {
+        await db.policies.delete(id);
+        await db.reminders.where('policyId').equals(id).delete();
+        await db.auditLogs.add({
+          id: generateUUID(),
+          entityType: 'policy',
+          entityId: id,
+          action: 'delete',
+          timestamp: new Date().toISOString(),
+          summary: `Deleted policy ${existing.policyNumber}`,
+        });
+        deletedCount++;
+      }
+    }
+    if (deletedCount > 0) {
+      d1SyncService.triggerAutoSync();
+    }
+    return deletedCount;
   },
 
   /**

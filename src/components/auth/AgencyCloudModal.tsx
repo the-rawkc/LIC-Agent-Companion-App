@@ -126,8 +126,37 @@ export function AgencyCloudModal({ isOpen, onClose, mode = 'sync', onSuccess }: 
       title={modalTitle}
       description={modalDescription}
       maxWidth="md"
+      onSubmit={handleSubmit}
+      footer={
+        <>
+          <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={isLoading}>
+            Close
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            size="sm"
+            disabled={isLoading}
+            leftIcon={
+              isPullMode ? (
+                <ArrowDownCircle className="w-4 h-4" />
+              ) : (
+                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+              )
+            }
+          >
+            {isLoading
+              ? isPullMode
+                ? 'Restoring from D1...'
+                : 'Syncing Data...'
+              : isPullMode
+              ? 'Restore All Policies'
+              : 'Start Two-Way Sync'}
+          </Button>
+        </>
+      }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-4">
         {error && (
           <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl flex items-start gap-2.5 text-xs text-rose-700 dark:text-rose-300">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -204,35 +233,7 @@ export function AgencyCloudModal({ isOpen, onClose, mode = 'sync', onSuccess }: 
             />
           </div>
         )}
-
-        {/* Sticky Action Footer - Always visible on all screens */}
-        <div className="sticky -bottom-4 sm:-bottom-5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs pt-3 pb-1 mt-4 border-t border-slate-100 dark:border-slate-800 -mx-4 -mb-4 px-4 sm:-mx-5 sm:-mb-5 sm:px-5 flex items-center justify-end gap-2.5 z-10 shrink-0">
-          <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={isLoading}>
-            Close
-          </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            size="sm"
-            disabled={isLoading}
-            leftIcon={
-              isPullMode ? (
-                <ArrowDownCircle className="w-4 h-4" />
-              ) : (
-                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-              )
-            }
-          >
-            {isLoading
-              ? isPullMode
-                ? 'Restoring from D1...'
-                : 'Syncing Data...'
-              : isPullMode
-              ? 'Restore All Policies'
-              : 'Start Two-Way Sync'}
-          </Button>
-        </div>
-      </form>
+      </div>
     </Modal>
   );
 }

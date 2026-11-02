@@ -449,8 +449,19 @@ export function CustomerDetailsPage() {
         onClose={() => setIsEditModalOpen(false)}
         title="Edit Customer Profile"
         maxWidth="sm"
+        onSubmit={handleSaveCustomer}
+        footer={
+          <>
+            <Button type="button" variant="outline" size="sm" onClick={() => setIsEditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" size="sm">
+              Save Changes
+            </Button>
+          </>
+        }
       >
-        <form onSubmit={handleSaveCustomer} className="space-y-4">
+        <div className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               Customer Name *
@@ -512,16 +523,7 @@ export function CustomerDetailsPage() {
               className="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-
-          <div className="flex justify-end gap-2.5 pt-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => setIsEditModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" size="sm">
-              Save Changes
-            </Button>
-          </div>
-        </form>
+        </div>
       </Modal>
 
       {/* Add Reminder Modal */}
@@ -531,8 +533,19 @@ export function CustomerDetailsPage() {
         title="Add Follow-up Reminder"
         description={`Schedule reminder for ${customer.displayName}`}
         maxWidth="sm"
+        onSubmit={handleCreateReminder}
+        footer={
+          <>
+            <Button type="button" variant="outline" size="sm" onClick={() => setIsReminderModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" size="sm">
+              Save Reminder
+            </Button>
+          </>
+        }
       >
-        <form onSubmit={handleCreateReminder} className="space-y-4">
+        <div className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               Reminder Title *
@@ -596,16 +609,7 @@ export function CustomerDetailsPage() {
               </select>
             </div>
           )}
-
-          <div className="flex justify-end gap-2.5 pt-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => setIsReminderModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" size="sm">
-              Save Reminder
-            </Button>
-          </div>
-        </form>
+        </div>
       </Modal>
 
       {/* Delete Confirmation */}

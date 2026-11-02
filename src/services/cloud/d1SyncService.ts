@@ -149,6 +149,10 @@ export const d1SyncService = {
     const profileItem = await targetDb.appSettings.get('agent_profile');
     const profile = profileItem?.value || null;
 
+    // Track deleted policies so cloud replica stays in sync
+    const deletedLogs = await targetDb.auditLogs.where({ entityType: 'policy', action: 'delete' }).toArray();
+    const deletedPolicyIds = Array.from(new Set(deletedLogs.map((l) => l.entityId)));
+
     const res = await fetch(`${base}/api/sync/push`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -159,6 +163,7 @@ export const d1SyncService = {
         customers,
         reminders,
         profile,
+        deletedPolicyIds,
       }),
     });
 
@@ -228,13 +233,18 @@ export const d1SyncService = {
     const cloudReminders: Reminder[] = Array.isArray(data.reminders) ? data.reminders : [];
     const cloudProfile = data.profile || null;
 
+    // Filter out any policies marked as deleted locally
+    const deletedLogs = await targetDb.auditLogs.where({ entityType: 'policy', action: 'delete' }).toArray();
+    const deletedSet = new Set(deletedLogs.map((l) => l.entityId));
+    const policiesToPut = cloudPolicies.filter((p) => !deletedSet.has(p.id));
+
     // Atomically merge records into local IndexedDB
     await targetDb.transaction('rw', [targetDb.policies, targetDb.customers, targetDb.reminders, targetDb.appSettings], async () => {
       if (cloudCustomers.length > 0) {
         await targetDb.customers.bulkPut(cloudCustomers);
       }
-      if (cloudPolicies.length > 0) {
-        await targetDb.policies.bulkPut(cloudPolicies);
+      if (policiesToPut.length > 0) {
+        await targetDb.policies.bulkPut(policiesToPut);
       }
       if (cloudReminders.length > 0) {
         await targetDb.reminders.bulkPut(cloudReminders);

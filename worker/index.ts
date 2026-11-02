@@ -175,6 +175,7 @@ export default {
           const policies: any[] = Array.isArray(body.policies) ? body.policies : [];
           const customers: any[] = Array.isArray(body.customers) ? body.customers : [];
           const reminders: any[] = Array.isArray(body.reminders) ? body.reminders : [];
+          const deletedPolicyIds: string[] = Array.isArray(body.deletedPolicyIds) ? body.deletedPolicyIds : [];
           const profile = body.profile || null;
           const now = new Date().toISOString();
 
@@ -193,6 +194,16 @@ export default {
 
           // Chunk queries to stay well within D1 batch boundaries (maximum 100 statements per batch)
           const statements: any[] = [];
+
+          // Delete policies and reminders that were removed on client
+          for (const delId of deletedPolicyIds) {
+            statements.push(
+              env.DB.prepare('DELETE FROM cloud_policies WHERE id = ? AND agency_code = ?').bind(delId, agencyCode)
+            );
+            statements.push(
+              env.DB.prepare('DELETE FROM cloud_reminders WHERE policy_id = ? AND agency_code = ?').bind(delId, agencyCode)
+            );
+          }
 
           if (profile) {
             statements.push(

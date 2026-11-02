@@ -268,6 +268,15 @@ export function PolicyDetailsPage() {
           >
             Reminder
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsDeleteDialogOpen(true)}
+            leftIcon={<Trash2 className="w-3.5 h-3.5 text-rose-600" />}
+            className="text-rose-600 hover:bg-rose-50 border-rose-200 dark:border-rose-900/60"
+          >
+            Delete
+          </Button>
         </div>
       </div>
 
@@ -570,8 +579,19 @@ export function PolicyDetailsPage() {
         onClose={() => setIsEditModalOpen(false)}
         title="Edit Policy Record"
         maxWidth="md"
+        onSubmit={handleUpdatePolicy}
+        footer={
+          <>
+            <Button type="button" variant="outline" size="sm" onClick={() => setIsEditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" size="sm">
+              Save Changes
+            </Button>
+          </>
+        }
       >
-        <form onSubmit={handleUpdatePolicy} className="space-y-3.5">
+        <div className="space-y-3.5">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -707,16 +727,7 @@ export function PolicyDetailsPage() {
               className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-blue-500"
             />
           </div>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => setIsEditModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" size="sm">
-              Save Changes
-            </Button>
-          </div>
-        </form>
+        </div>
       </Modal>
 
       {/* Add Reminder Modal */}
@@ -725,8 +736,19 @@ export function PolicyDetailsPage() {
         onClose={() => setIsReminderModalOpen(false)}
         title="Create Policy Follow-up"
         maxWidth="sm"
+        onSubmit={handleCreateReminder}
+        footer={
+          <>
+            <Button type="button" variant="outline" size="sm" onClick={() => setIsReminderModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" size="sm">
+              Schedule Task
+            </Button>
+          </>
+        }
       >
-        <form onSubmit={handleCreateReminder} className="space-y-4">
+        <div className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               Task Title *
@@ -753,16 +775,7 @@ export function PolicyDetailsPage() {
               required
             />
           </div>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => setIsReminderModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" size="sm">
-              Schedule Task
-            </Button>
-          </div>
-        </form>
+        </div>
       </Modal>
 
       {/* Record Payment Confirmation */}

@@ -441,8 +441,19 @@ export function CustomersPage() {
         title="Add New Customer"
         description="Create a customer record. Phone number is optional."
         maxWidth="sm"
+        onSubmit={handleCreateCustomer}
+        footer={
+          <>
+            <Button type="button" variant="outline" size="sm" onClick={() => setIsAddModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" size="sm">
+              Save Customer
+            </Button>
+          </>
+        }
       >
-        <form onSubmit={handleCreateCustomer} className="space-y-4">
+        <div className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               Customer Full Name *
@@ -482,16 +493,7 @@ export function CustomersPage() {
               placeholder="Address, family references, preferred contact time..."
             />
           </div>
-
-          <div className="sticky -bottom-4 sm:-bottom-5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs pt-3 pb-1 mt-4 border-t border-slate-100 dark:border-slate-800 -mx-4 -mb-4 px-4 sm:-mx-5 sm:-mb-5 sm:px-5 flex items-center justify-end gap-2.5 z-10 shrink-0">
-            <Button type="button" variant="outline" size="sm" onClick={() => setIsAddModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" size="sm">
-              Save Customer
-            </Button>
-          </div>
-        </form>
+        </div>
       </Modal>
 
       {/* Merge Customers Modal */}
@@ -501,6 +503,22 @@ export function CustomersPage() {
         title="Merge Customer Profiles"
         description="Consolidate duplicate customer records. All policies and reminders will be safely reassigned."
         maxWidth="md"
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setIsMergeModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={!sourceCustomerId || !targetCustomerId || sourceCustomerId === targetCustomerId || isMerging}
+              isLoading={isMerging}
+              onClick={handleExecuteMerge}
+            >
+              Confirm Merge
+            </Button>
+          </>
+        }
       >
         <div className="space-y-4">
           <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-900/60 text-xs text-amber-800 dark:text-amber-300">
@@ -553,21 +571,6 @@ export function CustomersPage() {
               </p>
             </div>
           )}
-
-          <div className="flex justify-end gap-2.5 pt-2">
-            <Button variant="outline" size="sm" onClick={() => setIsMergeModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              disabled={!sourceCustomerId || !targetCustomerId || sourceCustomerId === targetCustomerId || isMerging}
-              isLoading={isMerging}
-              onClick={handleExecuteMerge}
-            >
-              Confirm Merge
-            </Button>
-          </div>
         </div>
       </Modal>
     </div>
