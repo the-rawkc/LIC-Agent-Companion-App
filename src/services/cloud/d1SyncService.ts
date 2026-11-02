@@ -337,8 +337,12 @@ export const d1SyncService = {
    */
   triggerAutoSync(delayMs = 1200): void {
     if (typeof window === 'undefined') return;
-    const agencyCode = sessionStorage.getItem('lic_active_agency_code');
-    const pin = sessionStorage.getItem('lic_session_pin');
+    const agencyCode =
+      sessionStorage.getItem('lic_active_agency_code') ||
+      localStorage.getItem('lic_active_agency_code');
+    const pin =
+      sessionStorage.getItem('lic_session_pin') ||
+      localStorage.getItem('lic_session_pin');
     if (!agencyCode || !pin) return;
 
     if (autoSyncTimer) {

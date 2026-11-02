@@ -37,6 +37,11 @@ export class LICDatabase extends Dexie {
       auditLogs: 'id, entityType, entityId, action, timestamp',
       appSettings: 'key',
     });
+
+    // Version 3: Compound index on auditLogs for fast deletion and sync lookups
+    this.version(3).stores({
+      auditLogs: 'id, entityType, entityId, action, timestamp, [entityType+action]',
+    });
   }
 }
 

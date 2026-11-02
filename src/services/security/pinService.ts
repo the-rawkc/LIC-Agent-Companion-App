@@ -82,6 +82,8 @@ export const pinService = {
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('lic_app_unlocked', 'true');
         localStorage.setItem('lic_app_unlocked', 'true');
+        sessionStorage.setItem('lic_session_pin', pin.trim());
+        localStorage.setItem('lic_session_pin', pin.trim());
       }
       return true;
     }

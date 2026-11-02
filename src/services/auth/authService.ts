@@ -81,6 +81,7 @@ export const authService = {
     sessionStorage.setItem(UNLOCKED_KEY, 'true');
     if (pin) {
       sessionStorage.setItem('lic_session_pin', pin.trim());
+      localStorage.setItem('lic_session_pin', pin.trim());
     }
     // Remember last agency for convenient login pre-fill, but never persist active auth
     localStorage.setItem(LAST_AGENCY_KEY, sanitized);
@@ -98,6 +99,7 @@ export const authService = {
     sessionStorage.removeItem(AUTH_FLAG_KEY);
     sessionStorage.removeItem(UNLOCKED_KEY);
     sessionStorage.removeItem('lic_session_pin');
+    localStorage.removeItem('lic_session_pin');
     localStorage.removeItem(ACTIVE_AGENCY_KEY);
     localStorage.removeItem(AUTH_FLAG_KEY);
     localStorage.removeItem(UNLOCKED_KEY);
