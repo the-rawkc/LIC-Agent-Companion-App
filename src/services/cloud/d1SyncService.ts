@@ -17,6 +17,17 @@ export interface SyncConfig {
 
 let autoSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
+async function safeJson(res: Response): Promise<any> {
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    if (!res.ok) {
+      throw new Error(`Sync server returned HTTP ${res.status}: ${res.statusText || 'Service unavailable'}`);
+    }
+    throw new Error('Sync server returned non-JSON response. Check your server URL in Settings.');
+  }
+  return await res.json();
+}
+
 export const d1SyncService = {
   /**
    * Get API Base URL (env -> localStorage -> settings -> origin)
@@ -81,7 +92,7 @@ export const d1SyncService = {
       if (!res.ok) {
         return { d1Ready: false, error: `HTTP ${res.status}: ${res.statusText}` };
       }
-      const data = await res.json();
+      const data = await safeJson(res);
       return { d1Ready: Boolean(data.d1Ready), timestamp: data.timestamp };
     } catch (err: any) {
       return { d1Ready: false, error: err.message || 'Cannot reach Cloudflare sync server.' };
@@ -103,7 +114,7 @@ export const d1SyncService = {
       body: JSON.stringify({ agencyCode: agencyCode.trim(), pin: pin.trim(), agentName: agentName?.trim() }),
     });
 
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) {
       throw new Error(data.error || 'Authentication failed.');
     }
@@ -151,7 +162,7 @@ export const d1SyncService = {
       }),
     });
 
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) {
       throw new Error(data.error || 'Failed to push data to Cloudflare D1.');
     }
@@ -207,7 +218,7 @@ export const d1SyncService = {
       }),
     });
 
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) {
       throw new Error(data.error || 'Failed to retrieve data from Cloudflare D1.');
     }
@@ -274,6 +285,39 @@ export const d1SyncService = {
       lastSyncAt: data.lastSyncAt,
       agentName: data.agentName,
       profile: cloudProfile,
+    };
+  },
+
+  /**
+   * Complete two-way sync:
+   * 1. Authenticate with Cloudflare D1
+   * 2. Pull all cloud records and merge into local IndexedDB
+   * 3. Push local state up to Cloudflare D1
+   */
+  async fullTwoWaySync(
+    agencyCode: string,
+    pin: string,
+    agentName?: string
+  ): Promise<{
+    pulledCount: number;
+    pushedCount: number;
+    syncedAt: string;
+  }> {
+    const sanitized = agencyCode.trim().toUpperCase();
+
+    // 1. Authenticate / Register
+    await this.authenticate(sanitized, pin, agentName);
+
+    // 2. Pull from cloud and merge into local IndexedDB
+    const pullResult = await this.pullFromCloud(sanitized, pin);
+
+    // 3. Push local records up to Cloudflare D1
+    const pushResult = await this.pushToCloud(sanitized, pin);
+
+    return {
+      pulledCount: pullResult.policiesCount,
+      pushedCount: pushResult.counts.policies,
+      syncedAt: pushResult.syncedAt,
     };
   },
 

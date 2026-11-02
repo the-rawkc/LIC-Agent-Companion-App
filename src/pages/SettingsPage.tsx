@@ -69,7 +69,7 @@ export function SettingsPage() {
   const [syncConfig, setSyncConfig] = useState<SyncConfig | null>(null);
   const [d1Status, setD1Status] = useState<SyncStatus | null>(null);
   const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
-  const [cloudModalMode, setCloudModalMode] = useState<'push' | 'pull'>('push');
+  const [cloudModalMode, setCloudModalMode] = useState<'sync' | 'push' | 'pull'>('sync');
   const [isCheckingD1, setIsCheckingD1] = useState(false);
   const [apiUrlInput, setApiUrlInput] = useState('');
   const [apiUrlSaved, setApiUrlSaved] = useState(false);
@@ -409,12 +409,12 @@ export function SettingsPage() {
             variant="primary"
             size="sm"
             onClick={() => {
-              setCloudModalMode('push');
+              setCloudModalMode('sync');
               setIsCloudModalOpen(true);
             }}
-            leftIcon={<ArrowUpCircle className="w-4 h-4" />}
+            leftIcon={<RefreshCw className="w-4 h-4" />}
           >
-            Sync / Backup to D1
+            Two-Way Cloud Sync
           </Button>
 
           <Button
