@@ -3,6 +3,7 @@ import { db } from '@/db/database';
 import { policyRepository } from '@/db/repositories/policyRepository';
 import { customerRepository } from '@/db/repositories/customerRepository';
 import { reminderRepository } from '@/db/repositories/reminderRepository';
+import { profileRepository, DEFAULT_PROFILE } from '@/db/repositories/profileRepository';
 import type { Policy, Customer } from '@/types';
 
 describe('Database Repositories & Business Logic', () => {
@@ -214,5 +215,20 @@ describe('Database Repositories & Business Logic', () => {
     });
 
     await expect(customerRepository.delete(cust.id)).rejects.toThrow(/Cannot delete customer with 1 active policies/);
+  });
+
+  it('saves and retrieves agent profile including custom avatar photo', async () => {
+    const customPhoto = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD';
+    await profileRepository.saveProfile({
+      ...DEFAULT_PROFILE,
+      fullName: 'Vikramaditya Sharma',
+      agencyCode: '09876543',
+      avatarUrl: customPhoto,
+    });
+
+    const retrieved = await profileRepository.getProfile();
+    expect(retrieved.fullName).toBe('Vikramaditya Sharma');
+    expect(retrieved.agencyCode).toBe('09876543');
+    expect(retrieved.avatarUrl).toBe(customPhoto);
   });
 });

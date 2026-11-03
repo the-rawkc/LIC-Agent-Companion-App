@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   User,
@@ -17,7 +17,10 @@ import {
   Sparkles,
   LogOut,
   ShieldCheck,
-  KeyRound
+  KeyRound,
+  Camera,
+  Trash2,
+  Upload
 } from 'lucide-react';
 import { profileRepository, type AgentProfile, DEFAULT_PROFILE } from '@/db/repositories/profileRepository';
 import { authService, type AgentAccount } from '@/services/auth/authService';
@@ -34,6 +37,7 @@ export function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [savedNotice, setSavedNotice] = useState(false);
   const [copiedNotice, setCopiedNotice] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadProfile();
@@ -60,6 +64,50 @@ export function ProfilePage() {
       ...prev,
       [field]: value,
     }));
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const rawUrl = event.target?.result as string;
+      // Optimize image dimensions using HTML5 Canvas (max 600x600)
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 600;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          const optimized = canvas.toDataURL('image/jpeg', 0.88);
+          setProfile((prev) => ({ ...prev, avatarUrl: optimized }));
+        } else {
+          setProfile((prev) => ({ ...prev, avatarUrl: rawUrl }));
+        }
+      };
+      img.src = rawUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemovePhoto = () => {
+    setProfile((prev) => ({ ...prev, avatarUrl: '' }));
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -170,19 +218,46 @@ export function ProfilePage() {
         </Button>
       </div>
 
+      {/* Hidden File Input for Photo Upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handlePhotoUpload}
+        className="hidden"
+      />
+
       {/* Hero Agent Identity Card (Digital Visiting Card Preview) */}
       <div className="bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden border border-blue-900/60">
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-blue-500/10 blur-3xl rounded-full pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-start sm:items-center gap-5">
-            <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-2xl flex items-center justify-center shrink-0 shadow-lg border-2 border-white/20">
-              {profile.fullName
-                .split(' ')
-                .map((n) => n[0])
-                .slice(0, 2)
-                .join('')
-                .toUpperCase() || 'AG'}
+            {/* Agent Photo Avatar in Visiting Card */}
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-2xl flex items-center justify-center shrink-0 shadow-lg border-2 border-white/20 overflow-hidden relative group cursor-pointer"
+              title="Click to upload / change agent photo"
+            >
+              {profile.avatarUrl ? (
+                <img
+                  src={profile.avatarUrl}
+                  alt={profile.fullName || 'Agent'}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                profile.fullName
+                  .split(' ')
+                  .map((n) => n[0])
+                  .slice(0, 2)
+                  .join('')
+                  .toUpperCase() || 'AG'
+              )}
+              <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition flex flex-col items-center justify-center text-white text-[11px] font-bold gap-1">
+                <Camera className="w-5 h-5 text-amber-300" />
+                <span>{profile.avatarUrl ? 'Change' : 'Upload'}</span>
+              </div>
             </div>
+
             <div>
               <div className="flex flex-wrap items-center gap-2 mb-1.5">
                 <Badge variant="purple" size="sm">
@@ -223,6 +298,73 @@ export function ProfilePage() {
               <Sparkles className="w-3.5 h-3.5" />
               <span>Life Insurance Corporation of India</span>
             </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Dedicated Agent Profile Photo Management Card */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+            <Camera className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              Agent Profile Photo
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Add your formal photo to personalize your visiting card and festival greetings
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-1">
+          {/* Photo Avatar Preview */}
+          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-2xl flex items-center justify-center shrink-0 shadow-md ring-4 ring-amber-400/20 overflow-hidden relative">
+            {profile.avatarUrl ? (
+              <img
+                src={profile.avatarUrl}
+                alt={profile.fullName || 'Agent'}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              profile.fullName
+                .split(' ')
+                .map((n) => n[0])
+                .slice(0, 2)
+                .join('')
+                .toUpperCase() || 'AG'
+            )}
+          </div>
+
+          {/* Photo Action Buttons */}
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                leftIcon={<Upload className="w-4 h-4" />}
+              >
+                {profile.avatarUrl ? 'Change Photo' : 'Upload Photo'}
+              </Button>
+              {profile.avatarUrl && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRemovePhoto}
+                  leftIcon={<Trash2 className="w-3.5 h-3.5 text-rose-500" />}
+                  className="border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                >
+                  Remove Photo
+                </Button>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Formal passport-style or professional photo recommended. Saved automatically to your agent profile.
+            </p>
           </div>
         </div>
       </div>

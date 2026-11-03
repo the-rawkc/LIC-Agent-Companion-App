@@ -42,6 +42,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [agentName, setAgentName] = useState('Advisor');
   const [agentInitials, setAgentInitials] = useState('AG');
+  const [agentAvatar, setAgentAvatar] = useState<string | null>(null);
   const [agencyCode, setAgencyCode] = useState('');
 
   const isOnline = useNetworkStatus();
@@ -53,6 +54,8 @@ export function AppLayout({ children }: AppLayoutProps) {
 
     profileRepository.getProfile().then((p) => {
       if (p.agencyCode) setAgencyCode(p.agencyCode);
+      if (p.avatarUrl) setAgentAvatar(p.avatarUrl);
+      else setAgentAvatar(null);
       if (p.fullName) {
         setAgentName(p.fullName);
         const inits = p.fullName
@@ -141,8 +144,12 @@ export function AppLayout({ children }: AppLayoutProps) {
                 title={`View Agent Profile (${agentName})`}
                 className="flex items-center gap-1.5 p-0.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition tap-effect focus:outline-none"
               >
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-xs flex items-center justify-center shrink-0 shadow-xs ring-2 ring-amber-400/40 hover:scale-105 transition">
-                  {agentInitials}
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-xs flex items-center justify-center shrink-0 shadow-xs ring-2 ring-amber-400/40 hover:scale-105 transition overflow-hidden">
+                  {agentAvatar ? (
+                    <img src={agentAvatar} alt={agentName} className="w-full h-full object-cover" />
+                  ) : (
+                    agentInitials
+                  )}
                 </div>
               </button>
 
@@ -282,8 +289,12 @@ export function AppLayout({ children }: AppLayoutProps) {
               <div className="pt-4 mt-auto">
                 <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 space-y-2">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
-                      {agentInitials}
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-xs flex items-center justify-center shrink-0 shadow-xs overflow-hidden">
+                      {agentAvatar ? (
+                        <img src={agentAvatar} alt={agentName} className="w-full h-full object-cover" />
+                      ) : (
+                        agentInitials
+                      )}
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-bold text-slate-900 dark:text-white break-words">
