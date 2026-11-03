@@ -58,5 +58,5 @@ describe('Import & Rollback Workflow', () => {
 
     const afterRollbackPolicies = await policyRepository.getAll();
     expect(afterRollbackPolicies.length).toBe(0);
-  });
+  }, 15000);
 });

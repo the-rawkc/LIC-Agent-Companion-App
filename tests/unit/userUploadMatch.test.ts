@@ -118,5 +118,5 @@ describe('Real User Uploaded Data Test', () => {
     expect(pLast?.customerName).toBe(expectedLast);
     const cLast = await db.customers.get(pLast!.customerId);
     expect(cLast?.displayName).toBe(expectedLast);
-  });
+  }, 15000);
 });

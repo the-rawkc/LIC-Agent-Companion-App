@@ -186,63 +186,69 @@ export function CustomersPage() {
   };
 
   return (
-    <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-5 max-w-6xl mx-auto w-full">
-      {/* Page Title & Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
-            <Users className="w-6 h-6 text-blue-600" />
-            <span>Customer Directory</span>
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            {customers.length} total customer {customers.length === 1 ? 'profile' : 'profiles'} registered
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportAllCsv}
-            disabled={customers.length === 0 || isExporting}
-            leftIcon={<Download className="w-3.5 h-3.5" />}
-          >
-            Export All (CSV)
-          </Button>
-          {customers.length >= 2 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsMergeModalOpen(true)}
-              leftIcon={<GitMerge className="w-4 h-4" />}
-            >
-              Combine Duplicates
-            </Button>
-          )}
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setIsAddModalOpen(true)}
-            leftIcon={<Plus className="w-4 h-4" />}
-          >
-            Add Customer
-          </Button>
+    <div className="min-h-full flex flex-col w-full">
+      {/* Frozen Search Bar on Top by Default (Sticks flush to top, freezes on scroll) */}
+      <div className="sticky top-14 sm:top-16 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-xs w-full">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5">
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search customer name, phone, or policy #..."
+              className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-white placeholder-slate-400 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
+            />
+          </div>
         </div>
       </div>
 
-      {/* Search and Filters Bar (Sticky flush on scroll) */}
-      <div className="sticky top-14 sm:top-16 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md py-2 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 border-b border-slate-200 dark:border-slate-800 shadow-xs space-y-2">
-        <div className="relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search customer name, phone, or policy #..."
-            className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-white placeholder-slate-400 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
-          />
+      {/* Main Page Content (Slides smoothly underneath frozen top search bar) */}
+      <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-5 max-w-6xl mx-auto w-full">
+        {/* Page Title & Actions */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
+              <Users className="w-6 h-6 text-blue-600" />
+              <span>Customer Directory</span>
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              {customers.length} total customer {customers.length === 1 ? 'profile' : 'profiles'} registered
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportAllCsv}
+              disabled={customers.length === 0 || isExporting}
+              leftIcon={<Download className="w-3.5 h-3.5" />}
+            >
+              Export All (CSV)
+            </Button>
+            {customers.length >= 2 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsMergeModalOpen(true)}
+                leftIcon={<GitMerge className="w-4 h-4" />}
+              >
+                Combine Duplicates
+              </Button>
+            )}
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setIsAddModalOpen(true)}
+              leftIcon={<Plus className="w-4 h-4" />}
+            >
+              Add Customer
+            </Button>
+          </div>
         </div>
 
+        {/* Profiles count & Sort Bar */}
         <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
           <div className="text-[11px] text-slate-500 font-medium">
             Showing {filteredCustomers.length} of {customers.length} profiles
@@ -263,7 +269,6 @@ export function CustomersPage() {
             </select>
           </div>
         </div>
-      </div>
 
       {/* Multi-Selection & Quick Action Bar */}
       {filteredCustomers.length > 0 && (
@@ -433,6 +438,7 @@ export function CustomersPage() {
         })}
         </div>
       )}
+      </div>
 
       {/* Add Customer Modal */}
       <Modal

@@ -215,6 +215,7 @@ export function GreetingsPage() {
   const [agentPhoto, setAgentPhoto] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string>('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -236,6 +237,157 @@ export function GreetingsPage() {
     setCustomEnglish(activeTheme.englishMessage);
   }, [selectedThemeId]);
 
+  // Generate High-Resolution Complete Poster Data URL
+  const generateCardDataUrl = async (format: 'square' | 'portrait'): Promise<string> => {
+    const width = 1080;
+    const height = format === 'square' ? 1080 : 1920;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+
+    // 1. Draw rich festive background, golden borders, garland, and hero artwork picture in Canvas
+    drawFestiveCardToCanvas(ctx, width, height, activeTheme.id, activeTheme.accentColor, format);
+
+    // 2. Main Festive Titles with shadow
+    const titleY = format === 'portrait' ? 440 : 330;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fef08a';
+    ctx.font = 'bold 54px "Segoe UI", Roboto, sans-serif';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+    ctx.shadowBlur = 10;
+    ctx.fillText(activeTheme.title, width / 2, titleY);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 36px "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(activeTheme.subtitle, width / 2, titleY + 55);
+    ctx.shadowBlur = 0;
+
+    // Decorative golden divider line
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(width / 2 - 180, titleY + 95);
+    ctx.lineTo(width / 2 + 180, titleY + 95);
+    ctx.stroke();
+
+    // 3. Festive Messages (Hindi & English)
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = '30px "Segoe UI", Roboto, sans-serif';
+    wrapText(ctx, customHindi, width / 2, titleY + 160, width - 160, 44);
+
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = 'italic 24px "Segoe UI", Roboto, sans-serif';
+    wrapText(ctx, customEnglish, width / 2, titleY + 270, width - 180, 36);
+
+    // 4. Draw Agent Branding Footer Section
+    const footerHeight = format === 'portrait' ? 360 : 280;
+    const footerY = height - footerHeight;
+
+    // Dark glass container for agent details
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+    ctx.fillRect(0, footerY, width, footerHeight);
+
+    // Golden top border for footer
+    ctx.fillStyle = activeTheme.accentColor;
+    ctx.fillRect(0, footerY, width, 6);
+
+    // Load agent photo image if available
+    const avatarSize = 130;
+    const avatarX = 90;
+    const avatarY = footerY + (footerHeight - avatarSize) / 2;
+
+    if (agentPhoto) {
+      try {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = agentPhoto;
+        await new Promise((resolve) => {
+          img.onload = resolve;
+          img.onerror = resolve;
+        });
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(img, avatarX, avatarY, avatarSize, avatarSize);
+        ctx.restore();
+
+        // Border around photo
+        ctx.strokeStyle = activeTheme.accentColor;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+        ctx.stroke();
+      } catch {
+        drawDefaultAvatar(ctx, avatarX, avatarY, avatarSize, profile.fullName);
+      }
+    } else {
+      drawDefaultAvatar(ctx, avatarX, avatarY, avatarSize, profile.fullName);
+    }
+
+    // Agent Text Info
+    const textX = avatarX + avatarSize + 35;
+    ctx.textAlign = 'left';
+
+    // Agent Name
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 36px "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(profile.fullName || 'LIC Financial Advisor', textX, footerY + 70);
+
+    // Club & Designation
+    ctx.fillStyle = '#fbbf24';
+    ctx.font = '600 22px "Segoe UI", Roboto, sans-serif';
+    ctx.fillText(profile.clubMembership || "Chairman's Club Member", textX, footerY + 110);
+
+    // Agency Code & Branch
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '20px "Segoe UI", Roboto, sans-serif';
+    const agencyText = `Agency Code: ${profile.agencyCode || '08345678'}  •  ${profile.branchName || 'Main Branch'}`;
+    ctx.fillText(agencyText, textX, footerY + 145);
+
+    // Mobile Number / WhatsApp
+    ctx.fillStyle = '#34d399';
+    ctx.font = 'bold 22px "Segoe UI", Roboto, sans-serif';
+    const contactText = `📞 / WhatsApp: ${profile.mobileNumber || profile.whatsappNumber || '9876543210'}`;
+    ctx.fillText(contactText, textX, footerY + 180);
+
+    // Official LIC Motto Badge
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = 'bold 18px "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('भारतीय जीवन बीमा निगम  •  Life Insurance Corporation of India  •  योगक्षेमं वहाम्यहम्', textX, footerY + 220);
+
+    return canvas.toDataURL('image/png');
+  };
+
+  // Re-generate complete preview image whenever poster details change
+  useEffect(() => {
+    let isCancelled = false;
+    generateCardDataUrl(cardFormat).then((url) => {
+      if (!isCancelled && url) {
+        setPreviewImageUrl(url);
+      }
+    });
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    selectedThemeId,
+    cardFormat,
+    customHindi,
+    customEnglish,
+    profile.fullName,
+    profile.agencyCode,
+    profile.mobileNumber,
+    profile.clubMembership,
+    profile.branchName,
+    agentPhoto,
+  ]);
+
   // Handle agent photo upload
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -255,132 +407,13 @@ export function GreetingsPage() {
   const handleDownloadImage = async () => {
     setIsGenerating(true);
     try {
-      const width = cardFormat === 'square' ? 1080 : 1080;
-      const height = cardFormat === 'square' ? 1080 : 1920;
-
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      // 1. Draw rich festive background, golden borders, garland, and hero artwork picture in Canvas
-      drawFestiveCardToCanvas(ctx, width, height, activeTheme.id, activeTheme.accentColor, cardFormat);
-
-      // 2. Main Festive Titles with shadow
-      const titleY = cardFormat === 'portrait' ? 440 : 330;
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#fef08a';
-      ctx.font = 'bold 54px "Segoe UI", Roboto, sans-serif';
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-      ctx.shadowBlur = 10;
-      ctx.fillText(activeTheme.title, width / 2, titleY);
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 36px "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(activeTheme.subtitle, width / 2, titleY + 55);
-      ctx.shadowBlur = 0;
-
-      // Decorative golden divider line
-      ctx.strokeStyle = '#fbbf24';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.moveTo(width / 2 - 180, titleY + 95);
-      ctx.lineTo(width / 2 + 180, titleY + 95);
-      ctx.stroke();
-
-      // 3. Festive Messages (Hindi & English)
-      ctx.fillStyle = '#f8fafc';
-      ctx.font = '30px "Segoe UI", Roboto, sans-serif';
-      wrapText(ctx, customHindi, width / 2, titleY + 160, width - 160, 44);
-
-      ctx.fillStyle = '#cbd5e1';
-      ctx.font = 'italic 24px "Segoe UI", Roboto, sans-serif';
-      wrapText(ctx, customEnglish, width / 2, titleY + 270, width - 180, 36);
-
-      // 6. Draw Agent Branding Footer Section
-      const footerHeight = cardFormat === 'portrait' ? 360 : 280;
-      const footerY = height - footerHeight;
-
-      // Dark glass container for agent details
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
-      ctx.fillRect(0, footerY, width, footerHeight);
-
-      // Golden top border for footer
-      ctx.fillStyle = activeTheme.accentColor;
-      ctx.fillRect(0, footerY, width, 6);
-
-      // Load agent photo image if available
-      const avatarSize = 130;
-      const avatarX = 90;
-      const avatarY = footerY + (footerHeight - avatarSize) / 2;
-
-      if (agentPhoto) {
-        try {
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.src = agentPhoto;
-          await new Promise((resolve) => {
-            img.onload = resolve;
-            img.onerror = resolve;
-          });
-
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
-          ctx.closePath();
-          ctx.clip();
-          ctx.drawImage(img, avatarX, avatarY, avatarSize, avatarSize);
-          ctx.restore();
-
-          // Border around photo
-          ctx.strokeStyle = activeTheme.accentColor;
-          ctx.lineWidth = 4;
-          ctx.beginPath();
-          ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
-          ctx.stroke();
-        } catch {
-          drawDefaultAvatar(ctx, avatarX, avatarY, avatarSize, profile.fullName);
-        }
-      } else {
-        drawDefaultAvatar(ctx, avatarX, avatarY, avatarSize, profile.fullName);
-      }
-
-      // Agent Text Info
-      const textX = avatarX + avatarSize + 35;
-      ctx.textAlign = 'left';
-
-      // Agent Name
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 36px "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(profile.fullName || 'LIC Financial Advisor', textX, footerY + 70);
-
-      // Club & Designation
-      ctx.fillStyle = '#fbbf24';
-      ctx.font = '600 22px "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(profile.clubMembership || "Chairman's Club Member", textX, footerY + 110);
-
-      // Agency Code & Branch
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '20px "Segoe UI", Roboto, sans-serif';
-      const agencyText = `Agency Code: ${profile.agencyCode || '08345678'}  •  ${profile.branchName || 'Main Branch'}`;
-      ctx.fillText(agencyText, textX, footerY + 145);
-
-      // Mobile Number / WhatsApp
-      ctx.fillStyle = '#34d399';
-      ctx.font = 'bold 22px "Segoe UI", Roboto, sans-serif';
-      const contactText = `📞 / WhatsApp: ${profile.mobileNumber || profile.whatsappNumber || '9876543210'}`;
-      ctx.fillText(contactText, textX, footerY + 180);
-
-      // Official LIC Motto Badge
-      ctx.fillStyle = '#cbd5e1';
-      ctx.font = 'bold 18px "Segoe UI", Roboto, sans-serif';
-      ctx.fillText('भारतीय जीवन बीमा निगम  •  Life Insurance Corporation of India  •  योगक्षेमं वहाम्यहम्', textX, footerY + 220);
+      const dataUrl = previewImageUrl || (await generateCardDataUrl(cardFormat));
+      if (!dataUrl) return;
 
       // Export file
       const link = document.createElement('a');
-      link.download = `LIC_Greeting_${activeTheme.id}_${profile.fullName.replace(/\s+/g, '_')}.png`;
-      link.href = canvas.toDataURL('image/png');
+      link.download = `LIC_Greeting_${activeTheme.id}_${(profile.fullName || 'Advisor').replace(/\s+/g, '_')}.png`;
+      link.href = dataUrl;
       link.click();
     } catch (err) {
       console.error('Failed to generate greeting card', err);
@@ -667,90 +700,31 @@ export function GreetingsPage() {
               </span>
             </div>
 
-            {/* The Greeting Card Artwork Component */}
-            <div
-              className={`w-full rounded-3xl overflow-hidden shadow-2xl relative border-4 border-amber-400/50 flex flex-col justify-between select-none bg-gradient-to-br ${activeTheme.gradient} ${
-                cardFormat === 'square' ? 'aspect-square' : 'aspect-[9/16]'
-              }`}
-            >
-              {/* Ornate Golden Corners for Royal Festive Look */}
-              <OrnateCorner position="top-left" />
-              <OrnateCorner position="top-right" />
-              <OrnateCorner position="bottom-left" />
-              <OrnateCorner position="bottom-right" />
-
-              {/* Hanging Marigold Garland Toran across the top */}
-              <HangingFestoon />
-
-              {/* Subtle festive background pattern / radial glow */}
-              <div className="absolute inset-0 bg-radial from-amber-400/15 via-transparent to-black/30 pointer-events-none" />
-
-              {/* Top Festivities & Greetings Section */}
-              <div className="p-4 sm:p-6 text-center flex-1 flex flex-col items-center justify-center space-y-2 z-10 pt-8 sm:pt-10">
-                {/* Rich Decorative Hero Picture / Festive Illustration */}
-                <FestivalArtworkImage themeId={activeTheme.id} />
-
-                <div className="space-y-0.5">
-                  <h2 className="text-xl sm:text-2xl font-black text-amber-200 tracking-tight drop-shadow-md">
-                    {activeTheme.title}
-                  </h2>
-                  <p className="text-xs sm:text-sm font-bold text-white drop-shadow">
-                    {activeTheme.subtitle}
-                  </p>
+            {/* The Complete Greeting Card Live Image Preview */}
+            <div className="w-full rounded-3xl overflow-hidden shadow-2xl border-4 border-amber-400/60 bg-slate-950 relative flex items-center justify-center min-h-[320px]">
+              {previewImageUrl ? (
+                <img
+                  src={previewImageUrl}
+                  alt={`${activeTheme.title} Greeting Card`}
+                  className="w-full h-auto block select-none drop-shadow-md"
+                />
+              ) : (
+                <div className="p-12 text-center text-slate-400 text-xs flex flex-col items-center gap-2.5">
+                  <div className="w-7 h-7 border-3 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                  <span className="font-semibold text-slate-300">Generating complete festival poster...</span>
                 </div>
+              )}
+            </div>
 
-                <div className="w-20 h-0.5 bg-amber-400/80 rounded-full my-0.5" />
-
-                <div className="space-y-1.5 max-w-xs sm:max-w-sm px-2">
-                  <p className="text-xs sm:text-sm text-slate-100 font-medium leading-relaxed drop-shadow-xs">
-                    {customHindi}
-                  </p>
-                  <p className="text-[11px] sm:text-xs text-slate-200/90 italic leading-relaxed">
-                    {customEnglish}
-                  </p>
-                </div>
+            {/* Live Agent Credentials Badge Bar */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-3 text-xs space-y-1 shadow-xs">
+              <div className="font-bold text-slate-900 dark:text-white flex items-center justify-between">
+                <span>{profile.fullName || 'LIC Financial Advisor'}</span>
+                <span className="text-amber-600 dark:text-amber-400 font-semibold">{profile.clubMembership || "Chairman's Club Member"}</span>
               </div>
-
-              {/* Bottom Agent Details Branding Card (Under the photo and greetings) */}
-              <div className="bg-slate-950/95 backdrop-blur-md border-t-2 border-amber-400 px-4 py-3 sm:px-5 sm:py-3.5 z-10">
-                <div className="flex items-center gap-3">
-                  {/* Agent Photo */}
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-base flex items-center justify-center shrink-0 shadow-md ring-2 ring-amber-400 overflow-hidden">
-                    {agentPhoto ? (
-                      <img src={agentPhoto} alt="Agent" className="w-full h-full object-cover" />
-                    ) : (
-                      profile.fullName
-                        .split(' ')
-                        .map((n) => n[0])
-                        .slice(0, 2)
-                        .join('')
-                        .toUpperCase() || 'AG'
-                    )}
-                  </div>
-
-                  {/* Agent Credentials */}
-                  <div className="min-w-0 flex-1 leading-tight">
-                    <h3 className="font-extrabold text-xs sm:text-sm text-white truncate">
-                      {profile.fullName || 'LIC Financial Advisor'}
-                    </h3>
-                    <p className="text-[11px] text-amber-400 font-semibold truncate">
-                      {profile.clubMembership || "Chairman's Club Member"}
-                    </p>
-                    <p className="text-[10px] text-slate-300 truncate mt-0.5">
-                      Code: {profile.agencyCode || '08345678'} • {profile.branchName || 'LIC Branch'}
-                    </p>
-                    <p className="text-[10px] text-emerald-400 font-semibold truncate mt-0.5">
-                      📞 {profile.mobileNumber || '9876543210'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* LIC Motto Slogan Footnote */}
-                <div className="mt-2 pt-1.5 border-t border-slate-800 flex items-center justify-between text-[9px] text-slate-400 font-medium">
-                  <span>भारतीय जीवन बीमा निगम</span>
-                  <span className="text-amber-300/90 font-semibold">योगक्षेमं वहाम्यहम्</span>
-                  <span>LIC of India</span>
-                </div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center justify-between gap-1">
+                <span>Code: {profile.agencyCode || '08345678'} • {profile.branchName || 'Main Branch'}</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-mono font-medium">📞 {profile.mobileNumber || '9876543210'}</span>
               </div>
             </div>
 
