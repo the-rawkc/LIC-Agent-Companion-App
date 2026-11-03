@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, User, FileText, ArrowRight } from 'lucide-react';
 import { searchService, type GlobalSearchResult } from '@/services/search/searchService';
@@ -60,11 +61,15 @@ export function GlobalSearchModal({ isOpen, onClose }: GlobalSearchModalProps) {
     navigate(`/policies/${policyId}`);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-4 sm:pt-16 p-3 animate-in fade-in duration-150">
+  const content = (
+    <div
+      className="fixed inset-0 z-[99999] flex items-start justify-center pt-4 sm:pt-16 p-3 animate-in fade-in duration-150 pointer-events-auto"
+      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
+    >
       <div
-        className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+        className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm transition-opacity"
         onClick={onClose}
+        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, touchAction: 'none' }}
         aria-hidden="true"
       />
 
@@ -193,4 +198,6 @@ export function GlobalSearchModal({ isOpen, onClose }: GlobalSearchModalProps) {
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(content, document.body) : null;
 }

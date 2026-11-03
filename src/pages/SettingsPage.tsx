@@ -19,10 +19,12 @@ import {
   Cloud,
   RefreshCw,
   ArrowUpCircle,
-  ArrowDownCircle
+  ArrowDownCircle,
+  Sparkles
 } from 'lucide-react';
 import { pinService } from '@/services/security/pinService';
 import { backupService, type BackupPayload } from '@/services/backup/backupService';
+import { importService } from '@/services/import/importService';
 import { d1SyncService, type SyncConfig, type SyncStatus } from '@/services/cloud/d1SyncService';
 import { settingsRepository } from '@/db/repositories/settingsRepository';
 import { db, getActiveAgencyCode } from '@/db/database';
@@ -64,6 +66,25 @@ export function SettingsPage() {
 
   // Reset database state
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+
+  // Clean & Repair state
+  const [isCleaning, setIsCleaning] = useState(false);
+  const [cleanMessage, setCleanMessage] = useState<string | null>(null);
+
+  const handleCleanAndRepair = async () => {
+    setIsCleaning(true);
+    try {
+      const res = await importService.cleanAndRepairDatabase();
+      setCleanMessage(
+        `Database repaired & re-aligned: ${res.fixedPolicies} policies verified, ${res.cleanedCustomers} customers updated, ${res.removedOrphans} orphaned records removed.`
+      );
+      setTimeout(() => setCleanMessage(null), 6000);
+    } catch (err: any) {
+      alert('Repair failed: ' + (err.message || String(err)));
+    } finally {
+      setIsCleaning(false);
+    }
+  };
 
   // Cloudflare D1 Sync state
   const [syncConfig, setSyncConfig] = useState<SyncConfig | null>(null);
@@ -644,6 +665,32 @@ export function SettingsPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Maintenance Zone: Clean & Repair Data */}
+      <div className="bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/40 rounded-3xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-blue-800 dark:text-blue-400">
+            Clean & Repair Data
+          </h3>
+          <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
+            Auto-sanitize customer names, fix punctuation, re-link policies to exact customers, and purge orphaned records.
+          </p>
+          {cleanMessage && (
+            <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-1">
+              ✓ {cleanMessage}
+            </p>
+          )}
+        </div>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={handleCleanAndRepair}
+          disabled={isCleaning}
+          leftIcon={<Sparkles className="w-3.5 h-3.5" />}
+        >
+          {isCleaning ? 'Cleaning...' : 'Clean & Repair Data'}
+        </Button>
       </div>
 
       {/* Danger Zone: Clear Data */}

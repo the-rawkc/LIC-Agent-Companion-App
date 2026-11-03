@@ -17,7 +17,7 @@ export interface CommitImportOptions {
   filename: string;
   reportDate: string;
   rows: StagedPolicyRow[];
-  duplicateHandling: 'skip' | 'update' | 'review';
+  duplicateHandling: 'skip' | 'update' | 'replace' | 'review';
 }
 
 export interface CommitImportResult {
@@ -87,6 +87,15 @@ export const importService = {
   async commitImport(options: CommitImportOptions): Promise<CommitImportResult> {
     const importId = generateUUID();
     const now = new Date().toISOString();
+
+    // If 'replace' chosen, start with a 100% clean database slate
+    if (options.duplicateHandling === 'replace') {
+      await db.transaction('rw', [db.policies, db.customers, db.reminders], async () => {
+        await db.policies.clear();
+        await db.customers.clear();
+        await db.reminders.clear();
+      });
+    }
 
     const existingPolicies = await policyRepository.getAll();
     const policyMapByNumber = new Map(existingPolicies.map((p) => [p.policyNumber, p]));
@@ -173,6 +182,11 @@ export const importService = {
             };
 
             await db.policies.put(updatedRecord);
+            if (customer.displayName !== cleanName) {
+              customer.displayName = cleanName;
+              customer.updatedAt = now;
+              await db.customers.put(customer);
+            }
             updatedCount++;
             updatedPolicyIds.push(existingPolicy.id);
             continue;
@@ -248,6 +262,18 @@ export const importService = {
       });
     });
 
+    // Clean up orphaned customers (customers with 0 policies)
+    try {
+      const activeCustomerIds = new Set((await db.policies.toArray()).map((p) => p.customerId));
+      const allCustomers = await db.customers.toArray();
+      const orphanIds = allCustomers.filter((c) => !activeCustomerIds.has(c.id)).map((c) => c.id);
+      if (orphanIds.length > 0) {
+        await db.customers.bulkDelete(orphanIds);
+      }
+    } catch {
+      // ignore
+    }
+
     d1SyncService.triggerAutoSync(500);
 
     return {
@@ -290,8 +316,72 @@ export const importService = {
       });
     });
 
+    // Clean up orphaned customers (customers with 0 policies)
+    try {
+      const activeCustomerIds = new Set((await db.policies.toArray()).map((p) => p.customerId));
+      const allCustomers = await db.customers.toArray();
+      const orphanIds = allCustomers.filter((c) => !activeCustomerIds.has(c.id)).map((c) => c.id);
+      if (orphanIds.length > 0) {
+        await db.customers.bulkDelete(orphanIds);
+      }
+    } catch {
+      // ignore
+    }
+
     d1SyncService.triggerAutoSync(500);
 
     return { deletedPolicies };
+  },
+
+  /**
+   * Sanitizes all policy customer names, unifies matching customer profiles,
+   * fixes punctuation, and removes any orphaned customers from older imports.
+   */
+  async cleanAndRepairDatabase(): Promise<{ fixedPolicies: number; cleanedCustomers: number; removedOrphans: number }> {
+    let fixedPolicies = 0;
+    let cleanedCustomers = 0;
+    let removedOrphans = 0;
+
+    const policies = await db.policies.toArray();
+    const customers = await db.customers.toArray();
+    const customerMap = new Map(customers.map((c) => [c.id, c]));
+    const now = new Date().toISOString();
+
+    for (const p of policies) {
+      const cleanName = (p.customerName || 'Unknown Customer').replace(/^[,\s;]+|[,\s;]+$/g, '').replace(/\s+/g, ' ').trim();
+      let needsUpdate = false;
+      const updates: Partial<Policy> = {};
+
+      if (p.customerName !== cleanName) {
+        updates.customerName = cleanName;
+        needsUpdate = true;
+      }
+
+      const linkedCust = customerMap.get(p.customerId);
+      if (linkedCust && linkedCust.displayName !== cleanName) {
+        linkedCust.displayName = cleanName;
+        linkedCust.normalizedName = cleanName.toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        linkedCust.updatedAt = now;
+        await db.customers.put(linkedCust);
+        cleanedCustomers++;
+      }
+
+      if (needsUpdate) {
+        await db.policies.update(p.id, { ...updates, updatedAt: now });
+        fixedPolicies++;
+      }
+    }
+
+    // Clean orphaned customers (0 policies)
+    const activeCustomerIds = new Set((await db.policies.toArray()).map((p) => p.customerId));
+    const allCusts = await db.customers.toArray();
+    const orphanIds = allCusts.filter((c) => !activeCustomerIds.has(c.id)).map((c) => c.id);
+    if (orphanIds.length > 0) {
+      await db.customers.bulkDelete(orphanIds);
+      removedOrphans = orphanIds.length;
+    }
+
+    d1SyncService.triggerAutoSync(500);
+    return { fixedPolicies, cleanedCustomers, removedOrphans };
   }
 };

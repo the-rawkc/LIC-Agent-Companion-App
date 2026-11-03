@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home,
@@ -360,12 +361,16 @@ export function AppLayout({ children }: AppLayoutProps) {
         </nav>
       )}
 
-      {/* Mobile "More" Drawer Modal */}
-      {isMoreMenuOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center animate-in fade-in duration-200">
+      {/* Mobile "More" Drawer Modal - Top Layer Portal */}
+      {isMoreMenuOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 z-[99999] flex items-end justify-center animate-in fade-in duration-200 pointer-events-auto"
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh' }}
+        >
           <div
             className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
             onClick={() => setIsMoreMenuOpen(false)}
+            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, touchAction: 'none' }}
           />
           <div className="relative z-10 w-full bg-white dark:bg-slate-900 rounded-t-3xl p-5 shadow-2xl border-t border-slate-200 dark:border-slate-800 pb-safe animate-in slide-in-from-bottom duration-200 max-h-[85vh] overflow-y-auto">
             <div className="w-12 h-1 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mb-4" />
@@ -418,7 +423,8 @@ export function AppLayout({ children }: AppLayoutProps) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Global Search Modal */}

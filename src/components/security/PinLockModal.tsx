@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Lock, Delete } from 'lucide-react';
 import { pinService } from '@/services/security/pinService';
 
@@ -59,8 +60,11 @@ export function PinLockModal({ isOpen, onSuccess }: PinLockModalProps) {
     setErrorMessage('');
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950 p-4 select-none">
+  const content = (
+    <div
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950 p-4 select-none pointer-events-auto"
+      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh' }}
+    >
       <div className="w-full max-w-xs flex flex-col items-center">
         {/* App Logo / Lock Icon */}
         <div className="w-16 h-16 rounded-3xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 mb-6 shadow-lg shadow-blue-500/10">
@@ -128,4 +132,6 @@ export function PinLockModal({ isOpen, onSuccess }: PinLockModalProps) {
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(content, document.body) : null;
 }

@@ -14,11 +14,13 @@ import {
   Download,
   CheckSquare,
   Square,
-  Trash2
+  Trash2,
+  Sparkles
 } from 'lucide-react';
 import { policyRepository, type PolicyFilterOptions } from '@/db/repositories/policyRepository';
 import { customerRepository } from '@/db/repositories/customerRepository';
 import { backupService } from '@/services/backup/backupService';
+import { importService } from '@/services/import/importService';
 import { formatCurrency, formatDate, advanceFupDate, generateUUID } from '@/utils/formatters';
 import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
@@ -80,6 +82,26 @@ export function PoliciesPage() {
   const [addDom, setAddDom] = useState('');
   const [addDob, setAddDob] = useState('');
   const [addError, setAddError] = useState('');
+
+  // Clean & Repair state
+  const [isCleaning, setIsCleaning] = useState(false);
+  const [cleanNotice, setCleanNotice] = useState<string | null>(null);
+
+  const handleCleanAndRepair = async () => {
+    setIsCleaning(true);
+    try {
+      const res = await importService.cleanAndRepairDatabase();
+      setCleanNotice(
+        `Database verified & re-aligned: ${res.fixedPolicies} policies cleaned, ${res.cleanedCustomers} customers updated, ${res.removedOrphans} orphaned records removed.`
+      );
+      await loadPolicies();
+      setTimeout(() => setCleanNotice(null), 6000);
+    } catch (err: any) {
+      alert('Repair failed: ' + (err.message || String(err)));
+    } finally {
+      setIsCleaning(false);
+    }
+  };
 
   // Auto-open modal if URL param action=new
   useEffect(() => {
@@ -379,7 +401,17 @@ export function PoliciesPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCleanAndRepair}
+            disabled={policies.length === 0 || isCleaning}
+            leftIcon={<Sparkles className="w-3.5 h-3.5 text-amber-500" />}
+            title="Clean punctuation, trim names, re-link customers, and remove any orphaned records"
+          >
+            {isCleaning ? 'Cleaning...' : 'Clean Data'}
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -408,6 +440,14 @@ export function PoliciesPage() {
           </Button>
         </div>
       </div>
+
+      {/* Clean & Repair Notice Toast */}
+      {cleanNotice && (
+        <div className="p-3.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-300 dark:border-blue-800 rounded-2xl flex items-center gap-3 text-blue-800 dark:text-blue-200 text-xs font-semibold animate-in fade-in">
+          <Sparkles className="w-5 h-5 text-amber-500 shrink-0" />
+          <span>{cleanNotice}</span>
+        </div>
+      )}
 
       {/* Payment Success Toast */}
       {paymentSuccessToast && (

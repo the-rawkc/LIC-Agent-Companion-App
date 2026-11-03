@@ -37,7 +37,7 @@ export function ImportPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState<{ page: number; total: number; percentage: number } | null>(null);
   const [preview, setPreview] = useState<ImportPreviewSummary | null>(null);
-  const [duplicateHandling, setDuplicateHandling] = useState<'skip' | 'update'>('update');
+  const [duplicateHandling, setDuplicateHandling] = useState<'skip' | 'update' | 'replace'>('replace');
   const [filterStaged, setFilterStaged] = useState<'all' | 'ready' | 'review' | 'invalid' | 'duplicates'>('all');
   const [isCommitModalOpen, setIsCommitModalOpen] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
@@ -177,7 +177,7 @@ export function ImportPage() {
       await loadImportHistory();
       setPreview(null);
       setFile(null);
-      navigate('/');
+      navigate('/policies');
     } catch (err) {
       console.error('Commit failed', err);
       alert('Failed to save policies: ' + (err instanceof Error ? err.message : String(err)));
@@ -735,49 +735,64 @@ export function ImportPage() {
                 </p>
               </div>
 
-              {preview && preview.potentialDuplicateCount > 0 && (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                    How should existing policies be handled?
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  How should existing policies and customer data be handled?
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-start gap-2.5 p-2.5 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/40 dark:bg-blue-950/20 cursor-pointer text-xs">
+                    <input
+                      type="radio"
+                      name="dupChoice"
+                      checked={duplicateHandling === 'replace'}
+                      onChange={() => setDuplicateHandling('replace')}
+                      className="mt-0.5 text-blue-600"
+                    />
+                    <div>
+                      <span className="font-bold text-blue-900 dark:text-blue-300 block">
+                        Clean Replace (Recommended)
+                      </span>
+                      <span className="text-slate-600 dark:text-slate-400">
+                        Wipes previous corrupted/duplicate imports and loads all records 100% fresh in exact row order
+                      </span>
+                    </div>
                   </label>
-                  <div className="space-y-2">
-                    <label className="flex items-start gap-2.5 p-2 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer text-xs">
-                      <input
-                        type="radio"
-                        name="dupChoice"
-                        checked={duplicateHandling === 'update'}
-                        onChange={() => setDuplicateHandling('update')}
-                        className="mt-0.5 text-blue-600"
-                      />
-                      <div>
-                        <span className="font-bold text-slate-900 dark:text-white block">
-                          Update existing policies
-                        </span>
-                        <span className="text-slate-500">
-                          Preserves manual notes while updating latest F.U.P. and premium values
-                        </span>
-                      </div>
-                    </label>
-                    <label className="flex items-start gap-2.5 p-2 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer text-xs">
-                      <input
-                        type="radio"
-                        name="dupChoice"
-                        checked={duplicateHandling === 'skip'}
-                        onChange={() => setDuplicateHandling('skip')}
-                        className="mt-0.5 text-blue-600"
-                      />
-                      <div>
-                        <span className="font-bold text-slate-900 dark:text-white block">
-                          Skip existing policies
-                        </span>
-                        <span className="text-slate-500">
-                          Leave existing records untouched and only insert newly added policies
-                        </span>
-                      </div>
-                    </label>
-                  </div>
+                  <label className="flex items-start gap-2.5 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer text-xs">
+                    <input
+                      type="radio"
+                      name="dupChoice"
+                      checked={duplicateHandling === 'update'}
+                      onChange={() => setDuplicateHandling('update')}
+                      className="mt-0.5 text-blue-600"
+                    />
+                    <div>
+                      <span className="font-bold text-slate-900 dark:text-white block">
+                        Update existing policies
+                      </span>
+                      <span className="text-slate-500">
+                        Preserves manual notes while updating latest F.U.P., premium, and clean customer names
+                      </span>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-2.5 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer text-xs">
+                    <input
+                      type="radio"
+                      name="dupChoice"
+                      checked={duplicateHandling === 'skip'}
+                      onChange={() => setDuplicateHandling('skip')}
+                      className="mt-0.5 text-blue-600"
+                    />
+                    <div>
+                      <span className="font-bold text-slate-900 dark:text-white block">
+                        Skip existing policies
+                      </span>
+                      <span className="text-slate-500">
+                        Leave existing records untouched and only insert newly added policies
+                      </span>
+                    </div>
+                  </label>
                 </div>
-              )}
+              </div>
             </div>
           </Modal>
         </div>
