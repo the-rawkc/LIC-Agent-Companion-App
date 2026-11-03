@@ -176,6 +176,15 @@ export function DashboardPage() {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => navigate('/greetings')}
+              className="border-amber-400/40 text-amber-300 hover:bg-amber-400/10"
+              leftIcon={<Sparkles className="w-4 h-4 text-amber-400" />}
+            >
+              Festival Cards
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => navigate('/import')}
               className="border-white/20 text-white hover:bg-white/10 dark:border-white/20"
               leftIcon={<Upload className="w-4 h-4" />}

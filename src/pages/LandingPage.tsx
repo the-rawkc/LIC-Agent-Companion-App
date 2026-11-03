@@ -697,7 +697,7 @@ export function LandingPage() {
               Quick Launchpad
             </h3>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <button
                 onClick={() => navigate('/policies')}
                 className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-blue-400 transition text-left shadow-xs flex flex-col justify-between h-28 group"
@@ -728,6 +728,17 @@ export function LandingPage() {
                 <div>
                   <span className="text-sm font-bold text-slate-900 dark:text-white block">Reminders</span>
                   <span className="text-[11px] text-slate-400 block">Follow-up schedule</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => navigate('/greetings')}
+                className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-400 transition text-left shadow-xs flex flex-col justify-between h-28 group"
+              >
+                <Sparkles className="w-5 h-5 text-amber-500 group-hover:scale-110 transition" />
+                <div>
+                  <span className="text-sm font-bold text-slate-900 dark:text-white block">Festival Cards</span>
+                  <span className="text-[11px] text-slate-400 block">Wishes & status</span>
                 </div>
               </button>
 

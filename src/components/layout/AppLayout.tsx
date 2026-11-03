@@ -19,7 +19,8 @@ import {
   HelpCircle,
   User,
   LayoutDashboard,
-  LogOut
+  LogOut,
+  Sparkles
 } from 'lucide-react';
 import { AppLogo } from '../shared/AppLogo';
 import { GlobalSearchModal } from '../shared/GlobalSearchModal';
@@ -116,6 +117,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   ];
 
   const moreItems = [
+    { to: '/greetings', label: 'Festival Greeting Cards', icon: Sparkles, desc: 'Create festive cards with your photo to send clients' },
     { to: '/reminders', label: 'Follow-ups & Reminders', icon: Bell, desc: 'Payment due dates & customer calls' },
     { to: '/profile', label: 'Agent Profile', icon: User, desc: 'Your name, agency code, branch & visiting card' },
     { to: '/analytics', label: 'Business Summary', icon: BarChart3, desc: 'Total business, plans & earnings chart' },

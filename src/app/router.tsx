@@ -11,6 +11,7 @@ import { RemindersPage } from '@/pages/RemindersPage';
 import { AnalyticsPage } from '@/pages/AnalyticsPage';
 import { ImportPage } from '@/pages/ImportPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { GreetingsPage } from '@/pages/GreetingsPage';
 import { authService } from '@/services/auth/authService';
 
 /**
@@ -122,6 +123,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <SettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/greetings"
+        element={
+          <ProtectedRoute>
+            <GreetingsPage />
           </ProtectedRoute>
         }
       />

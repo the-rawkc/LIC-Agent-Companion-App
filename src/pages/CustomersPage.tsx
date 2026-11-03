@@ -230,36 +230,38 @@ export function CustomersPage() {
         </div>
       </div>
 
-      {/* Search and Filters Bar */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-3 sm:p-4 shadow-xs space-y-3">
-        <div className="relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search customer name, phone, or policy #..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+      {/* Search and Filters Bar (Sticky on scroll) */}
+      <div className="sticky top-14 sm:top-16 z-20 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur-md pt-2 pb-2.5 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 border-b border-slate-200/70 dark:border-slate-800/70 shadow-xs space-y-2">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-2 sm:p-2.5 shadow-xs">
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search customer name, phone, or policy #..."
+              className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-white placeholder-slate-400 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
-          <div className="text-xs text-slate-500 font-medium">
-            Showing {filteredCustomers.length} of {customers.length} customer profiles
+        <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
+          <div className="text-[11px] text-slate-500 font-medium">
+            Showing {filteredCustomers.length} of {customers.length} profiles
           </div>
 
           {/* Sort Selector */}
           <div className="flex items-center gap-1.5 ml-auto">
-            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+            <ArrowUpDown className="w-3 h-3 text-slate-400" />
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg px-2.5 py-1.5 border border-slate-200 dark:border-slate-700 focus:outline-none"
+              className="text-[11px] bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg px-2 py-1 border border-slate-200 dark:border-slate-700 focus:outline-none shadow-2xs"
             >
               <option value="name_asc">Name (A → Z)</option>
               <option value="name_desc">Name (Z → A)</option>
               <option value="policies_desc">Most Policies</option>
-              <option value="premium_desc">Highest Premium Sum</option>
+              <option value="premium_desc">Highest Premium</option>
             </select>
           </div>
         </div>
@@ -329,7 +331,7 @@ export function CustomersPage() {
           onAction={searchQuery ? () => setSearchQuery('') : () => setIsAddModalOpen(true)}
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {filteredCustomers.map((c) => {
             const isSelected = selectedIds.has(c.id);
             return (
@@ -340,11 +342,11 @@ export function CustomersPage() {
                   isSelected
                     ? 'border-blue-500 dark:border-blue-500 ring-2 ring-blue-500/20'
                     : 'border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600'
-                } rounded-2xl p-4 sm:p-5 shadow-xs transition-all duration-150 cursor-pointer flex flex-col justify-between group active:scale-[0.99]`}
+                } rounded-xl p-3 sm:p-3.5 shadow-xs transition-all duration-150 cursor-pointer flex flex-col justify-between group active:scale-[0.99]`}
               >
                 <div>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-2.5 min-w-0">
+                  <div className="flex items-start justify-between gap-2.5">
+                    <div className="flex items-start gap-2 min-w-0">
                       <button
                         type="button"
                         onClick={(e) => handleToggleSelect(c.id, e)}
@@ -352,35 +354,35 @@ export function CustomersPage() {
                         aria-label={isSelected ? 'Deselect customer' : 'Select customer'}
                       >
                         {isSelected ? (
-                          <CheckSquare className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                          <CheckSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                         ) : (
-                          <Square className="w-5 h-5 text-slate-300 dark:text-slate-600" />
+                          <Square className="w-4 h-4 text-slate-300 dark:text-slate-600" />
                         )}
                       </button>
                       <div className="min-w-0 flex-1">
-                        <h3 className="font-bold text-base text-slate-900 dark:text-white break-words group-hover:text-blue-600 dark:group-hover:text-blue-400 transition leading-snug">
+                        <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white break-words group-hover:text-blue-600 dark:group-hover:text-blue-400 transition leading-snug">
                           {c.displayName}
                         </h3>
-                        <p className="text-xs text-slate-400 mt-0.5">
-                          Customer ID: <span className="font-mono">{c.id.substring(0, 8)}</span>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          ID: <span className="font-mono">{c.id.substring(0, 8)}</span>
                         </p>
                       </div>
                     </div>
-                    <Badge variant={c.policyCount > 1 ? 'purple' : 'info'} size="sm">
+                    <Badge variant={c.policyCount > 1 ? 'purple' : 'info'} size="sm" className="text-[10px] py-0 px-1.5 shrink-0">
                       {c.policyCount} {c.policyCount === 1 ? 'Policy' : 'Policies'}
                     </Badge>
                   </div>
 
                 {/* Financial Summary */}
-                <div className="grid grid-cols-2 gap-2 mt-4 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs">
+                <div className="grid grid-cols-2 gap-2 mt-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-[11px]">
                   <div className="min-w-0">
-                    <span className="text-[11px] text-slate-400 block font-medium">Total Sum Assured</span>
+                    <span className="text-[10px] text-slate-400 block font-medium">Total Sum Assured</span>
                     <span className="font-bold text-slate-800 dark:text-slate-200 mt-0.5 block break-words">
                       {formatCurrency(c.totalSumAssured)}
                     </span>
                   </div>
                   <div className="min-w-0">
-                    <span className="text-[11px] text-slate-400 block font-medium">Recorded Premium Sum</span>
+                    <span className="text-[10px] text-slate-400 block font-medium">Recorded Premium Sum</span>
                     <span className="font-bold text-slate-800 dark:text-slate-200 mt-0.5 block break-words">
                       {formatCurrency(c.totalRecordedPremium)}
                     </span>
@@ -389,8 +391,8 @@ export function CustomersPage() {
 
                 {/* Next Date requiring attention */}
                 {c.nextUpcomingDate && (
-                  <div className="mt-2.5 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                    <span className="text-[11px] text-slate-400">Next Due/Maturity:</span>
+                  <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                    <span className="text-[10px] text-slate-400">Next Due/Maturity:</span>
                     <span className="font-medium text-slate-700 dark:text-slate-300">
                       {formatDate(c.nextUpcomingDate)}
                     </span>
@@ -399,12 +401,12 @@ export function CustomersPage() {
               </div>
 
               {/* Bottom Card Actions */}
-              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                 {c.mobileNumber ? (
                   <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                     <a
                       href={`tel:${c.mobileNumber}`}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-medium hover:bg-emerald-100 transition"
+                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[11px] font-medium hover:bg-emerald-100 transition"
                     >
                       <Phone className="w-3 h-3" />
                       <span>{c.mobileNumber}</span>
@@ -413,14 +415,14 @@ export function CustomersPage() {
                       href={`https://wa.me/91${c.mobileNumber.replace(/\D/g, '')}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition"
+                      className="p-1 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition"
                       title="Open WhatsApp chat"
                     >
                       <MessageSquare className="w-3.5 h-3.5" />
                     </a>
                   </div>
                 ) : (
-                  <span className="text-xs text-slate-400 italic">No phone recorded</span>
+                  <span className="text-[11px] text-slate-400 italic">No phone recorded</span>
                 )}
 
                 <div className="flex items-center text-xs text-blue-600 dark:text-blue-400 font-medium group-hover:translate-x-0.5 transition gap-0.5">
