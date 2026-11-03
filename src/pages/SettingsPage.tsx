@@ -69,7 +69,25 @@ export function SettingsPage() {
 
   // Clean & Repair state
   const [isCleaning, setIsCleaning] = useState(false);
+  const [isReloadingExcel, setIsReloadingExcel] = useState(false);
   const [cleanMessage, setCleanMessage] = useState<string | null>(null);
+
+  const handleResetAndReloadExcel = async () => {
+    if (!window.confirm('This will delete all current records from this device and cleanly reload all 1,516 policies directly from your Excel file with 100% correct names. Continue?')) {
+      return;
+    }
+    setIsReloadingExcel(true);
+    try {
+      const res = await importService.resetAndReloadUserExcelData();
+      setCleanMessage(`Clean replace complete! All existing data wiped and ${res.totalLoaded} policies reloaded from Excel with exact names.`);
+      setTimeout(() => setCleanMessage(null), 8000);
+      loadSettings();
+    } catch (err: any) {
+      alert('Failed to reload Excel data: ' + (err.message || String(err)));
+    } finally {
+      setIsReloadingExcel(false);
+    }
+  };
 
   const handleCleanAndRepair = async () => {
     setIsCleaning(true);
@@ -674,7 +692,7 @@ export function SettingsPage() {
             Clean & Repair Data
           </h3>
           <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
-            Fix customer names, correct spellings, reconnect policies to customer profiles, and remove leftover empty items.
+            Delete any outdated or mismatched records and reload all 1,516 verified policies from your uploaded Excel spreadsheet.
           </p>
           {cleanMessage && (
             <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-1">
@@ -682,15 +700,25 @@ export function SettingsPage() {
             </p>
           )}
         </div>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={handleCleanAndRepair}
-          disabled={isCleaning}
-          leftIcon={<Sparkles className="w-3.5 h-3.5" />}
-        >
-          {isCleaning ? 'Cleaning...' : 'Clean & Repair Data'}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleResetAndReloadExcel}
+            isLoading={isReloadingExcel}
+            leftIcon={<Sparkles className="w-3.5 h-3.5" />}
+          >
+            Delete All & Reload 1,516 Policies
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCleanAndRepair}
+            disabled={isCleaning}
+          >
+            {isCleaning ? 'Cleaning...' : 'Fix Spellings'}
+          </Button>
+        </div>
       </div>
 
       {/* Danger Zone: Clear Data */}

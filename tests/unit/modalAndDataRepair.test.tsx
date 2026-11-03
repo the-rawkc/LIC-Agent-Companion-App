@@ -113,4 +113,56 @@ describe('Modal Portal & Data Clean/Repair Test Suite', () => {
     const orphan = await db.customers.get(cust2OrphanId);
     expect(orphan).toBeUndefined();
   });
+
+  it('detects outdated data and cleanly replaces all records with 1516 verified Excel policies', async () => {
+    // 1. Simulate outdated/corrupt data where 242647587 had "Rajesh Kumar"
+    await db.policies.add({
+      id: 'p-corrupt',
+      policyNumber: '242647587',
+      customerId: 'c-corrupt',
+      customerName: 'Rajesh Kumar',
+      planCode: '749',
+      term: 15,
+      premiumPayingTerm: 1,
+      originalPlanString: '749/15/01',
+      sumAssured: 181250,
+      commencementDate: '2026-06-30',
+      premiumMode: 'Single',
+      firstUnpaidPremiumDate: '2027-06-30',
+      premiumAmount: 145000,
+      maturityDate: '2041-06-30',
+      dateOfBirth: null,
+      sourceSerialNumber: 1,
+      sourceReportDate: '2026-10-29',
+      sourceImportId: 'imp-old',
+      extractionWarnings: [],
+      recordStatus: 'active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    // Check needs repair returns true
+    const needsRepair = await importService.checkNeedsDataRepair();
+    expect(needsRepair).toBe(true);
+
+    // 2. Perform reset and reload
+    const result = await importService.resetAndReloadUserExcelData();
+    expect(result.totalLoaded).toBe(1516);
+
+    // Check needs repair is now false
+    const needsRepairAfter = await importService.checkNeedsDataRepair();
+    expect(needsRepairAfter).toBe(false);
+
+    // Verify Row 1: Ravi Mohan Rohela
+    const p1 = await db.policies.where('policyNumber').equals('242647587').first();
+    expect(p1?.customerName).toBe('Ravi Mohan Rohela');
+    const c1 = await db.customers.get(p1!.customerId);
+    expect(c1?.displayName).toBe('Ravi Mohan Rohela');
+
+    // Verify Row 3: CHITRANSH RUHELA
+    const p3 = await db.policies.where('policyNumber').equals('242647528').first();
+    expect(p3?.customerName).toBe('CHITRANSH RUHELA');
+    const c3 = await db.customers.get(p3!.customerId);
+    expect(c3?.displayName).toBe('CHITRANSH RUHELA');
+  });
 });

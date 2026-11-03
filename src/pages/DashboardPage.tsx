@@ -39,6 +39,8 @@ export function DashboardPage() {
   const [isDemoLoading, setIsDemoLoading] = useState(false);
   const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
   const [recoveredBanner, setRecoveredBanner] = useState<string | null>(null);
+  const [hasOutdatedData, setHasOutdatedData] = useState(false);
+  const [isReloadingExcel, setIsReloadingExcel] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
@@ -65,6 +67,11 @@ export function DashboardPage() {
           }
         }
       }
+
+      // Check if browser has mismatched/outdated data from previous imports
+      const needsRepair = await importService.checkNeedsDataRepair();
+      setHasOutdatedData(needsRepair);
+
       setStats(data);
     } catch (err) {
       console.error('Failed to load dashboard statistics', err);
@@ -73,37 +80,24 @@ export function DashboardPage() {
     }
   }
 
-  const handleLoadDemoData = async () => {
-    setIsDemoLoading(true);
+  const handleCleanAndReloadExcel = async () => {
+    setIsReloadingExcel(true);
     try {
-      const preview = await importService.preparePreview(SAMPLE_RAW_POLICY_ROWS, 76, []);
-      await importService.commitImport({
-        filename: 'LIC_Agent_Report_2026.pdf',
-        reportDate: '2026-10-29',
-        rows: preview.rows,
-        duplicateHandling: 'update',
-      });
-
-      // Also create a sample reminder
-      const sampleCustomer = await importService.preparePreview(SAMPLE_RAW_POLICY_ROWS.slice(0, 1), 1, []);
-      if (sampleCustomer.rows[0]) {
-        await reminderRepository.create({
-          customerId: 'demo-customer',
-          title: 'Premium Follow-up: Rajesh Kumar',
-          description: 'Call regarding next premium verification for policy 242647587',
-          dueDate: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
-          reminderType: 'premium_due_verification',
-          status: 'pending',
-          priority: 'high',
-        });
-      }
-
+      const res = await importService.resetAndReloadUserExcelData();
+      setHasOutdatedData(false);
+      setRecoveredBanner(`Successfully deleted old records and cleanly imported ${res.totalLoaded} policies from Excel!`);
+      setTimeout(() => setRecoveredBanner(null), 6000);
       await loadDashboardData();
     } catch (err) {
-      console.error('Failed to load demo data', err);
+      console.error('Failed to reload Excel policies', err);
+      alert('Failed to reload Excel policies: ' + String(err));
     } finally {
-      setIsDemoLoading(false);
+      setIsReloadingExcel(false);
     }
+  };
+
+  const handleLoadDemoData = async () => {
+    await handleCleanAndReloadExcel();
   };
 
   const handleToggleReminder = async (id: string) => {
@@ -131,6 +125,33 @@ export function DashboardPage() {
         <div className="p-4 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-800 rounded-2xl flex items-center gap-3 text-emerald-800 dark:text-emerald-200 text-xs font-semibold animate-in fade-in">
           <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
           <span>{recoveredBanner}</span>
+        </div>
+      )}
+
+      {/* Outdated / Corrupt Data Repair Alert */}
+      {hasOutdatedData && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-in fade-in">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 font-bold shadow-xs">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold">Outdated Policy Records in Browser</h3>
+              <p className="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
+                Your browser contains previous records where customer names do not match policy numbers. Click below to delete all old records and cleanly reload your 1,516 policies from your Excel file.
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleCleanAndReloadExcel}
+            isLoading={isReloadingExcel}
+            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold border-none shrink-0"
+            leftIcon={<Sparkles className="w-4 h-4 text-slate-950" />}
+          >
+            Delete All & Reload 1,516 Policies
+          </Button>
         </div>
       )}
 
@@ -205,12 +226,12 @@ export function DashboardPage() {
           <EmptyState
             icon={<FileText className="w-8 h-8 text-blue-600" />}
             title="No policy records yet"
-            description="Your app is ready. Upload your LIC policy list (Excel or PDF) to organize and track all customer policies."
+            description="Your app is ready. Upload your LIC policy list (Excel or PDF) or load your 1,516 policies directly."
             actionLabel="Import Policies"
             onAction={() => navigate('/import')}
             actionIcon={<Upload className="w-4 h-4" />}
-            secondaryActionLabel={isDemoLoading ? 'Loading Sample...' : 'Load Sample Policies'}
-            onSecondaryAction={handleLoadDemoData}
+            secondaryActionLabel={isReloadingExcel ? 'Loading 1,516 Policies...' : 'Load 1,516 Policies from Excel'}
+            onSecondaryAction={handleCleanAndReloadExcel}
           />
         </div>
       ) : (

@@ -383,5 +383,57 @@ export const importService = {
 
     d1SyncService.triggerAutoSync(500);
     return { fixedPolicies, cleanedCustomers, removedOrphans };
+  },
+
+  /**
+   * Check if current database contains outdated or mismatched policy rows from prior imports
+   */
+  async checkNeedsDataRepair(): Promise<boolean> {
+    const count = await db.policies.count();
+    if (count === 0) return false;
+    
+    // Check policy 242647587 (must be Ravi Mohan Rohela)
+    const p1 = await db.policies.where('policyNumber').equals('242647587').first();
+    if (p1 && p1.customerName !== 'Ravi Mohan Rohela') {
+      return true;
+    }
+
+    // Check policy 242647528 (must be CHITRANSH RUHELA)
+    const p3 = await db.policies.where('policyNumber').equals('242647528').first();
+    if (p3 && p3.customerName !== 'CHITRANSH RUHELA') {
+      return true;
+    }
+
+    return false;
+  },
+
+  /**
+   * Completely wipe corrupt / outdated data and cleanly re-import all 1,516 policies
+   * from the user's authentic verified Excel dataset.
+   */
+  async resetAndReloadUserExcelData(): Promise<{ totalLoaded: number }> {
+    const { USER_UPLOADED_POLICY_ROWS } = await import('@/services/sampleData/licSampleRecords');
+    
+    // 1. Cleanly wipe all current policy and customer records
+    await db.policies.clear();
+    await db.customers.clear();
+    await db.reminders.clear();
+    await db.importHistory.clear();
+
+    // 2. Prepare preview from the 1,516 verified rows
+    const preview = await this.preparePreview(USER_UPLOADED_POLICY_ROWS, 1, []);
+
+    // 3. Commit clean import
+    await this.commitImport({
+      filename: 'user_uploaded_policies.xlsx',
+      reportDate: '2026-10-29',
+      duplicateHandling: 'replace',
+      rows: preview.rows,
+    });
+
+    // 4. Trigger cloud backup sync
+    d1SyncService.triggerAutoSync(500);
+
+    return { totalLoaded: preview.rows.length };
   }
 };

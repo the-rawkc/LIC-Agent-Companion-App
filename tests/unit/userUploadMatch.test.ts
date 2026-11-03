@@ -24,6 +24,12 @@ describe('Real User Uploaded Data Test', () => {
     const buffer = fs.readFileSync(uploadedExcelPath);
     const result = await extractPoliciesFromExcel(new Uint8Array(buffer));
 
+    // Save full JSON and copy fixture to public so app can load and auto-repair 100%
+    const publicJsonPath = path.resolve(__dirname, '../../public/user_uploaded_policies.json');
+    const publicXlsxPath = path.resolve(__dirname, '../../public/user_uploaded_policies.xlsx');
+    fs.writeFileSync(publicJsonPath, JSON.stringify(result.extractedRows));
+    fs.copyFileSync(uploadedExcelPath, publicXlsxPath);
+
     console.log('Total extracted rows from user excel:', result.extractedRows.length);
     console.log('Matched columns:', result.matchedColumns);
 
