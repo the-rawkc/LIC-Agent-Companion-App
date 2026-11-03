@@ -15,10 +15,14 @@ import {
   CheckSquare,
   Square,
   Trash2,
-  Sparkles
+  Sparkles,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { policyRepository, type PolicyFilterOptions } from '@/db/repositories/policyRepository';
 import { customerRepository } from '@/db/repositories/customerRepository';
+import { profileRepository } from '@/db/repositories/profileRepository';
+import { settingsRepository } from '@/db/repositories/settingsRepository';
 import { backupService } from '@/services/backup/backupService';
 import { importService } from '@/services/import/importService';
 import { formatCurrency, formatDate, advanceFupDate, generateUUID } from '@/utils/formatters';
@@ -86,6 +90,43 @@ export function PoliciesPage() {
   // Clean & Repair state
   const [isCleaning, setIsCleaning] = useState(false);
   const [cleanNotice, setCleanNotice] = useState<string | null>(null);
+
+  // Top Search Header Agent Identity & Theme State
+  const [agentAvatar, setAgentAvatar] = useState<string | null>(null);
+  const [agentInitials, setAgentInitials] = useState('AG');
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
+    profileRepository.getProfile().then((p) => {
+      if (p.avatarUrl) setAgentAvatar(p.avatarUrl);
+      if (p.fullName) {
+        const inits = p.fullName
+          .split(' ')
+          .filter(Boolean)
+          .map((n) => n[0])
+          .slice(0, 2)
+          .join('')
+          .toUpperCase();
+        setAgentInitials(inits || 'AG');
+      }
+    });
+
+    settingsRepository.get<string>('theme', 'light').then((theme) => {
+      setIsDarkMode(theme === 'dark' || document.documentElement.classList.contains('dark'));
+    });
+  }, []);
+
+  const toggleTheme = async () => {
+    const nextDark = !isDarkMode;
+    setIsDarkMode(nextDark);
+    if (nextDark) {
+      document.documentElement.classList.add('dark');
+      await settingsRepository.set('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      await settingsRepository.set('theme', 'light');
+    }
+  };
 
   const handleCleanAndRepair = async () => {
     setIsCleaning(true);
@@ -389,35 +430,62 @@ export function PoliciesPage() {
 
   return (
     <div className="min-h-full flex flex-col w-full">
-      {/* Frozen Search & Quick Filter Bar on Top by Default (Sticks flush to top, freezes on scroll) */}
-      <div className="sticky top-14 sm:top-16 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-xs w-full">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 space-y-2">
-          {/* Main Search Bar */}
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setCurrentPage(1);
-              }}
-              placeholder="Search by policy number, customer name, plan code, or premium..."
-              className="w-full pl-9 pr-9 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-white placeholder-slate-400 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery('');
+      {/* Permanent Top Search & Filter Header (Sits at the very top of the screen permanently) */}
+      <div className="sticky top-0 z-30 pt-safe bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-xs w-full">
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 py-2 sm:py-2.5 space-y-2">
+          {/* Top Row: Mini Avatar + Search Input + Theme Toggle */}
+          <div className="flex items-center gap-2">
+            {/* Mini Agent Avatar (Clickable to Profile) */}
+            <button
+              type="button"
+              onClick={() => navigate('/profile')}
+              className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-900 font-black text-xs flex items-center justify-center shrink-0 shadow-xs ring-2 ring-amber-400/30 overflow-hidden"
+              title="View Agent Profile"
+            >
+              {agentAvatar ? (
+                <img src={agentAvatar} alt="Agent" className="w-full h-full object-cover" />
+              ) : (
+                agentInitials
+              )}
+            </button>
+
+            {/* Main Search Bar */}
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
                   setCurrentPage(1);
                 }}
-                title="Clear search"
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+                placeholder="Search by policy number, customer name, plan code, or premium..."
+                className="w-full pl-9 pr-9 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-white placeholder-slate-400 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setCurrentPage(1);
+                  }}
+                  title="Clear search"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Theme Toggle Button */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-100 dark:bg-slate-800 shrink-0"
+              title="Toggle Dark/Light Mode"
+            >
+              {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
+            </button>
           </div>
 
           {/* Quick FUP & Mode Filter Pills */}

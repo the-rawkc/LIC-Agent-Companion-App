@@ -130,11 +130,12 @@ export function AppLayout({ children }: AppLayoutProps) {
   ];
 
   const isLandingPage = location.pathname === '/';
+  const isSearchPage = location.pathname === '/policies' || location.pathname === '/customers';
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col antialiased overflow-x-hidden w-full max-w-full">
-      {/* Top Header - Rendered strictly in authenticated workspace to avoid ghost flashes on landing */}
-      {!isLandingPage && (
+      {/* Top Header - Rendered strictly in workspace, hidden on search pages so search bar sits directly at top-0 */}
+      {!isLandingPage && !isSearchPage && (
         <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 pt-safe w-full overflow-x-hidden">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-3">
             {/* Left: Profile Avatar & Brand Title */}
