@@ -385,21 +385,21 @@ export function SettingsPage() {
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                  Cloudflare D1 Cloud Database (100% Free)
+                  Online Cloud Sync (Free & Safe)
                 </h2>
                 <Badge variant={d1Status?.d1Ready ? 'success' : 'default'} size="sm">
-                  {d1Status?.d1Ready ? 'D1 Connected' : 'Ready to Connect'}
+                  {d1Status?.d1Ready ? 'Connected' : 'Ready'}
                 </Badge>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Automatically backup and restore all policies by your <strong>Agency Code</strong>. Never lose data if you uninstall the app or switch phones.
+                Automatically backup and restore all policies using your <strong>Agency Code</strong>. Never lose data if you uninstall the app or switch phones.
               </p>
             </div>
           </div>
           <button
             onClick={checkCloudStatus}
             disabled={isCheckingD1}
-            title="Refresh D1 connection status"
+            title="Check online sync status"
             className="p-2 text-slate-400 hover:text-blue-600 transition"
           >
             <RefreshCw className={`w-4 h-4 ${isCheckingD1 ? 'animate-spin text-blue-600' : ''}`} />
@@ -409,18 +409,18 @@ export function SettingsPage() {
         {/* Agency Info bar */}
         <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs flex flex-wrap items-center justify-between gap-3">
           <div>
-            <span className="text-[11px] text-slate-400 block uppercase font-medium">Linked Agency Code</span>
+            <span className="text-[11px] text-slate-400 block uppercase font-medium">Agency Code</span>
             <span className="font-mono font-bold text-slate-800 dark:text-slate-200 text-sm">
-              {syncConfig?.agencyCode || 'Not configured yet'}
+              {syncConfig?.agencyCode || 'Not registered'}
             </span>
             {syncConfig?.agentName && (
               <span className="text-xs text-slate-500 ml-2">({syncConfig.agentName})</span>
             )}
           </div>
           <div>
-            <span className="text-[11px] text-slate-400 block uppercase font-medium">Last Cloud Backup</span>
+            <span className="text-[11px] text-slate-400 block uppercase font-medium">Last Online Backup</span>
             <span className="font-medium text-slate-700 dark:text-slate-300">
-              {syncConfig?.lastSyncAt ? formatDate(syncConfig.lastSyncAt, 'medium') : 'Never synced'}
+              {syncConfig?.lastSyncAt ? formatDate(syncConfig.lastSyncAt, 'medium') : 'Not synced yet'}
             </span>
           </div>
         </div>
@@ -435,7 +435,7 @@ export function SettingsPage() {
             }}
             leftIcon={<RefreshCw className="w-4 h-4" />}
           >
-            Two-Way Cloud Sync
+            Sync Across Devices
           </Button>
 
           <Button
@@ -447,7 +447,7 @@ export function SettingsPage() {
             }}
             leftIcon={<ArrowDownCircle className="w-4 h-4" />}
           >
-            Restore by Agency Code
+            Download from Online Backup
           </Button>
         </div>
 
@@ -456,10 +456,10 @@ export function SettingsPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
             <div>
               <span className="font-semibold text-slate-800 dark:text-slate-200 block">
-                Sync Server URL
+                Server Address (Advanced)
               </span>
               <span className="text-[11px] text-slate-400">
-                Leave blank to sync with current origin, or set your custom Cloudflare Worker address.
+                Leave empty for standard automatic sync, or enter a custom server address.
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -467,7 +467,7 @@ export function SettingsPage() {
                 type="text"
                 value={apiUrlInput}
                 onChange={(e) => setApiUrlInput(e.target.value)}
-                placeholder="https://... (default: current host)"
+                placeholder="https://... (default: automatic)"
                 className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs w-64 focus:ring-2 focus:ring-blue-500 font-mono text-[11px]"
               />
               <Button
@@ -490,10 +490,10 @@ export function SettingsPage() {
           </div>
           <div>
             <h2 className="text-base font-bold text-slate-900 dark:text-white">
-              Data Backup & Exports
+              Save Backup File
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Never rely solely on one device. Export your database regularly.
+              Save a copy of your policies to your phone, Pen Drive, Google Drive, or WhatsApp.
             </p>
           </div>
         </div>
@@ -507,7 +507,7 @@ export function SettingsPage() {
                 Password-Protected Backup
               </span>
               <p className="text-[11px] text-slate-500 mt-1">
-                AES-GCM 256-bit encrypted with your password. Safest for saving on Google Drive, USB, or email.
+                Locked with your chosen password. Safest for saving on WhatsApp, Google Drive, or Pen Drive.
               </p>
             </div>
             <Button
@@ -516,7 +516,7 @@ export function SettingsPage() {
               onClick={() => setIsEncryptedExportModalOpen(true)}
               leftIcon={<Download className="w-3.5 h-3.5" />}
             >
-              Export Encrypted
+              Download Safe Backup
             </Button>
           </div>
 
@@ -525,10 +525,10 @@ export function SettingsPage() {
             <div>
               <span className="text-xs font-bold text-slate-900 dark:text-white block flex items-center gap-1.5">
                 <FileSpreadsheet className="w-4 h-4 text-blue-600" />
-                Spreadsheet CSV
+                Excel Spreadsheet (CSV)
               </span>
               <p className="text-[11px] text-slate-500 mt-1">
-                Exports all policies for opening in Microsoft Excel or Google Sheets.
+                Save your policies as an Excel file to open and print in Microsoft Excel or Google Sheets.
               </p>
             </div>
             <Button
@@ -537,7 +537,7 @@ export function SettingsPage() {
               onClick={handleExportCsv}
               leftIcon={<Download className="w-3.5 h-3.5" />}
             >
-              Export CSV
+              Export to Excel
             </Button>
           </div>
 
@@ -546,10 +546,10 @@ export function SettingsPage() {
             <div>
               <span className="text-xs font-bold text-slate-900 dark:text-white block flex items-center gap-1.5">
                 <Download className="w-4 h-4 text-slate-600" />
-                Raw JSON Backup
+                Standard Backup File
               </span>
               <p className="text-[11px] text-slate-500 mt-1">
-                Standard JSON backup without password. Store only in secure private folders.
+                Standard file that you can restore anytime into this app on another phone or browser.
               </p>
             </div>
             <Button
@@ -558,7 +558,7 @@ export function SettingsPage() {
               onClick={handleExportPlainJson}
               leftIcon={<Download className="w-3.5 h-3.5" />}
             >
-              Export JSON
+              Download File
             </Button>
           </div>
         </div>
@@ -643,8 +643,8 @@ export function SettingsPage() {
           {storageUsage && (
             <div className="py-3 flex items-center justify-between">
               <div>
-                <span className="font-semibold text-slate-800 dark:text-slate-200 block">Browser Storage</span>
-                <span className="text-slate-400">IndexedDB local storage used</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200 block">Device Storage</span>
+                <span className="text-slate-400">App storage used on device</span>
               </div>
               <span className="font-mono text-slate-700 dark:text-slate-300">
                 {storageUsage.usage} / {storageUsage.quota}
@@ -674,7 +674,7 @@ export function SettingsPage() {
             Clean & Repair Data
           </h3>
           <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
-            Auto-sanitize customer names, fix punctuation, re-link policies to exact customers, and purge orphaned records.
+            Fix customer names, correct spellings, reconnect policies to customer profiles, and remove leftover empty items.
           </p>
           {cleanMessage && (
             <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-1">
@@ -700,7 +700,7 @@ export function SettingsPage() {
             Reset All Local Data
           </h3>
           <p className="text-xs text-rose-700 dark:text-rose-300 mt-0.5">
-            Permanently clear all policies, customer profiles, and follow-ups from this browser.
+            Permanently clear all policies, customer profiles, and reminders from this device.
           </p>
         </div>
         <Button
@@ -709,7 +709,7 @@ export function SettingsPage() {
           onClick={() => setIsResetConfirmOpen(true)}
           leftIcon={<Trash2 className="w-3.5 h-3.5" />}
         >
-          Reset Database
+          Reset All Data
         </Button>
       </div>
 
@@ -738,7 +738,7 @@ export function SettingsPage() {
         isOpen={isEncryptedExportModalOpen}
         onClose={() => setIsEncryptedExportModalOpen(false)}
         title="Password-Protected Backup"
-        description="Choose a strong password to encrypt your customer data"
+        description="Choose a password to safely lock your customer data file"
         maxWidth="sm"
         onSubmit={handleExportEncrypted}
         footer={
@@ -747,19 +747,19 @@ export function SettingsPage() {
               Cancel
             </Button>
             <Button type="submit" variant="success" size="sm" isLoading={isExporting}>
-              Encrypt & Download
+              Lock & Download Backup
             </Button>
           </>
         }
       >
         <div className="space-y-4">
           <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-100 dark:border-emerald-900 text-xs text-emerald-800 dark:text-emerald-300">
-            Uses authenticated <strong>AES-GCM 256-bit</strong> encryption. Please remember or safely record this password; it cannot be recovered if lost.
+            This file will be completely password-locked and safe. Please remember or write down this password; without it, the backup cannot be opened.
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Backup Encryption Password (min 4 characters)
+              Backup Password (min 4 characters)
             </label>
             <input
               type="password"

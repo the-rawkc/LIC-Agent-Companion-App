@@ -116,12 +116,12 @@ export function AppLayout({ children }: AppLayoutProps) {
   ];
 
   const moreItems = [
-    { to: '/reminders', label: 'Follow-ups & Reminders', icon: Bell, desc: 'F.U.P. & customer contact schedules' },
-    { to: '/profile', label: 'Agent Profile', icon: User, desc: 'Personal credentials, branch & signatures' },
-    { to: '/analytics', label: 'Analytics', icon: BarChart3, desc: 'Portfolio distribution & trends' },
-    { to: '/import', label: 'Import PDF / Excel', icon: Upload, desc: 'Import policy records from PDF or Excel' },
-    { to: '/settings', label: 'Export & Backup', icon: HardDrive, desc: 'Encrypted backup & CSV export' },
-    { to: '/settings', label: 'Settings & Cloud Sync', icon: Settings, desc: 'D1 sync, PIN lock & preferences' },
+    { to: '/reminders', label: 'Follow-ups & Reminders', icon: Bell, desc: 'Payment due dates & customer calls' },
+    { to: '/profile', label: 'Agent Profile', icon: User, desc: 'Your name, agency code, branch & visiting card' },
+    { to: '/analytics', label: 'Business Summary', icon: BarChart3, desc: 'Total business, plans & earnings chart' },
+    { to: '/import', label: 'Import Policies', icon: Upload, desc: 'Add policies from LIC Excel or PDF file' },
+    { to: '/settings', label: 'Backup & Export', icon: HardDrive, desc: 'Save backup file or export to Excel' },
+    { to: '/settings', label: 'Settings & Phone Sync', icon: Settings, desc: 'Online sync across phones, PIN lock & theme' },
   ];
 
   const isLandingPage = location.pathname === '/';
@@ -375,7 +375,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <div className="relative z-10 w-full bg-white dark:bg-slate-900 rounded-t-3xl p-5 shadow-2xl border-t border-slate-200 dark:border-slate-800 pb-safe animate-in slide-in-from-bottom duration-200 max-h-[85vh] overflow-y-auto">
             <div className="w-12 h-1 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mb-4" />
             <h3 className="text-base font-bold text-slate-900 dark:text-white px-2 mb-3">
-              Tools & Management
+              More Features
             </h3>
             <div className="space-y-2">
               {moreItems.map((item) => {

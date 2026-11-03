@@ -195,7 +195,7 @@ export function LandingPage() {
               LIC Agent <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-amber-200 to-amber-500">Companion</span>
             </h1>
             <p className="text-xs sm:text-base text-slate-300 max-w-2xl mx-auto font-normal leading-relaxed">
-              Private, mobile-first insurance workspace for Indian Life Insurance Advisors. Manage policies, customers, F.U.P. tracking, and reminders with 100% individual agent data privacy.
+              Easy, private companion for LIC Advisors. Keep customer records, track premium due dates (F.U.P.), and send WhatsApp reminders directly from your phone.
             </p>
           </div>
 
@@ -445,9 +445,9 @@ export function LandingPage() {
               <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
                 <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold">
                   <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>100% Isolated Data per Agent</span>
+                  <span>100% Private & Safe</span>
                 </span>
-                <span>Encrypted on-device</span>
+                <span>Saved safely on your phone</span>
               </div>
             </div>
           ) : (
@@ -618,10 +618,10 @@ export function LandingPage() {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                    Ready to load your agency dataset?
+                    Ready to load your customer policies?
                   </h3>
                   <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                    Upload your policy PDF / Excel spreadsheet or restore existing policies from Cloudflare D1.
+                    Upload your policy PDF / Excel spreadsheet or restore existing policies from online backup.
                   </p>
                 </div>
               </div>
@@ -632,7 +632,7 @@ export function LandingPage() {
                   onClick={() => setIsRestoreModalOpen(true)}
                   leftIcon={<Download className="w-4 h-4" />}
                 >
-                  Restore Cloud Data
+                  Download Backup
                 </Button>
                 <Button
                   variant="outline"
@@ -649,7 +649,7 @@ export function LandingPage() {
           {/* Feature Pillars Grid */}
           <div className="space-y-3">
             <h3 className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">
-              Core Architecture Highlights
+              Key Benefits
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -658,10 +658,10 @@ export function LandingPage() {
                   <Zap className="w-5 h-5" />
                 </div>
                 <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Multi-Agent Privacy
+                  Private & Confidential
                 </h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                  Each advisor's data is isolated into their dedicated local storage. Multiple advisors can share this device without cross-viewing client information.
+                  Each advisor's data is isolated on their phone. Multiple advisors can share this device without seeing each other's customer information.
                 </p>
               </div>
 
@@ -670,10 +670,10 @@ export function LandingPage() {
                   <Cloud className="w-5 h-5" />
                 </div>
                 <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Cloudflare D1 Sync
+                  Safe Online Backup
                 </h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                  Sync policies tagged by your Agency Code. If you uninstall the app or get a new device, entering your Agency Code and PIN restores everything.
+                  Safely save all policies linked to your Agency Code. If you switch or lose your phone, entering your Agency Code and PIN restores all records instantly.
                 </p>
               </div>
 

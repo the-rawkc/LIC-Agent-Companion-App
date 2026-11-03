@@ -141,13 +141,13 @@ export function DashboardPage() {
           <div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-medium mb-2.5 border border-blue-400/20">
               <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>Offline-First Indian Insurance Workspace</span>
+              <span>Your Personal Insurance Companion</span>
             </div>
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
               LIC Agent Companion
             </h1>
             <p className="mt-1 text-xs sm:text-sm text-slate-300 max-w-xl">
-              Source report reference date: <strong>29 October 2026</strong>. All calculations and records reside privately on this device.
+              All policy records and client details stay private and safe on your device.
             </p>
           </div>
 
@@ -159,7 +159,7 @@ export function DashboardPage() {
               className="border-white/20 text-white hover:bg-white/10 dark:border-white/20"
               leftIcon={<Upload className="w-4 h-4" />}
             >
-              Import PDF
+              Import Policies
             </Button>
             <Button
               variant="primary"
@@ -198,18 +198,18 @@ export function DashboardPage() {
               onClick={() => setIsRestoreModalOpen(true)}
               leftIcon={<ArrowDownCircle className="w-4 h-4" />}
             >
-              Restore from Cloud
+              Download Saved Backup
             </Button>
           </div>
 
           <EmptyState
             icon={<FileText className="w-8 h-8 text-blue-600" />}
             title="No policy records yet"
-            description="Your local database is clean and ready. Upload your LIC agent PDF report to immediately organize and track all customer policies."
-            actionLabel="Upload PDF Report"
+            description="Your app is ready. Upload your LIC policy list (Excel or PDF) to organize and track all customer policies."
+            actionLabel="Import Policies"
             onAction={() => navigate('/import')}
             actionIcon={<Upload className="w-4 h-4" />}
-            secondaryActionLabel={isDemoLoading ? 'Loading Sample...' : 'Load Demonstration Dataset'}
+            secondaryActionLabel={isDemoLoading ? 'Loading Sample...' : 'Load Sample Policies'}
             onSecondaryAction={handleLoadDemoData}
           />
         </div>

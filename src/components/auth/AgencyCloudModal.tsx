@@ -76,7 +76,7 @@ export function AgencyCloudModal({ isOpen, onClose, mode = 'sync', onSuccess }: 
           );
         } else {
           setSuccessMessage(
-            `Connection successful, but 0 policies were found in cloud backup for Agency Code ${agencyCode}. If you have policies on another phone, please open that phone and tap "Two-Way Cloud Sync" first.`
+            `Connected, but 0 policies were found in online backup for Agency Code ${agencyCode}. If your policies are on your other phone, please open that phone and tap "Sync Across Devices" first.`
           );
         }
       } else {
@@ -85,15 +85,15 @@ export function AgencyCloudModal({ isOpen, onClose, mode = 'sync', onSuccess }: 
         setPoliciesRestored(result.pulledCount);
         if (result.pulledCount > 0) {
           setSuccessMessage(
-            `Successfully synced! Downloaded ${result.pulledCount} policies from cloud onto this device.`
+            `Successfully synced! Downloaded ${result.pulledCount} policies onto this device.`
           );
         } else if (result.pushedCount > 0) {
           setSuccessMessage(
-            `Successfully synced! Uploaded ${result.pushedCount} local policies to Cloudflare D1.`
+            `Successfully synced! Saved ${result.pushedCount} policies to online backup.`
           );
         } else {
           setSuccessMessage(
-            `Sync successful! Connected to Cloudflare D1 (0 policies found). Make sure your main phone has uploaded its data.`
+            `Sync successful! Connected to online backup (0 policies found). Make sure your main phone has synced its data first.`
           );
         }
       }
@@ -102,7 +102,7 @@ export function AgencyCloudModal({ isOpen, onClose, mode = 'sync', onSuccess }: 
         onSuccess();
       }
     } catch (err: any) {
-      setError(err.message || 'Operation failed. Please check your credentials and connection.');
+      setError(err.message || 'Operation failed. Please check your agency code, PIN, and internet connection.');
     } finally {
       setIsLoading(false);
     }
@@ -114,10 +114,10 @@ export function AgencyCloudModal({ isOpen, onClose, mode = 'sync', onSuccess }: 
   };
 
   const isPullMode = mode === 'pull';
-  const modalTitle = isPullMode ? 'Restore from Cloudflare D1' : 'Two-Way Cloud Sync';
+  const modalTitle = isPullMode ? 'Download Data from Online Backup' : 'Sync Policies Across Devices';
   const modalDescription = isPullMode
-    ? 'Download all policies and customer profiles stored in the cloud for this Agency Code.'
-    : 'Synchronizes your device with Cloudflare D1: downloads any cloud records and uploads any local records.';
+    ? 'Download all policies and customer profiles saved online for this Agency Code.'
+    : 'Keep your policies updated across all your phones and computers automatically.';
 
   return (
     <Modal
@@ -147,11 +147,11 @@ export function AgencyCloudModal({ isOpen, onClose, mode = 'sync', onSuccess }: 
           >
             {isLoading
               ? isPullMode
-                ? 'Restoring from D1...'
-                : 'Syncing Data...'
+                ? 'Downloading policies...'
+                : 'Syncing policies...'
               : isPullMode
-              ? 'Restore All Policies'
-              : 'Start Two-Way Sync'}
+              ? 'Download All Policies'
+              : 'Sync Now'}
           </Button>
         </>
       }

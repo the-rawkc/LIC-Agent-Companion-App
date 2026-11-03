@@ -344,7 +344,7 @@ export function ProfilePage() {
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <p className="text-[11px] text-slate-400 mt-1">
-                Used to sync & recover all policies from Cloudflare D1.
+                Used to sync and recover your policies from online backup.
               </p>
             </div>
 

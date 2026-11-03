@@ -216,7 +216,7 @@ export function CustomersPage() {
               onClick={() => setIsMergeModalOpen(true)}
               leftIcon={<GitMerge className="w-4 h-4" />}
             >
-              Merge Profiles
+              Combine Duplicates
             </Button>
           )}
           <Button
@@ -500,8 +500,8 @@ export function CustomersPage() {
       <Modal
         isOpen={isMergeModalOpen}
         onClose={() => setIsMergeModalOpen(false)}
-        title="Merge Customer Profiles"
-        description="Consolidate duplicate customer records. All policies and reminders will be safely reassigned."
+        title="Combine Duplicate Customers"
+        description="Combine duplicate records if a customer is listed more than once. All policies and reminders will be moved to the main profile."
         maxWidth="md"
         footer={
           <>
@@ -515,26 +515,26 @@ export function CustomersPage() {
               isLoading={isMerging}
               onClick={handleExecuteMerge}
             >
-              Confirm Merge
+              Combine Profiles
             </Button>
           </>
         }
       >
         <div className="space-y-4">
           <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-900/60 text-xs text-amber-800 dark:text-amber-300">
-            <strong>Important rule:</strong> Never merge profiles unless you are sure they represent the exact same person. An audit log will record this merge.
+            <strong>Please check carefully:</strong> Only combine profiles if they belong to the exact same customer.
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Source Customer (will be merged and deleted)
+              Duplicate Profile (will be removed)
             </label>
             <select
               value={sourceCustomerId}
               onChange={(e) => setSourceCustomerId(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">Select source customer...</option>
+              <option value="">Select duplicate profile to remove...</option>
               {customers.map((c) => (
                 <option key={c.id} value={c.id} disabled={c.id === targetCustomerId}>
                   {c.displayName} ({c.policyCount} policies{c.mobileNumber ? ` • ${c.mobileNumber}` : ''})
@@ -545,14 +545,14 @@ export function CustomersPage() {
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Target Customer (will receive all policies)
+              Main Profile (to keep and receive all policies)
             </label>
             <select
               value={targetCustomerId}
               onChange={(e) => setTargetCustomerId(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">Select target customer...</option>
+              <option value="">Select main profile to keep...</option>
               {customers.map((c) => (
                 <option key={c.id} value={c.id} disabled={c.id === sourceCustomerId}>
                   {c.displayName} ({c.policyCount} policies{c.mobileNumber ? ` • ${c.mobileNumber}` : ''})
@@ -564,7 +564,7 @@ export function CustomersPage() {
           {sourceCustomerId && targetCustomerId && (
             <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 space-y-1">
               <p>
-                <strong>Preview:</strong> Policies from source profile will be transferred to target. Target will have{' '}
+                <strong>Summary:</strong> Policies from duplicate profile will be transferred to the main profile. The main profile will then have{' '}
                 {(customers.find((c) => c.id === sourceCustomerId)?.policyCount || 0) +
                   (customers.find((c) => c.id === targetCustomerId)?.policyCount || 0)}{' '}
                 total policies.

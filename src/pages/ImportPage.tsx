@@ -193,9 +193,9 @@ export function ImportPage() {
       const res = await importService.rollbackImport(rollbackId);
       setRollbackId(null);
       await loadImportHistory();
-      alert(`Rollback complete. Removed ${res.deletedPolicies} policies.`);
+      alert(`Import undone. Removed ${res.deletedPolicies} policies from app.`);
     } catch (err) {
-      alert('Rollback failed: ' + (err instanceof Error ? err.message : String(err)));
+      alert('Could not undo import: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setIsRollingBack(false);
     }
@@ -216,10 +216,10 @@ export function ImportPage() {
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
             <Upload className="w-6 h-6 text-blue-600" />
-            <span>PDF Import Engine</span>
+            <span>Import Policies (Excel / PDF)</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Extract, validate, and organize records from the agent's policy report
+            Add policies automatically from your LIC Excel file or PDF statement
           </p>
         </div>
 
@@ -233,7 +233,7 @@ export function ImportPage() {
                 : 'text-slate-600 dark:text-slate-400'
             }`}
           >
-            Import Document
+            Upload File
           </button>
           <button
             onClick={() => setActiveTab('history')}
@@ -243,7 +243,7 @@ export function ImportPage() {
                 : 'text-slate-600 dark:text-slate-400'
             }`}
           >
-            Import History ({importHistory.length})
+            Past Imports ({importHistory.length})
           </button>
         </div>
       </div>
@@ -384,7 +384,7 @@ export function ImportPage() {
                         : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                     }`}
                   >
-                    Ready ({preview.readyToImportCount})
+                    Ready to Add ({preview.readyToImportCount})
                   </button>
                   <button
                     onClick={() => setFilterStaged('review')}
@@ -394,7 +394,7 @@ export function ImportPage() {
                         : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
                     }`}
                   >
-                    Warnings / Review ({preview.requiringReviewCount})
+                    Needs Check ({preview.requiringReviewCount})
                   </button>
                   <button
                     onClick={() => setFilterStaged('duplicates')}
@@ -404,7 +404,7 @@ export function ImportPage() {
                         : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                     }`}
                   >
-                    Existing in DB ({preview.potentialDuplicateCount})
+                    Already in App ({preview.potentialDuplicateCount})
                   </button>
                   {preview.invalidCount > 0 && (
                     <button
@@ -700,12 +700,12 @@ export function ImportPage() {
             </Modal>
           )}
 
-          {/* Commit Confirmation Dialog */}
+          {/* Save Policies Confirmation Dialog */}
           <Modal
             isOpen={isCommitModalOpen}
             onClose={() => setIsCommitModalOpen(false)}
-            title="Confirm Database Import"
-            description="Commit staged policies to your private IndexedDB storage"
+            title="Save Policies to App"
+            description="Save these policies to your phone or computer"
             maxWidth="sm"
             footer={
               <>
@@ -718,7 +718,7 @@ export function ImportPage() {
                   isLoading={isCommitting}
                   onClick={handleExecuteCommit}
                 >
-                  Commit to Database
+                  Save Policies
                 </Button>
               </>
             }
@@ -726,18 +726,18 @@ export function ImportPage() {
             <div className="space-y-4">
               <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl text-xs space-y-1">
                 <p>
-                  <strong>Total to save:</strong>{' '}
-                  {preview?.rows.filter((r) => r.isValid).length} valid policy records
+                  <strong>Total policies to save:</strong>{' '}
+                  {preview?.rows.filter((r) => r.isValid).length} valid records
                 </p>
                 <p>
-                  <strong>Existing policies detected:</strong>{' '}
+                  <strong>Policies already in app:</strong>{' '}
                   {preview?.potentialDuplicateCount}
                 </p>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                  How should existing policies and customer data be handled?
+                  How should existing policies be handled?
                 </label>
                 <div className="space-y-2">
                   <label className="flex items-start gap-2.5 p-2.5 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/40 dark:bg-blue-950/20 cursor-pointer text-xs">
@@ -753,7 +753,7 @@ export function ImportPage() {
                         Clean Replace (Recommended)
                       </span>
                       <span className="text-slate-600 dark:text-slate-400">
-                        Wipes previous corrupted/duplicate imports and loads all records 100% fresh in exact row order
+                        Clears old policy list and loads all records fresh from this file in exact row order
                       </span>
                     </div>
                   </label>
@@ -770,7 +770,7 @@ export function ImportPage() {
                         Update existing policies
                       </span>
                       <span className="text-slate-500">
-                        Preserves manual notes while updating latest F.U.P., premium, and clean customer names
+                        Keeps existing policies and updates due dates, premium, and customer names
                       </span>
                     </div>
                   </label>
@@ -787,7 +787,7 @@ export function ImportPage() {
                         Skip existing policies
                       </span>
                       <span className="text-slate-500">
-                        Leave existing records untouched and only insert newly added policies
+                        Keep existing policies as they are and only add new policies
                       </span>
                     </div>
                   </label>
@@ -797,11 +797,11 @@ export function ImportPage() {
           </Modal>
         </div>
       ) : (
-        /* Tab: Import History */
+        /* Tab: Past Imports */
         <div className="space-y-3">
           {importHistory.length === 0 ? (
             <p className="text-xs text-slate-400 text-center py-8 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
-              No previous import operations recorded.
+              No previous imports found.
             </p>
           ) : (
             importHistory.map((h) => (
@@ -815,7 +815,7 @@ export function ImportPage() {
                       {h.filename}
                     </span>
                     <Badge variant="info" size="sm">
-                      {h.createdCount} Created
+                      {h.createdCount} Added
                     </Badge>
                     {h.updatedCount > 0 && (
                       <Badge variant="purple" size="sm">
@@ -824,7 +824,7 @@ export function ImportPage() {
                     )}
                   </div>
                   <p className="text-xs text-slate-400 mt-1">
-                    Imported on {formatDate(h.importDate, 'medium')} • Total {h.totalRows} rows evaluated
+                    Imported on {formatDate(h.importDate, 'medium')} • Total {h.totalRows} policies checked
                   </p>
                 </div>
 
@@ -835,7 +835,7 @@ export function ImportPage() {
                   leftIcon={<RotateCcw className="w-3.5 h-3.5 text-rose-500" />}
                   className="shrink-0"
                 >
-                  Rollback Import
+                  Undo Import
                 </Button>
               </div>
             ))
@@ -846,9 +846,9 @@ export function ImportPage() {
             isOpen={Boolean(rollbackId)}
             onClose={() => setRollbackId(null)}
             onConfirm={handleExecuteRollback}
-            title="Rollback Import Operation"
-            message="This will delete the policies created during this import session. Any records you have manually marked or modified will be protected."
-            confirmLabel="Rollback Now"
+            title="Undo This Import"
+            message="This will remove the policies added during this import session. Any policies you updated manually will be kept safe."
+            confirmLabel="Undo & Remove"
             isLoading={isRollingBack}
           />
         </div>

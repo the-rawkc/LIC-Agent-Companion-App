@@ -375,7 +375,7 @@ export function PolicyDetailsPage() {
               </span>
             </div>
             <div className="flex justify-between py-1.5">
-              <span className="text-slate-400">Source Report Serial</span>
+              <span className="text-slate-400">List Serial (#)</span>
               <span className="font-mono text-slate-800 dark:text-slate-200">
                 {policy.sourceSerialNumber ? `#${policy.sourceSerialNumber}` : '—'}
               </span>
@@ -459,13 +459,13 @@ export function PolicyDetailsPage() {
               </span>
             </div>
             <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
-              <span className="text-slate-400">Installment Premium</span>
+              <span className="text-slate-400">Premium Amount</span>
               <span className="font-bold text-base text-slate-900 dark:text-white font-mono">
                 {formatCurrency(policy.premiumAmount)}
               </span>
             </div>
             <div className="flex justify-between py-1.5">
-              <span className="text-slate-400">Premium Frequency</span>
+              <span className="text-slate-400">Payment Mode</span>
               <Badge variant="default">{policy.premiumMode}</Badge>
             </div>
           </div>
@@ -499,7 +499,7 @@ export function PolicyDetailsPage() {
               </span>
             </div>
             <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
-              <span className="text-slate-400">Separately Verified Next Date</span>
+              <span className="text-slate-400">Agent Confirmed Next Due</span>
               <span className="font-bold text-blue-600 dark:text-blue-400 font-mono">
                 {policy.verifiedNextPremiumDate ? formatDate(policy.verifiedNextPremiumDate) : 'Not verified'}
               </span>
