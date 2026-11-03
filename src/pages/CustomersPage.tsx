@@ -20,7 +20,6 @@ import {
   X
 } from 'lucide-react';
 import { customerRepository, type CustomerWithSummary } from '@/db/repositories/customerRepository';
-import { profileRepository } from '@/db/repositories/profileRepository';
 import { settingsRepository } from '@/db/repositories/settingsRepository';
 import { backupService } from '@/services/backup/backupService';
 import { formatCurrency, formatDate } from '@/utils/formatters';
@@ -54,27 +53,11 @@ export function CustomersPage() {
   const [targetCustomerId, setTargetCustomerId] = useState('');
   const [isMerging, setIsMerging] = useState(false);
 
-  // Top Search Header Agent Identity & Theme State
-  const [agentAvatar, setAgentAvatar] = useState<string | null>(null);
-  const [agentInitials, setAgentInitials] = useState('AG');
+  // Theme State
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   useEffect(() => {
     loadCustomers();
-
-    profileRepository.getProfile().then((p) => {
-      if (p.avatarUrl) setAgentAvatar(p.avatarUrl);
-      if (p.fullName) {
-        const inits = p.fullName
-          .split(' ')
-          .filter(Boolean)
-          .map((n) => n[0])
-          .slice(0, 2)
-          .join('')
-          .toUpperCase();
-        setAgentInitials(inits || 'AG');
-      }
-    });
 
     settingsRepository.get<string>('theme', 'light').then((theme) => {
       setIsDarkMode(theme === 'dark' || document.documentElement.classList.contains('dark'));
@@ -230,20 +213,6 @@ export function CustomersPage() {
       {/* Permanent Top Search Header (Sits at the very top of the screen permanently) */}
       <div className="sticky top-0 z-30 pt-safe bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-xs w-full">
         <div className="max-w-6xl mx-auto px-3 sm:px-6 py-2 sm:py-2.5 flex items-center gap-2">
-          {/* Mini Agent Avatar (Clickable to Profile) */}
-          <button
-            type="button"
-            onClick={() => navigate('/profile')}
-            className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-xs flex items-center justify-center shrink-0 shadow-xs ring-2 ring-amber-400/30 overflow-hidden"
-            title="View Agent Profile"
-          >
-            {agentAvatar ? (
-              <img src={agentAvatar} alt="Agent" className="w-full h-full object-cover" />
-            ) : (
-              agentInitials
-            )}
-          </button>
-
           {/* Full-Width Search Input */}
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />

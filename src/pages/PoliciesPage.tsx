@@ -15,13 +15,11 @@ import {
   CheckSquare,
   Square,
   Trash2,
-  Sparkles,
   Sun,
   Moon
 } from 'lucide-react';
 import { policyRepository, type PolicyFilterOptions } from '@/db/repositories/policyRepository';
 import { customerRepository } from '@/db/repositories/customerRepository';
-import { profileRepository } from '@/db/repositories/profileRepository';
 import { settingsRepository } from '@/db/repositories/settingsRepository';
 import { backupService } from '@/services/backup/backupService';
 import { importService } from '@/services/import/importService';
@@ -87,30 +85,10 @@ export function PoliciesPage() {
   const [addDob, setAddDob] = useState('');
   const [addError, setAddError] = useState('');
 
-  // Clean & Repair state
-  const [isCleaning, setIsCleaning] = useState(false);
-  const [cleanNotice, setCleanNotice] = useState<string | null>(null);
-
-  // Top Search Header Agent Identity & Theme State
-  const [agentAvatar, setAgentAvatar] = useState<string | null>(null);
-  const [agentInitials, setAgentInitials] = useState('AG');
+  // Theme State
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   useEffect(() => {
-    profileRepository.getProfile().then((p) => {
-      if (p.avatarUrl) setAgentAvatar(p.avatarUrl);
-      if (p.fullName) {
-        const inits = p.fullName
-          .split(' ')
-          .filter(Boolean)
-          .map((n) => n[0])
-          .slice(0, 2)
-          .join('')
-          .toUpperCase();
-        setAgentInitials(inits || 'AG');
-      }
-    });
-
     settingsRepository.get<string>('theme', 'light').then((theme) => {
       setIsDarkMode(theme === 'dark' || document.documentElement.classList.contains('dark'));
     });
@@ -125,22 +103,6 @@ export function PoliciesPage() {
     } else {
       document.documentElement.classList.remove('dark');
       await settingsRepository.set('theme', 'light');
-    }
-  };
-
-  const handleCleanAndRepair = async () => {
-    setIsCleaning(true);
-    try {
-      const res = await importService.cleanAndRepairDatabase();
-      setCleanNotice(
-        `Database verified & re-aligned: ${res.fixedPolicies} policies cleaned, ${res.cleanedCustomers} customers updated, ${res.removedOrphans} orphaned records removed.`
-      );
-      await loadPolicies();
-      setTimeout(() => setCleanNotice(null), 6000);
-    } catch (err: any) {
-      alert('Repair failed: ' + (err.message || String(err)));
-    } finally {
-      setIsCleaning(false);
     }
   };
 
@@ -433,22 +395,8 @@ export function PoliciesPage() {
       {/* Permanent Top Search & Filter Header (Sits at the very top of the screen permanently) */}
       <div className="sticky top-0 z-30 pt-safe bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-xs w-full">
         <div className="max-w-6xl mx-auto px-3 sm:px-6 py-2 sm:py-2.5 space-y-2">
-          {/* Top Row: Mini Avatar + Search Input + Theme Toggle */}
+          {/* Top Row: Search Input + Theme Toggle */}
           <div className="flex items-center gap-2">
-            {/* Mini Agent Avatar (Clickable to Profile) */}
-            <button
-              type="button"
-              onClick={() => navigate('/profile')}
-              className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-900 font-black text-xs flex items-center justify-center shrink-0 shadow-xs ring-2 ring-amber-400/30 overflow-hidden"
-              title="View Agent Profile"
-            >
-              {agentAvatar ? (
-                <img src={agentAvatar} alt="Agent" className="w-full h-full object-cover" />
-              ) : (
-                agentInitials
-              )}
-            </button>
-
             {/* Main Search Bar */}
             <div className="relative flex-1">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -577,16 +525,6 @@ export function PoliciesPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={handleCleanAndRepair}
-              disabled={policies.length === 0 || isCleaning}
-              leftIcon={<Sparkles className="w-3.5 h-3.5 text-amber-500" />}
-              title="Clean punctuation, trim names, re-link customers, and remove any orphaned records"
-            >
-              {isCleaning ? 'Cleaning...' : 'Clean Data'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
               onClick={handleExportAllCsv}
               disabled={policies.length === 0 || isExporting}
               leftIcon={<Download className="w-3.5 h-3.5" />}
@@ -612,14 +550,6 @@ export function PoliciesPage() {
             </Button>
           </div>
         </div>
-
-        {/* Clean & Repair Notice Toast */}
-        {cleanNotice && (
-          <div className="p-3.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-300 dark:border-blue-800 rounded-2xl flex items-center gap-3 text-blue-800 dark:text-blue-200 text-xs font-semibold animate-in fade-in">
-            <Sparkles className="w-5 h-5 text-amber-500 shrink-0" />
-            <span>{cleanNotice}</span>
-          </div>
-        )}
 
         {/* Payment Success Toast */}
         {paymentSuccessToast && (
