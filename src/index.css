@@ -59,9 +59,9 @@
 
 /* Safe area padding for mobile notch and bottom home indicator */
 .pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 1rem);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .pt-safe {
-  padding-top: env(safe-area-inset-top, 0.5rem);
+  padding-top: env(safe-area-inset-top, 0px);
 }

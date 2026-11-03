@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/shared/Button';
 import { profileRepository, type AgentProfile, DEFAULT_PROFILE } from '@/db/repositories/profileRepository';
+import { FestivalArtworkImage, OrnateCorner, HangingFestoon } from './greetings/festivalArtwork';
+import { drawFestiveCardToCanvas } from './greetings/canvasArtworkRenderer';
 
 export interface FestivalTheme {
   id: string;
@@ -262,72 +264,39 @@ export function GreetingsPage() {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      // 1. Draw festive background gradient
-      const gradient = ctx.createLinearGradient(0, 0, width, height);
-      if (activeTheme.id === 'diwali') {
-        gradient.addColorStop(0, '#78350f');
-        gradient.addColorStop(0.5, '#881337');
-        gradient.addColorStop(1, '#451a03');
-      } else if (activeTheme.id === 'holi') {
-        gradient.addColorStop(0, '#e11d48');
-        gradient.addColorStop(0.5, '#7c3aed');
-        gradient.addColorStop(1, '#d97706');
-      } else if (activeTheme.id === 'eid') {
-        gradient.addColorStop(0, '#064e3b');
-        gradient.addColorStop(0.5, '#134e4a');
-        gradient.addColorStop(1, '#0f172a');
-      } else if (activeTheme.id === 'republic_day') {
-        gradient.addColorStop(0, '#c2410c');
-        gradient.addColorStop(0.5, '#0f172a');
-        gradient.addColorStop(1, '#047857');
-      } else {
-        gradient.addColorStop(0, '#0f172a');
-        gradient.addColorStop(0.5, '#1e3a8a');
-        gradient.addColorStop(1, '#020617');
-      }
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, width, height);
+      // 1. Draw rich festive background, golden borders, garland, and hero artwork picture in Canvas
+      drawFestiveCardToCanvas(ctx, width, height, activeTheme.id, activeTheme.accentColor, cardFormat);
 
-      // 2. Draw subtle festive particle motifs
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-      for (let i = 0; i < 40; i++) {
-        const x = (i * 97) % width;
-        const y = (i * 137) % (height - 300);
-        ctx.beginPath();
-        ctx.arc(x, y, (i % 5) * 3 + 2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // 3. Top Decorative Icon / Emblem
+      // 2. Main Festive Titles with shadow
+      const titleY = cardFormat === 'portrait' ? 440 : 330;
       ctx.textAlign = 'center';
-      ctx.font = '80px sans-serif';
-      ctx.fillText(activeTheme.decorIcon, width / 2, cardFormat === 'portrait' ? 240 : 160);
-
-      // 4. Main Festive Titles
       ctx.fillStyle = '#fef08a';
       ctx.font = 'bold 54px "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(activeTheme.title, width / 2, cardFormat === 'portrait' ? 340 : 250);
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+      ctx.shadowBlur = 10;
+      ctx.fillText(activeTheme.title, width / 2, titleY);
 
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 36px "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(activeTheme.subtitle, width / 2, cardFormat === 'portrait' ? 410 : 310);
+      ctx.fillText(activeTheme.subtitle, width / 2, titleY + 55);
+      ctx.shadowBlur = 0;
 
-      // Decorative divider line
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-      ctx.lineWidth = 2;
+      // Decorative golden divider line
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.moveTo(width / 2 - 180, cardFormat === 'portrait' ? 460 : 350);
-      ctx.lineTo(width / 2 + 180, cardFormat === 'portrait' ? 460 : 350);
+      ctx.moveTo(width / 2 - 180, titleY + 95);
+      ctx.lineTo(width / 2 + 180, titleY + 95);
       ctx.stroke();
 
-      // 5. Festive Messages (Hindi & English)
+      // 3. Festive Messages (Hindi & English)
       ctx.fillStyle = '#f8fafc';
       ctx.font = '30px "Segoe UI", Roboto, sans-serif';
-      wrapText(ctx, customHindi, width / 2, cardFormat === 'portrait' ? 560 : 420, width - 160, 44);
+      wrapText(ctx, customHindi, width / 2, titleY + 160, width - 160, 44);
 
       ctx.fillStyle = '#cbd5e1';
       ctx.font = 'italic 24px "Segoe UI", Roboto, sans-serif';
-      wrapText(ctx, customEnglish, width / 2, cardFormat === 'portrait' ? 760 : 540, width - 180, 36);
+      wrapText(ctx, customEnglish, width / 2, titleY + 270, width - 180, 36);
 
       // 6. Draw Agent Branding Footer Section
       const footerHeight = cardFormat === 'portrait' ? 360 : 280;
@@ -700,21 +669,29 @@ export function GreetingsPage() {
 
             {/* The Greeting Card Artwork Component */}
             <div
-              className={`w-full rounded-3xl overflow-hidden shadow-2xl relative border-2 border-white/20 flex flex-col justify-between select-none bg-gradient-to-br ${activeTheme.gradient} ${
+              className={`w-full rounded-3xl overflow-hidden shadow-2xl relative border-4 border-amber-400/50 flex flex-col justify-between select-none bg-gradient-to-br ${activeTheme.gradient} ${
                 cardFormat === 'square' ? 'aspect-square' : 'aspect-[9/16]'
               }`}
             >
-              {/* Subtle festive background pattern */}
-              <div className="absolute inset-0 bg-radial from-white/10 to-transparent pointer-events-none" />
+              {/* Ornate Golden Corners for Royal Festive Look */}
+              <OrnateCorner position="top-left" />
+              <OrnateCorner position="top-right" />
+              <OrnateCorner position="bottom-left" />
+              <OrnateCorner position="bottom-right" />
+
+              {/* Hanging Marigold Garland Toran across the top */}
+              <HangingFestoon />
+
+              {/* Subtle festive background pattern / radial glow */}
+              <div className="absolute inset-0 bg-radial from-amber-400/15 via-transparent to-black/30 pointer-events-none" />
 
               {/* Top Festivities & Greetings Section */}
-              <div className="p-6 sm:p-8 text-center flex-1 flex flex-col items-center justify-center space-y-3 z-10">
-                <span className="text-5xl sm:text-6xl drop-shadow-md animate-bounce duration-1000">
-                  {activeTheme.decorIcon}
-                </span>
+              <div className="p-4 sm:p-6 text-center flex-1 flex flex-col items-center justify-center space-y-2 z-10 pt-8 sm:pt-10">
+                {/* Rich Decorative Hero Picture / Festive Illustration */}
+                <FestivalArtworkImage themeId={activeTheme.id} />
 
-                <div className="space-y-1">
-                  <h2 className="text-2xl sm:text-3xl font-black text-amber-200 tracking-tight drop-shadow-md">
+                <div className="space-y-0.5">
+                  <h2 className="text-xl sm:text-2xl font-black text-amber-200 tracking-tight drop-shadow-md">
                     {activeTheme.title}
                   </h2>
                   <p className="text-xs sm:text-sm font-bold text-white drop-shadow">
@@ -722,9 +699,9 @@ export function GreetingsPage() {
                   </p>
                 </div>
 
-                <div className="w-16 h-0.5 bg-amber-400/60 rounded-full my-1" />
+                <div className="w-20 h-0.5 bg-amber-400/80 rounded-full my-0.5" />
 
-                <div className="space-y-2 max-w-xs sm:max-w-sm px-2">
+                <div className="space-y-1.5 max-w-xs sm:max-w-sm px-2">
                   <p className="text-xs sm:text-sm text-slate-100 font-medium leading-relaxed drop-shadow-xs">
                     {customHindi}
                   </p>
