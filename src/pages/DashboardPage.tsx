@@ -28,6 +28,7 @@ import { analyticsService, type DashboardStats } from '@/features/analytics/anal
 import { importService } from '@/services/import/importService';
 import { reminderRepository } from '@/db/repositories/reminderRepository';
 import { authService } from '@/services/auth/authService';
+import { d1SyncService } from '@/services/cloud/d1SyncService';
 import { getActiveAgencyCode, ensureDataSynchronized } from '@/db/database';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 
@@ -41,6 +42,11 @@ export function DashboardPage() {
 
   useEffect(() => {
     loadDashboardData();
+    const handleSync = () => {
+      analyticsService.getDashboardStats().then(setStats).catch(() => {});
+    };
+    window.addEventListener('lic_cloud_synced', handleSync);
+    return () => window.removeEventListener('lic_cloud_synced', handleSync);
   }, []);
 
   async function loadDashboardData() {
@@ -54,13 +60,21 @@ export function DashboardPage() {
       }
 
       let data = await analyticsService.getDashboardStats();
-      if (data.totalPolicies === 0) {
-        if (code) {
-          const pin = sessionStorage.getItem('lic_session_pin') || localStorage.getItem('lic_session_pin') || undefined;
+      const pin = sessionStorage.getItem('lic_session_pin') || localStorage.getItem('lic_session_pin') || undefined;
+
+      if (code && pin) {
+        if (data.totalPolicies === 0) {
           const res = await authService.autoRestoreOrMigrateData(code, pin);
           if (res.restored) {
             data = await analyticsService.getDashboardStats();
           }
+        } else {
+          // Keep all devices uniform in background by merging latest cloud changes
+          d1SyncService.pullFromCloud(code, pin).then((res) => {
+            if (res.policiesCount > 0) {
+              analyticsService.getDashboardStats().then(setStats).catch(() => {});
+            }
+          }).catch((err) => console.warn('Background dashboard sync:', err));
         }
       }
 

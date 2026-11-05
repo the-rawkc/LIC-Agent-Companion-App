@@ -236,7 +236,52 @@ export const d1SyncService = {
     // Filter out any policies marked as deleted locally
     const deletedLogs = await targetDb.auditLogs.where({ entityType: 'policy', action: 'delete' }).toArray();
     const deletedSet = new Set(deletedLogs.map((l) => l.entityId));
-    const policiesToPut = cloudPolicies.filter((p) => !deletedSet.has(p.id));
+
+    // Reconcile existing local policies by policyNumber so FUP updates and new policies merge cleanly across devices
+    const localPolicies = await targetDb.policies.toArray();
+    const localPolicyByNumber = new Map<string, Policy>();
+    for (const lp of localPolicies) {
+      const cleanNum = lp.policyNumber.replace(/[^0-9]/g, '').trim();
+      if (cleanNum) {
+        localPolicyByNumber.set(cleanNum, lp);
+        localPolicyByNumber.set(cleanNum.replace(/^0+/, ''), lp);
+      }
+    }
+
+    const newlyPulledPolicies: Policy[] = [];
+    const policiesToPut: Policy[] = [];
+    for (const cp of cloudPolicies) {
+      if (deletedSet.has(cp.id)) continue;
+
+      const cleanCpNum = cp.policyNumber.replace(/[^0-9]/g, '').trim();
+      const existing = cleanCpNum
+        ? localPolicyByNumber.get(cleanCpNum) || localPolicyByNumber.get(cleanCpNum.replace(/^0+/, ''))
+        : null;
+
+      if (existing) {
+        // Decide which FUP is more up to date:
+        // Pick whichever FUP is further in the future to prevent regression
+        const existingFup = existing.firstUnpaidPremiumDate || existing.commencementDate;
+        const cloudFup = cp.firstUnpaidPremiumDate || cp.commencementDate;
+        let chosenFup = existingFup;
+        if (cloudFup && (!existingFup || cloudFup >= existingFup)) {
+          chosenFup = cloudFup;
+        }
+
+        policiesToPut.push({
+          ...existing,
+          ...cp,
+          id: existing.id,
+          customerId: existing.customerId || cp.customerId,
+          firstUnpaidPremiumDate: chosenFup,
+          premiumMode: cp.premiumMode || existing.premiumMode,
+          updatedAt: (cp.updatedAt && (!existing.updatedAt || cp.updatedAt > existing.updatedAt)) ? cp.updatedAt : existing.updatedAt,
+        });
+      } else {
+        policiesToPut.push(cp);
+        newlyPulledPolicies.push(cp);
+      }
+    }
 
     // Atomically merge records into local IndexedDB
     await targetDb.transaction('rw', [targetDb.policies, targetDb.customers, targetDb.reminders, targetDb.appSettings], async () => {
@@ -248,6 +293,26 @@ export const d1SyncService = {
       }
       if (cloudReminders.length > 0) {
         await targetDb.reminders.bulkPut(cloudReminders);
+      }
+      if (newlyPulledPolicies.length > 0) {
+        await targetDb.appSettings.put({
+          key: 'last_added_batch',
+          value: {
+            timestamp: new Date().toISOString(),
+            count: newlyPulledPolicies.length,
+            policyNumbers: newlyPulledPolicies.map((p) => p.policyNumber),
+            policies: newlyPulledPolicies.map((p) => ({
+              id: p.id,
+              policyNumber: p.policyNumber,
+              customerName: p.customerName,
+              premiumMode: p.premiumMode,
+              firstUnpaidPremiumDate: p.firstUnpaidPremiumDate,
+              commencementDate: p.commencementDate,
+              createdAt: p.createdAt,
+            })),
+          },
+          updatedAt: new Date().toISOString(),
+        });
       }
       if (cloudProfile) {
         await targetDb.appSettings.put({
@@ -332,17 +397,29 @@ export const d1SyncService = {
   },
 
   /**
+   * Helper to retrieve currently authenticated agencyCode and pin from any storage layer
+   */
+  getCredentials(): { agencyCode: string | null; pin: string | null } {
+    if (typeof window === 'undefined') return { agencyCode: null, pin: null };
+    const agencyCode =
+      sessionStorage.getItem('lic_active_agency_code') ||
+      localStorage.getItem('lic_active_agency_code') ||
+      localStorage.getItem('lic_last_agency_code') ||
+      null;
+    const pin =
+      sessionStorage.getItem('lic_session_pin') ||
+      localStorage.getItem('lic_session_pin') ||
+      null;
+    return { agencyCode, pin };
+  },
+
+  /**
    * Automatically synchronize current agent data with Cloudflare D1 in background.
    * Debounced to batch rapid consecutive updates.
    */
   triggerAutoSync(delayMs = 1200): void {
     if (typeof window === 'undefined') return;
-    const agencyCode =
-      sessionStorage.getItem('lic_active_agency_code') ||
-      localStorage.getItem('lic_active_agency_code');
-    const pin =
-      sessionStorage.getItem('lic_session_pin') ||
-      localStorage.getItem('lic_session_pin');
+    const { agencyCode, pin } = this.getCredentials();
     if (!agencyCode || !pin) return;
 
     if (autoSyncTimer) {

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText,
@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { extractCommissionBillFromPdf, extractCommissionBillFromExcel } from '@/services/pdf/extractCommissionBill';
 import { commissionBillService } from '@/services/commission/commissionBillService';
-import { ensureDataSynchronized } from '@/db/database';
+import { db, ensureDataSynchronized } from '@/db/database';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { Button } from '@/components/shared/Button';
 import { Badge } from '@/components/shared/Badge';
@@ -49,6 +49,35 @@ export function CommissionBillPage() {
     createdCount: number;
     skippedCount: number;
   } | null>(null);
+
+  // Recently Added Batch History
+  const [lastAddedBatch, setLastAddedBatch] = useState<{
+    timestamp: string;
+    count: number;
+    policyNumbers: string[];
+    policies?: Array<{
+      id: string;
+      policyNumber: string;
+      customerName: string;
+      premiumMode: string;
+      firstUnpaidPremiumDate: string;
+      commencementDate?: string;
+      createdAt?: string;
+    }>;
+  } | null>(null);
+
+  const loadLastAddedBatch = async () => {
+    try {
+      const item = await db.appSettings.get('last_added_batch');
+      if (item && item.value) {
+        setLastAddedBatch(item.value as any);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadLastAddedBatch();
+  }, []);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -139,6 +168,8 @@ export function CommissionBillPage() {
         createdCount: result.createdCount,
         skippedCount: result.skippedCount,
       });
+
+      await loadLastAddedBatch();
 
       // Refresh items list to reflect updated DB state
       const targetIds = new Set(targetItems.map((t) => t.id));
@@ -653,6 +684,80 @@ export function CommissionBillPage() {
         </div>
       )}
 
+      {/* History of Recently Added Policies */}
+      {lastAddedBatch && lastAddedBatch.count > 0 && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-amber-50 dark:bg-amber-950/60 rounded-xl text-amber-600 dark:text-amber-400">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>History of Last Added Policies</span>
+                  <Badge variant="warning" size="sm" className="font-bold">
+                    {lastAddedBatch.count} New
+                  </Badge>
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Auto-added from Bill on {formatDate(lastAddedBatch.timestamp)}
+                </p>
+              </div>
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/policies?filter=recently_added')}
+              leftIcon={<ArrowRight className="w-3.5 h-3.5" />}
+              className="text-xs font-semibold self-start sm:self-auto text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+            >
+              View in Policies List
+            </Button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 uppercase text-[10px] tracking-wider font-bold">
+                <tr>
+                  <th className="py-2.5 px-3">Policy No</th>
+                  <th className="py-2.5 px-3">Policyholder</th>
+                  <th className="py-2.5 px-3">Mode</th>
+                  <th className="py-2.5 px-3">Current FUP</th>
+                  <th className="py-2.5 px-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
+                {(lastAddedBatch.policies || lastAddedBatch.policyNumbers.map((no) => ({ policyNumber: no, customerName: 'Customer', premiumMode: 'Half-Yearly', firstUnpaidPremiumDate: '' }))).map((p, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+                    <td className="py-2.5 px-3 font-mono font-bold text-slate-900 dark:text-white">
+                      {p.policyNumber}
+                    </td>
+                    <td className="py-2.5 px-3 text-slate-800 dark:text-slate-200">
+                      {p.customerName || 'Customer'}
+                    </td>
+                    <td className="py-2.5 px-3 text-slate-500">
+                      {p.premiumMode || 'Half-Yearly'}
+                    </td>
+                    <td className="py-2.5 px-3 font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                      {formatDate(p.firstUnpaidPremiumDate) || 'Updated'}
+                    </td>
+                    <td className="py-2.5 px-3 text-right">
+                      <button
+                        onClick={() => navigate(`/policies?search=${p.policyNumber}`)}
+                        className="text-blue-600 dark:text-blue-400 hover:underline font-semibold"
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Success Commitment Dialog */}
       {commitResult && (
         <Modal
@@ -670,7 +775,7 @@ export function CommissionBillPage() {
                 Due Dates Updated Successfully!
               </h3>
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-                Your policy due dates have been advanced and saved to your device.
+                Your policy due dates have been advanced and saved to your device and synced to cloud.
               </p>
             </div>
 
@@ -695,14 +800,24 @@ export function CommissionBillPage() {
               When these policies are viewed anywhere in the app, the new due dates are shown automatically.
             </p>
 
-            <div className="flex items-center justify-center gap-2 pt-2">
-              <Button
-                variant="primary"
-                onClick={() => navigate('/policies')}
-                className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                View Policies
-              </Button>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2">
+              {commitResult.createdCount > 0 ? (
+                <Button
+                  variant="primary"
+                  onClick={() => navigate('/policies?filter=recently_added')}
+                  className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  View Last Added Policies ({commitResult.createdCount})
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  onClick={() => navigate('/policies')}
+                  className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  View Policies
+                </Button>
+              )}
               <Button
                 variant="outline"
                 onClick={() => setCommitResult(null)}

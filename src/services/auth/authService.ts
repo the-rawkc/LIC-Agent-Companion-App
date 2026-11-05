@@ -25,16 +25,7 @@ const ACTIVE_AGENCY_KEY = 'lic_active_agency_code';
 const UNLOCKED_KEY = 'lic_app_unlocked';
 const LAST_AGENCY_KEY = 'lic_last_agency_code';
 
-// Clean up any stale persistent auth flags from localStorage so opening in a new session/browser always requires PIN authentication
-if (typeof window !== 'undefined') {
-  try {
-    localStorage.removeItem(AUTH_FLAG_KEY);
-    localStorage.removeItem(ACTIVE_AGENCY_KEY);
-    localStorage.removeItem(UNLOCKED_KEY);
-  } catch {
-    // ignore
-  }
-}
+// Preserve active agency session across tabs and refreshes for seamless multi-device parity
 
 export const authService = {
   /**

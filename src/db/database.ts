@@ -149,6 +149,24 @@ export async function ensureDataSynchronized(): Promise<void> {
         await legacy.auditLogs.bulkPut(auditLogs);
       });
       hasAutoSynced = true;
+    } else if (activeCount > 0 && legacyCount > 0 && activeCount !== legacyCount) {
+      // Reconcile records between active agent DB and legacy DB
+      const [activeList, legacyList] = await Promise.all([
+        active.policies.toArray(),
+        legacy.policies.toArray(),
+      ]);
+      const activeNums = new Set(activeList.map((p) => p.policyNumber.replace(/[^0-9]/g, '')));
+      const legacyNums = new Set(legacyList.map((p) => p.policyNumber.replace(/[^0-9]/g, '')));
+
+      const missingInLegacy = activeList.filter((p) => !legacyNums.has(p.policyNumber.replace(/[^0-9]/g, '')));
+      if (missingInLegacy.length > 0) {
+        await legacy.policies.bulkPut(missingInLegacy);
+      }
+      const missingInActive = legacyList.filter((p) => !activeNums.has(p.policyNumber.replace(/[^0-9]/g, '')));
+      if (missingInActive.length > 0) {
+        await active.policies.bulkPut(missingInActive);
+      }
+      hasAutoSynced = true;
     }
   } catch (err) {
     console.warn('Auto data sync notice:', err);

@@ -225,9 +225,10 @@ export const commissionBillService = {
     let skippedCount = 0;
     let failedCount = 0;
     const errors: string[] = [];
+    const createdPolicies: Policy[] = [];
 
     // Execute within a Dexie transactional boundary to prevent partial writes
-    await db.transaction('rw', [db.policies, db.customers, db.auditLogs], async () => {
+    await db.transaction('rw', [db.policies, db.customers, db.auditLogs, db.appSettings], async () => {
       for (const item of items) {
         if (!item.selected) {
           skippedCount++;
@@ -329,6 +330,21 @@ export const commissionBillService = {
             };
 
             await db.policies.add(newPolicy);
+
+            await db.auditLogs.add({
+              id: generateUUID(),
+              entityType: 'policy',
+              entityId: newPolicyId,
+              action: 'create',
+              timestamp: now,
+              summary: `Policy ${item.policyNo} (${item.customerName}) auto-created from Bill with FUP ${item.calculatedNewFup} (Mode: ${item.mode}).`,
+              changedFields: {
+                firstUnpaidPremiumDate: { old: null, new: item.calculatedNewFup },
+                premiumMode: { old: null, new: item.mode },
+              },
+            });
+
+            createdPolicies.push(newPolicy);
             createdCount++;
           } else {
             skippedCount++;
@@ -338,10 +354,44 @@ export const commissionBillService = {
           errors.push(`Error processing ${item.policyNo}: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
+
+      // Persist the batch history of newly added policies for auditing & viewing
+      if (createdPolicies.length > 0) {
+        await db.appSettings.put({
+          key: 'last_added_batch',
+          value: {
+            timestamp: now,
+            count: createdPolicies.length,
+            policyNumbers: createdPolicies.map((p) => p.policyNumber),
+            policies: createdPolicies.map((p) => ({
+              id: p.id,
+              policyNumber: p.policyNumber,
+              customerName: p.customerName,
+              premiumMode: p.premiumMode,
+              firstUnpaidPremiumDate: p.firstUnpaidPremiumDate,
+              commencementDate: p.commencementDate,
+              createdAt: p.createdAt,
+            })),
+          },
+          updatedAt: now,
+        });
+      }
     });
 
     if (updatedCount > 0 || createdCount > 0) {
-      d1SyncService.triggerAutoSync();
+      // Immediate push to Cloudflare D1 so updates are instantaneously live across all agent devices
+      const { agencyCode, pin } = d1SyncService.getCredentials();
+      if (agencyCode && pin) {
+        try {
+          await d1SyncService.pushToCloud(agencyCode, pin);
+          console.log(`[CommissionBill] Direct Cloud sync successfully completed for Agent ${agencyCode}`);
+        } catch (e) {
+          console.warn('[CommissionBill] Direct Cloud sync error, falling back to background autoSync:', e);
+          d1SyncService.triggerAutoSync();
+        }
+      } else {
+        d1SyncService.triggerAutoSync();
+      }
     }
 
     return {

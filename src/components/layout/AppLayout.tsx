@@ -29,6 +29,7 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { settingsRepository } from '@/db/repositories/settingsRepository';
 import { profileRepository, type AgentProfile } from '@/db/repositories/profileRepository';
 import { authService } from '@/services/auth/authService';
+import { d1SyncService } from '@/services/cloud/d1SyncService';
 
 export interface AppLayoutProps {
   children: React.ReactNode;
@@ -112,6 +113,47 @@ export function AppLayout({ children }: AppLayoutProps) {
   useEffect(() => {
     setIsMoreMenuOpen(false);
   }, [location.pathname]);
+
+  // Continuous background cloud sync across multiple devices & tabs
+  useEffect(() => {
+    let isSyncing = false;
+    const syncFromCloud = async () => {
+      if (isSyncing || typeof navigator === 'undefined' || !navigator.onLine) return;
+      const { agencyCode, pin } = d1SyncService.getCredentials();
+      if (!agencyCode || !pin) return;
+      try {
+        isSyncing = true;
+        await d1SyncService.pullFromCloud(agencyCode, pin);
+      } catch (err) {
+        // Silent background fallback
+      } finally {
+        isSyncing = false;
+      }
+    };
+
+    // Sync on initial app load
+    syncFromCloud();
+
+    // Sync whenever tab becomes visible (e.g. user opens device or switches back to tab)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        syncFromCloud();
+      }
+    };
+
+    // Sync when device reconnects to internet
+    const handleOnline = () => {
+      syncFromCloud();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, []);
 
   const navItems = [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
