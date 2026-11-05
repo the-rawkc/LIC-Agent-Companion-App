@@ -22,6 +22,7 @@ import {
 import { policyRepository, type PolicyFilterOptions } from '@/db/repositories/policyRepository';
 import { customerRepository } from '@/db/repositories/customerRepository';
 import { settingsRepository } from '@/db/repositories/settingsRepository';
+import { ensureDataSynchronized } from '@/db/database';
 import { backupService } from '@/services/backup/backupService';
 import { importService } from '@/services/import/importService';
 import { formatCurrency, formatDate, advanceFupDate, generateUUID } from '@/utils/formatters';
@@ -121,6 +122,7 @@ export function PoliciesPage() {
   async function loadPolicies() {
     setIsLoading(true);
     try {
+      await ensureDataSynchronized();
       const filters: PolicyFilterOptions = {};
       if (selectedPlan) filters.planCode = selectedPlan;
       if (selectedMode) filters.premiumMode = selectedMode;

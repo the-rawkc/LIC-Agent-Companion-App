@@ -20,7 +20,6 @@ import { extractPoliciesFromPdf } from '@/services/pdf/extractPdfText';
 import { extractPoliciesFromExcel } from '@/services/excel/extractExcelData';
 import { importService, type CommitImportOptions } from '@/services/import/importService';
 import { db } from '@/db/database';
-import { SAMPLE_RAW_POLICY_ROWS } from '@/services/sampleData/licSampleRecords';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { Button } from '@/components/shared/Button';
 import { Badge } from '@/components/shared/Badge';
@@ -136,21 +135,6 @@ export function ImportPage() {
     } finally {
       setIsProcessing(false);
       setProgress(null);
-    }
-  };
-
-  const handleLoadDemo = async () => {
-    setIsProcessing(true);
-    setFileType('excel');
-    setFile({ name: 'user_uploaded_policies.xlsx' } as any);
-    setDuplicateHandling('replace');
-    try {
-      const previewSummary = await importService.preparePreview(SAMPLE_RAW_POLICY_ROWS, 1, [
-        'Loaded verified 1,516 policies matching 100% with exact customer names and policy numbers.'
-      ]);
-      setPreview(previewSummary);
-    } finally {
-      setIsProcessing(false);
     }
   };
 
@@ -305,17 +289,9 @@ export function ImportPage() {
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1.5 max-w-md mx-auto">
                 Supports official LIC PDF agent reports and Excel registers (<strong>.xlsx</strong>, <strong>.xls</strong>, <strong>.csv</strong>). 100% processed privately on your device.
               </p>
-              <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+              <div className="mt-5 flex items-center justify-center">
                 <Button variant="primary" size="sm" onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }} leftIcon={<Upload className="w-3.5 h-3.5" />}>
                   Choose Document (PDF / Excel)
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={(e) => { e.stopPropagation(); handleLoadDemo(); }}
-                  leftIcon={<Sparkles className="w-3.5 h-3.5 text-amber-500" />}
-                >
-                  Load Uploaded Excel (1,516 Policies)
                 </Button>
               </div>
             </div>

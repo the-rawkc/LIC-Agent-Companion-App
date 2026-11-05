@@ -50,7 +50,17 @@ const dbInstances = new Map<string, LICDatabase>();
 
 export function getActiveAgencyCode(): string | null {
   if (typeof window === 'undefined') return null;
-  return sessionStorage.getItem('lic_active_agency_code') || null;
+  const code =
+    sessionStorage.getItem('lic_active_agency_code') ||
+    localStorage.getItem('lic_active_agency_code') ||
+    localStorage.getItem('lic_last_agency_code') ||
+    null;
+  if (code && !sessionStorage.getItem('lic_active_agency_code')) {
+    try {
+      sessionStorage.setItem('lic_active_agency_code', code);
+    } catch {}
+  }
+  return code;
 }
 
 export function getActiveDbName(): string {
@@ -89,8 +99,60 @@ export function switchAgentDatabase(agencyCode: string): LICDatabase {
   if (typeof window !== 'undefined') {
     sessionStorage.setItem('lic_active_agency_code', sanitized);
     localStorage.setItem('lic_active_agency_code', sanitized);
+    localStorage.setItem('lic_last_agency_code', sanitized);
   }
   return getDatabase(sanitized);
+}
+
+/**
+ * Automatically synchronizes policies and customer records across database
+ * instances so the user always sees the exact same data everywhere without clicking buttons.
+ */
+let hasAutoSynced = false;
+export async function ensureDataSynchronized(): Promise<void> {
+  if (hasAutoSynced || typeof window === 'undefined') return;
+  try {
+    const active = getDatabase();
+    const legacy = getLegacyDatabase();
+    if (active.name === legacy.name) return;
+
+    const [activeCount, legacyCount] = await Promise.all([
+      active.policies.count(),
+      legacy.policies.count(),
+    ]);
+
+    if (activeCount === 0 && legacyCount > 0) {
+      const [policies, customers, reminders, auditLogs] = await Promise.all([
+        legacy.policies.toArray(),
+        legacy.customers.toArray(),
+        legacy.reminders.toArray(),
+        legacy.auditLogs.toArray(),
+      ]);
+      await active.transaction('rw', [active.policies, active.customers, active.reminders, active.auditLogs], async () => {
+        await active.policies.bulkPut(policies);
+        await active.customers.bulkPut(customers);
+        await active.reminders.bulkPut(reminders);
+        await active.auditLogs.bulkPut(auditLogs);
+      });
+      hasAutoSynced = true;
+    } else if (legacyCount === 0 && activeCount > 0) {
+      const [policies, customers, reminders, auditLogs] = await Promise.all([
+        active.policies.toArray(),
+        active.customers.toArray(),
+        active.reminders.toArray(),
+        active.auditLogs.toArray(),
+      ]);
+      await legacy.transaction('rw', [legacy.policies, legacy.customers, legacy.reminders, legacy.auditLogs], async () => {
+        await legacy.policies.bulkPut(policies);
+        await legacy.customers.bulkPut(customers);
+        await legacy.reminders.bulkPut(reminders);
+        await legacy.auditLogs.bulkPut(auditLogs);
+      });
+      hasAutoSynced = true;
+    }
+  } catch (err) {
+    console.warn('Auto data sync notice:', err);
+  }
 }
 
 /**

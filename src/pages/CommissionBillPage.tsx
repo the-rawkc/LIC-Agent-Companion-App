@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { extractCommissionBillFromPdf, extractCommissionBillFromExcel } from '@/services/pdf/extractCommissionBill';
 import { commissionBillService } from '@/services/commission/commissionBillService';
-import { SAMPLE_COMMISSION_ROWS, SAMPLE_COMMISSION_META } from '@/services/sampleData/licSampleCommissionBill';
+import { ensureDataSynchronized } from '@/db/database';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { Button } from '@/components/shared/Button';
 import { Badge } from '@/components/shared/Badge';
@@ -69,6 +69,7 @@ export function CommissionBillPage() {
     setProgress({ page: 1, total: 1, percentage: 10 });
 
     try {
+      await ensureDataSynchronized();
       if (isPdf) {
         const parsed = await extractCommissionBillFromPdf(selectedFile, (p) => setProgress(p));
         setBatchInfo(parsed.batchInfo || null);
@@ -88,26 +89,6 @@ export function CommissionBillPage() {
     } finally {
       setIsProcessing(false);
       setProgress(null);
-    }
-  };
-
-  const handleLoadSample = async () => {
-    setIsProcessing(true);
-    setFile(null);
-    setBatchInfo(SAMPLE_COMMISSION_META.batchInfo);
-    setAgencyCode(SAMPLE_COMMISSION_META.agencyCode);
-    setBillTotals({
-      premium: SAMPLE_COMMISSION_META.totalPremium,
-      commission: SAMPLE_COMMISSION_META.totalCommission,
-    });
-
-    try {
-      const staged = await commissionBillService.preparePreview(SAMPLE_COMMISSION_ROWS);
-      setItems(staged);
-    } catch (err) {
-      alert(`Error loading sample data: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setIsProcessing(false);
     }
   };
 
@@ -219,7 +200,7 @@ export function CommissionBillPage() {
                 FUP Update
               </h1>
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-                Upload your LIC commission bill (PDF/Excel) to automatically advance FUP based on paid due dates &amp; policy modes
+                Upload your LIC commission bill (PDF or Excel) to update next due dates (FUP)
               </p>
             </div>
           </div>
@@ -241,15 +222,6 @@ export function CommissionBillPage() {
               <span>Reset</span>
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleLoadSample}
-            className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/30"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Load Annexure-A Sample Bill</span>
-          </Button>
         </div>
       </div>
 
@@ -271,49 +243,40 @@ export function CommissionBillPage() {
 
             <div>
               <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
-                Upload Agency Commission Bill (Annexure-A)
+                Upload Commission Bill
               </h3>
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-                Upload the monthly/fortnightly commission bill PDF received from LIC portal.
+                Choose the commission bill PDF or Excel file received from LIC portal.
               </p>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            <div className="flex items-center justify-center pt-2">
               <Button
                 variant="primary"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isProcessing}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
               >
                 <FileText className="w-4 h-4" />
-                <span>Select PDF or Excel File</span>
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleLoadSample}
-                disabled={isProcessing}
-                className="w-full sm:w-auto flex items-center justify-center gap-2"
-              >
-                <Sparkles className="w-4 h-4 text-amber-500" />
-                <span>Try Sample Bill (11 Policies)</span>
+                <span>Choose PDF or Excel File</span>
               </Button>
             </div>
 
-            {/* How it works note */}
+            {/* Simple explanatory note */}
             <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800/80 text-left text-xs text-slate-500 space-y-2">
               <div className="flex items-center gap-1.5 font-semibold text-slate-700 dark:text-slate-300">
                 <HelpCircle className="w-3.5 h-3.5 text-blue-500" />
-                <span>How Commission Bill FUP updating works:</span>
+                <span>How this works:</span>
               </div>
               <ul className="list-disc pl-5 space-y-1 text-slate-500 dark:text-slate-400">
                 <li>
-                  The <strong className="text-slate-700 dark:text-slate-300">DueDt</strong> column acts as the last date when that premium was paid.
+                  The <strong className="text-slate-700 dark:text-slate-300">Due Date</strong> in the bill is taken as the last paid date.
                 </li>
                 <li>
-                  Using the policy mode (<strong className="text-slate-700 dark:text-slate-300">Half-Yearly</strong>, <strong className="text-slate-700 dark:text-slate-300">Quarterly</strong>, <strong className="text-slate-700 dark:text-slate-300">Yearly</strong>, or <strong className="text-slate-700 dark:text-slate-300">Monthly</strong>), the next FUP is automatically computed.
+                  The next due date is calculated automatically from the policy payment mode (Monthly, Quarterly, Half-Yearly, Yearly).
                 </li>
                 <li>
-                  Once updated, the new FUP appears across all app views (Policies, Reminders, Customer Details, and Dashboard).
+                  Updated dates appear everywhere in the app automatically.
                 </li>
               </ul>
             </div>
@@ -371,7 +334,7 @@ export function CommissionBillPage() {
 
             <div className="p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
               <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium uppercase flex items-center gap-1">
-                <TrendingUp className="w-3 h-3" /> Ready to Update
+                <TrendingUp className="w-3 h-3" /> Needs Update
               </span>
               <p className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
                 {readyCount}
@@ -380,7 +343,7 @@ export function CommissionBillPage() {
 
             <div className="p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
               <span className="text-[11px] text-blue-600 dark:text-blue-400 font-medium uppercase flex items-center gap-1">
-                <Check className="w-3 h-3" /> Up to Date
+                <Check className="w-3 h-3" /> Already Updated
               </span>
               <p className="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400 mt-0.5">
                 {upToDateCount}
@@ -389,7 +352,7 @@ export function CommissionBillPage() {
 
             <div className="p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
               <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium uppercase">
-                Not in App DB
+                Not in App
               </span>
               <p className="text-lg sm:text-xl font-black text-amber-600 dark:text-amber-400 mt-0.5">
                 {notInDbCount}
@@ -434,7 +397,7 @@ export function CommissionBillPage() {
                       : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100'
                   }`}
                 >
-                  Ready to Update ({readyCount})
+                  Needs Update ({readyCount})
                 </button>
                 <button
                   onClick={() => setStatusFilter('up_to_date')}
@@ -444,7 +407,7 @@ export function CommissionBillPage() {
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                   }`}
                 >
-                  Up to Date ({upToDateCount})
+                  Already Updated ({upToDateCount})
                 </button>
                 {notInDbCount > 0 && (
                   <button
@@ -455,7 +418,7 @@ export function CommissionBillPage() {
                         : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 hover:bg-amber-100'
                     }`}
                   >
-                    Not in DB ({notInDbCount})
+                    Not in App ({notInDbCount})
                   </button>
                 )}
               </div>
@@ -480,7 +443,7 @@ export function CommissionBillPage() {
                   onClick={() => handleSelectAll(true)}
                   className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
                 >
-                  Select Ready ({readyCount})
+                  Select All to Update ({readyCount})
                 </button>
                 <span className="text-slate-300 dark:text-slate-700">|</span>
                 <button
@@ -515,11 +478,11 @@ export function CommissionBillPage() {
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-2 shadow-xs"
                 >
                   {isCommitting ? (
-                    <span>Applying Updates...</span>
+                    <span>Saving Updates...</span>
                   ) : (
                     <>
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>Update FUP for {selectedCount} Policies</span>
+                      <span>Save Updates ({selectedCount})</span>
                     </>
                   )}
                 </Button>
@@ -551,11 +514,11 @@ export function CommissionBillPage() {
                     </th>
                     <th className="p-3 w-12 text-center">S.No</th>
                     <th className="p-3">Policy &amp; Customer</th>
-                    <th className="p-3">Paid Due Date (DueDt)</th>
+                    <th className="p-3">Paid Date</th>
                     <th className="p-3">Mode</th>
                     <th className="p-3">Current FUP</th>
-                    <th className="p-3">New Projected FUP</th>
-                    <th className="p-3 text-right">Premium / Commn.</th>
+                    <th className="p-3">New FUP</th>
+                    <th className="p-3 text-right">Premium / Comm.</th>
                     <th className="p-3 text-center">Status</th>
                   </tr>
                 </thead>
@@ -677,19 +640,19 @@ export function CommissionBillPage() {
                           {isReady && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
                               <CheckCircle2 className="w-3 h-3" />
-                              Ready to Update
+                              Needs Update
                             </span>
                           )}
                           {isUpToDate && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300">
                               <Check className="w-3 h-3" />
-                              Up to Date
+                              Updated
                             </span>
                           )}
                           {!isMatched && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
                               <AlertTriangle className="w-3 h-3" />
-                              Not in DB
+                              Not in App
                             </span>
                           )}
                         </td>
@@ -708,7 +671,7 @@ export function CommissionBillPage() {
         <Modal
           isOpen={true}
           onClose={() => setCommitResult(null)}
-          title="FUP Updation Completed"
+          title="Updates Saved"
         >
           <div className="space-y-4 text-center py-2">
             <div className="w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
@@ -717,10 +680,10 @@ export function CommissionBillPage() {
 
             <div>
               <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                Policies Successfully Updated!
+                Due Dates Updated Successfully!
               </h3>
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-                The next First Unpaid Premium (F.U.P.) dates have been updated based on the paid due dates and policy modes.
+                Your policy due dates have been advanced and saved to your device.
               </p>
             </div>
 
@@ -742,7 +705,7 @@ export function CommissionBillPage() {
             </div>
 
             <p className="text-xs text-slate-500 italic">
-              When these policies are fetched anywhere in the app, the updated FUP dates are shown immediately.
+              When these policies are viewed anywhere in the app, the new due dates are shown automatically.
             </p>
 
             <div className="flex items-center justify-center gap-2 pt-2">

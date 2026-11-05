@@ -28,7 +28,7 @@ import { analyticsService, type DashboardStats } from '@/features/analytics/anal
 import { importService } from '@/services/import/importService';
 import { reminderRepository } from '@/db/repositories/reminderRepository';
 import { authService } from '@/services/auth/authService';
-import { getActiveAgencyCode } from '@/db/database';
+import { getActiveAgencyCode, ensureDataSynchronized } from '@/db/database';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 
 export function DashboardPage() {
@@ -46,6 +46,7 @@ export function DashboardPage() {
   async function loadDashboardData() {
     setIsLoading(true);
     try {
+      await ensureDataSynchronized();
       const code = getActiveAgencyCode();
       if (code) {
         // Ensure personal credentials and profile are migrated / restored
@@ -55,12 +56,10 @@ export function DashboardPage() {
       let data = await analyticsService.getDashboardStats();
       if (data.totalPolicies === 0) {
         if (code) {
-          const pin = sessionStorage.getItem('lic_session_pin') || undefined;
+          const pin = sessionStorage.getItem('lic_session_pin') || localStorage.getItem('lic_session_pin') || undefined;
           const res = await authService.autoRestoreOrMigrateData(code, pin);
           if (res.restored) {
             data = await analyticsService.getDashboardStats();
-            setRecoveredBanner(`Successfully restored ${res.count} policies into your workspace!`);
-            setTimeout(() => setRecoveredBanner(null), 6000);
           }
         }
       }

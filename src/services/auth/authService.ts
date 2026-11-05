@@ -66,8 +66,9 @@ export const authService = {
   isAuthenticated(): boolean {
     if (typeof window === 'undefined') return false;
     const isAuth = sessionStorage.getItem(AUTH_FLAG_KEY) === 'true';
-    const activeAgency = sessionStorage.getItem(ACTIVE_AGENCY_KEY);
-    return Boolean(isAuth && activeAgency);
+    const localAuth = localStorage.getItem('lic_auth_logged_in') === 'true';
+    const activeAgency = getActiveAgencyCode();
+    return Boolean((isAuth || localAuth) && activeAgency);
   },
 
   /**
@@ -79,15 +80,13 @@ export const authService = {
     sessionStorage.setItem(ACTIVE_AGENCY_KEY, sanitized);
     sessionStorage.setItem(AUTH_FLAG_KEY, 'true');
     sessionStorage.setItem(UNLOCKED_KEY, 'true');
+    localStorage.setItem('lic_auth_logged_in', 'true');
+    localStorage.setItem(ACTIVE_AGENCY_KEY, sanitized);
+    localStorage.setItem(LAST_AGENCY_KEY, sanitized);
     if (pin) {
       sessionStorage.setItem('lic_session_pin', pin.trim());
       localStorage.setItem('lic_session_pin', pin.trim());
     }
-    // Remember last agency for convenient login pre-fill, but never persist active auth
-    localStorage.setItem(LAST_AGENCY_KEY, sanitized);
-    localStorage.removeItem(ACTIVE_AGENCY_KEY);
-    localStorage.removeItem(AUTH_FLAG_KEY);
-    localStorage.removeItem(UNLOCKED_KEY);
   },
 
   /**
@@ -102,6 +101,7 @@ export const authService = {
     localStorage.removeItem('lic_session_pin');
     localStorage.removeItem(ACTIVE_AGENCY_KEY);
     localStorage.removeItem(AUTH_FLAG_KEY);
+    localStorage.removeItem('lic_auth_logged_in');
     localStorage.removeItem(UNLOCKED_KEY);
   },
 
