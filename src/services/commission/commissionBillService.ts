@@ -1,4 +1,4 @@
-import { db } from '@/db/database';
+import { db, ensureDataSynchronized } from '@/db/database';
 import { policyRepository } from '@/db/repositories/policyRepository';
 import { customerRepository } from '@/db/repositories/customerRepository';
 import { advanceFupDate, parseDateToISO, generateUUID, parseCleanNumber } from '@/utils/formatters';
@@ -71,6 +71,9 @@ export const commissionBillService = {
       groupedByPolicy.set(cleanPolNo, list);
     }
 
+    // Ensure data is synchronized across database instances
+    await ensureDataSynchronized();
+
     // Load all DB policies once for fast, 100% accurate lookup without race conditions
     const allDbPolicies = await db.policies.toArray();
     const dbPoliciesByNumber = new Map<string, Policy>();
@@ -78,6 +81,8 @@ export const commissionBillService = {
       const pClean = p.policyNumber.replace(/[^0-9]/g, '').trim();
       if (pClean) {
         dbPoliciesByNumber.set(pClean, p);
+        // Also map without leading zeros to match unpadded Excel numbers
+        dbPoliciesByNumber.set(pClean.replace(/^0+/, ''), p);
       }
     }
 
@@ -107,8 +112,9 @@ export const commissionBillService = {
       const totalPrem = rows.reduce((acc, r) => acc + parseCleanNumber(r.premium), 0);
       const totalComm = rows.reduce((acc, r) => acc + parseCleanNumber(r.commission), 0);
 
-      // Strict lookup in DB
-      const existing = dbPoliciesByNumber.get(cleanPolNo);
+      // Strict lookup in DB (supporting padded or unpadded policy numbers)
+      const existing =
+        dbPoliciesByNumber.get(cleanPolNo) || dbPoliciesByNumber.get(cleanPolNo.replace(/^0+/, ''));
 
       let effectiveMode: PremiumMode = 'Half-Yearly';
       let currentFup: string | null = null;
@@ -137,20 +143,19 @@ export const commissionBillService = {
       // Calculate projected next FUP from the latest paid due date
       const calculatedNewFup = advanceFupDate(paidDueDateIso, effectiveMode);
 
-      // Determine status strictly:
-      // If current DB FUP is already equal to or greater than the new calculated FUP
-      // (e.g. from an earlier upload or a newer bill), NEVER regress - mark as already up to date!
       let status: CommissionItemStatus = 'not_in_db';
-      let selected = false;
+      let selected = true;
 
       if (policyFound) {
         if (!currentFup || currentFup < calculatedNewFup) {
           status = 'ready_to_update';
-          selected = true; // Auto-select rows that need updating
+          selected = true;
         } else {
           status = 'already_up_to_date';
           selected = false;
         }
+      } else {
+        selected = true;
       }
 
       items.push({
@@ -212,7 +217,7 @@ export const commissionBillService = {
    */
   async commitUpdates(
     items: CommissionBillPreviewItem[],
-    options?: { autoCreateMissingPolicies?: boolean }
+    options?: { autoCreateMissingPolicies?: boolean; forceUpdate?: boolean }
   ): Promise<CommitCommissionUpdatesResult> {
     const now = new Date().toISOString();
     let updatedCount = 0;
@@ -230,38 +235,32 @@ export const commissionBillService = {
         }
 
         try {
-          if (item.policyFoundInDb && item.existingPolicyId) {
-            const policy = await db.policies.get(item.existingPolicyId);
-            if (!policy) {
-              failedCount++;
-              errors.push(`Policy ${item.policyNo} record could not be loaded.`);
-              continue;
-            }
+          let policy: Policy | undefined;
+          if (item.existingPolicyId) {
+            policy = await db.policies.get(item.existingPolicyId);
+          }
 
-            // DATA INTEGRITY CHECK: Strict Policy Number Verification
-            const cleanDbNum = policy.policyNumber.replace(/[^0-9]/g, '').trim();
+          if (!policy) {
+            // Fallback direct search in database by policy number
             const cleanItemNum = item.policyNo.replace(/[^0-9]/g, '').trim();
-            if (cleanDbNum !== cleanItemNum) {
-              failedCount++;
-              errors.push(
-                `Integrity check failed: Record ID ${policy.id} has policyNumber "${policy.policyNumber}" which does not match "${item.policyNo}". Aborting update for this row.`
-              );
-              continue;
-            }
+            const unpadded = cleanItemNum.replace(/^0+/, '');
+            const candidates = await db.policies.toArray();
+            policy = candidates.find((p) => {
+              const pClean = p.policyNumber.replace(/[^0-9]/g, '').trim();
+              return pClean === cleanItemNum || pClean.replace(/^0+/, '') === unpadded;
+            });
+          }
 
+          if (policy) {
             const oldFup = policy.firstUnpaidPremiumDate || policy.commencementDate;
 
-            // LATEST DATE SAFETY RULE:
-            // If the policy in the database already has an FUP that is equal to or greater
-            // than the calculated date (e.g. from an earlier upload of a newer bill),
-            // NEVER regress or overwrite the newer date! Always preserve the latest date.
-            if (oldFup && oldFup >= item.calculatedNewFup) {
+            // Date safety rule: preserve latest date unless forceUpdate is specified
+            if (oldFup && oldFup >= item.calculatedNewFup && !options?.forceUpdate) {
               skippedCount++;
               continue;
             }
 
-            // Only update firstUnpaidPremiumDate, premiumMode, recordStatus (reactivating if lapsed), and updatedAt
-            // All other fields (customerId, customerName, planCode, sumAssured, dates, notes) remain untouched!
+            // Update firstUnpaidPremiumDate, premiumMode, recordStatus, and updatedAt
             const updatedPolicy: Policy = {
               ...policy,
               firstUnpaidPremiumDate: item.calculatedNewFup,
@@ -278,7 +277,7 @@ export const commissionBillService = {
               entityId: policy.id,
               action: 'update',
               timestamp: now,
-              summary: `Updated FUP for Policy ${policy.policyNumber} via Commission Bill: ${oldFup} ➔ ${item.calculatedNewFup} (Paid Due Date: ${item.paidDueDate}, Mode: ${item.mode}).`,
+              summary: `Updated FUP for Policy ${policy.policyNumber} via Bill: ${oldFup} ➔ ${item.calculatedNewFup} (Paid Date: ${item.paidDueDate}, Mode: ${item.mode}).`,
               changedFields: {
                 firstUnpaidPremiumDate: { old: oldFup, new: item.calculatedNewFup },
                 premiumMode: { old: policy.premiumMode, new: item.mode },
@@ -286,8 +285,8 @@ export const commissionBillService = {
             });
 
             updatedCount++;
-          } else if (options?.autoCreateMissingPolicies) {
-            // Auto-create customer if missing
+          } else if (options?.autoCreateMissingPolicies ?? true) {
+            // Auto-create policy and customer if missing so all rows in the bill are saved!
             let customer = await customerRepository.findByNormalizedName(item.customerName);
             if (!customer) {
               const customerId = generateUUID();
@@ -312,11 +311,11 @@ export const commissionBillService = {
               term: 20,
               premiumPayingTerm: 20,
               originalPlanString: item.planTerm || planCode,
-              sumAssured: item.premiumAmount * 10,
+              sumAssured: (item.premiumAmount || 10000) * 10,
               commencementDate: item.riskDate || item.paidDueDate,
               premiumMode: item.mode,
               firstUnpaidPremiumDate: item.calculatedNewFup,
-              premiumAmount: item.premiumAmount,
+              premiumAmount: item.premiumAmount || 0,
               maturityDate: advanceFupDate(item.paidDueDate, 'Yearly'),
               dateOfBirth: null,
               sourceSerialNumber: item.sNo ?? null,

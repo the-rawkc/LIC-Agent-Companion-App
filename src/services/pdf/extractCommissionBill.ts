@@ -257,56 +257,177 @@ export async function extractCommissionBillFromPdf(
 }
 
 /**
- * Extract commission rows from an Excel or CSV file
+ * Extract commission rows from an Excel or CSV file with multi-row header detection,
+ * date serial parsing, and fallback cell scanning.
  */
 export async function extractCommissionBillFromExcel(file: File): Promise<CommissionBillParseResult> {
   const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: 'array' });
-  const sheetName = workbook.SheetNames[0];
-  const worksheet = workbook.Sheets[sheetName];
-  const rows: Record<string, any>[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
-
+  const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
   const items: RawCommissionRow[] = [];
   const warnings: string[] = [];
 
-  for (let idx = 0; idx < rows.length; idx++) {
-    const row = rows[idx];
-    const keys = Object.keys(row);
+  // Helper to format any cell value
+  const formatCellStr = (val: any): string => {
+    if (val === null || val === undefined) return '';
+    if (val instanceof Date) {
+      const iso = parseDateToISO(val);
+      return iso || '';
+    }
+    if (typeof val === 'number') {
+      // Check if it looks like an Excel date serial
+      if (val >= 20000 && val <= 65000) {
+        const iso = parseDateToISO(val);
+        if (iso) return iso;
+      }
+      return val.toLocaleString('fullwide', { useGrouping: false });
+    }
+    return String(val).trim();
+  };
 
-    const getVal = (...names: string[]) => {
-      for (const name of names) {
-        const foundKey = keys.find((k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === name.toLowerCase().replace(/[^a-z0-9]/g, ''));
-        if (foundKey && row[foundKey] !== undefined && row[foundKey] !== '') {
-          return String(row[foundKey]).trim();
+  for (const sheetName of workbook.SheetNames) {
+    const worksheet = workbook.Sheets[sheetName];
+    if (!worksheet) continue;
+
+    const matrix: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true, defval: '' });
+    if (!matrix || matrix.length === 0) continue;
+
+    // 1. Detect Header Row (search first 20 rows)
+    let headerRowIdx = -1;
+    let colMap: {
+      policy: number;
+      due: number;
+      name: number;
+      plan: number;
+      risk: number;
+      mode: number;
+    } = { policy: -1, due: -1, name: -1, plan: -1, risk: -1, mode: -1 };
+
+    for (let r = 0; r < Math.min(20, matrix.length); r++) {
+      const row = matrix[r];
+      if (!Array.isArray(row)) continue;
+
+      let polCol = -1;
+      let dueCol = -1;
+      let nameCol = -1;
+      let planCol = -1;
+      let riskCol = -1;
+      let modeCol = -1;
+
+      for (let c = 0; c < row.length; c++) {
+        const rawCell = formatCellStr(row[c]).toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (!rawCell) continue;
+
+        if (
+          polCol === -1 &&
+          (rawCell.includes('policyno') ||
+            rawCell.includes('policynumber') ||
+            rawCell === 'policy' ||
+            rawCell === 'polno' ||
+            rawCell === 'policynum')
+        ) {
+          polCol = c;
+        } else if (
+          dueCol === -1 &&
+          (rawCell.includes('duedt') ||
+            rawCell.includes('duedate') ||
+            rawCell === 'due' ||
+            rawCell.includes('fup') ||
+            rawCell.includes('lastpaid') ||
+            rawCell.includes('paiddate') ||
+            rawCell.includes('nextdue'))
+        ) {
+          dueCol = c;
+        } else if (
+          nameCol === -1 &&
+          (rawCell.includes('phname') ||
+            rawCell.includes('customername') ||
+            rawCell.includes('holdername') ||
+            rawCell === 'name' ||
+            rawCell.includes('partyname') ||
+            rawCell.includes('insured'))
+        ) {
+          nameCol = c;
+        } else if (
+          planCol === -1 &&
+          (rawCell.includes('plntm') || rawCell.includes('planterm') || rawCell === 'plan')
+        ) {
+          planCol = c;
+        } else if (
+          riskCol === -1 &&
+          (rawCell.includes('riskdate') || rawCell.includes('doc') || rawCell.includes('risk'))
+        ) {
+          riskCol = c;
+        } else if (
+          modeCol === -1 &&
+          (rawCell.includes('mode') || rawCell.includes('freq'))
+        ) {
+          modeCol = c;
         }
       }
-      return '';
-    };
 
-    const policyNo = getVal('policyno', 'policy', 'policynumber', 'policy_no');
-    const dueDt = getVal('duedt', 'duedate', 'due_date', 'lastpaiddate', 'fup');
-    const phName = getVal('phname', 'name', 'customername', 'holdername');
-    const planTerm = getVal('plntm', 'plan', 'planterm', 'plantermppt');
-    const riskDate = getVal('riskdate', 'doc', 'commencementdate');
-    const cbo = getVal('cbo', 'branch', 'office');
-    const adjDate = getVal('adjdate', 'adjustmentdate', 'receiptdate');
-    const premium = parseCleanNumber(getVal('premium', 'prem', 'amount'));
-    const commission = parseCleanNumber(getVal('commn', 'commission', 'comm'));
+      if (polCol !== -1 && dueCol !== -1) {
+        headerRowIdx = r;
+        colMap = { policy: polCol, due: dueCol, name: nameCol, plan: planCol, risk: riskCol, mode: modeCol };
+        break;
+      }
+    }
 
-    if (policyNo && /^\d{6,12}$/.test(policyNo.replace(/[^0-9]/g, '')) && dueDt) {
-      items.push({
-        sNo: String(idx + 1),
-        phName: phName || `Policy ${policyNo}`,
-        policyNo: policyNo.replace(/[^0-9]/g, ''),
-        planTerm,
-        dueDt,
-        riskDate,
-        cbo,
-        adjDate,
-        premium,
-        commission,
-        pageNumber: 1,
-      });
+    // 2. Extract Data Rows using detected Header or Intelligent Cell Scanning
+    const startRow = headerRowIdx !== -1 ? headerRowIdx + 1 : 0;
+
+    for (let r = startRow; r < matrix.length; r++) {
+      const row = matrix[r];
+      if (!Array.isArray(row) || row.length === 0) continue;
+
+      let policyNo = '';
+      let dueDt = '';
+      let phName = '';
+      let planTerm = '';
+      let riskDate = '';
+
+      if (headerRowIdx !== -1 && colMap.policy !== -1) {
+        policyNo = formatCellStr(row[colMap.policy]).replace(/[^0-9]/g, '');
+        dueDt = formatCellStr(row[colMap.due]);
+        if (colMap.name !== -1) phName = formatCellStr(row[colMap.name]);
+        if (colMap.plan !== -1) planTerm = formatCellStr(row[colMap.plan]);
+        if (colMap.risk !== -1) riskDate = formatCellStr(row[colMap.risk]);
+      }
+
+      // Fallback: If header wasn't found or row was malformed, scan cells in row
+      if (!policyNo || !dueDt) {
+        for (let c = 0; c < row.length; c++) {
+          const val = formatCellStr(row[c]);
+          const digitsOnly = val.replace(/[^0-9]/g, '');
+          if (!policyNo && digitsOnly.length >= 8 && digitsOnly.length <= 10) {
+            policyNo = digitsOnly;
+          } else if (!dueDt && parseDateToISO(val)) {
+            dueDt = val;
+          } else if (!phName && val.length > 2 && /[A-Za-z]/.test(val) && !parseDateToISO(val)) {
+            phName = val;
+          }
+        }
+      }
+
+      const isoDue = parseDateToISO(dueDt);
+      if (policyNo && policyNo.length >= 6 && isoDue) {
+        items.push({
+          sNo: String(items.length + 1),
+          phName: phName || `Policy ${policyNo}`,
+          policyNo,
+          planTerm,
+          dueDt: isoDue,
+          riskDate: parseDateToISO(riskDate) || undefined,
+          cbo: '',
+          adjDate: undefined,
+          premium: 0,
+          commission: 0,
+          pageNumber: 1,
+        });
+      }
+    }
+
+    if (items.length > 0) {
+      break; // Found records in this sheet
     }
   }
 

@@ -37,7 +37,6 @@ export function CommissionBillPage() {
   const [progress, setProgress] = useState<{ page: number; total: number; percentage: number } | null>(null);
   const [batchInfo, setBatchInfo] = useState<string | null>(null);
   const [agencyCode, setAgencyCode] = useState<string | null>(null);
-  const [billTotals, setBillTotals] = useState<{ premium: number; commission: number } | null>(null);
 
   const [items, setItems] = useState<CommissionBillPreviewItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -74,9 +73,6 @@ export function CommissionBillPage() {
         const parsed = await extractCommissionBillFromPdf(selectedFile, (p) => setProgress(p));
         setBatchInfo(parsed.batchInfo || null);
         setAgencyCode(parsed.agencyCode || null);
-        if (parsed.totalPremium && parsed.totalCommission) {
-          setBillTotals({ premium: parsed.totalPremium, commission: parsed.totalCommission });
-        }
         const staged = await commissionBillService.preparePreview(parsed.items);
         setItems(staged);
       } else {
@@ -124,17 +120,18 @@ export function CommissionBillPage() {
     );
   };
 
-  const handleApplyUpdates = async () => {
-    const selectedCount = items.filter((i) => i.selected).length;
-    if (selectedCount === 0) {
+  const handleApplyUpdates = async (updateAll: boolean = false) => {
+    const targetItems = updateAll ? items.map((i) => ({ ...i, selected: true })) : items.filter((i) => i.selected);
+    if (targetItems.length === 0) {
       alert('Please select at least one policy to update.');
       return;
     }
 
     setIsCommitting(true);
     try {
-      const result = await commissionBillService.commitUpdates(items, {
-        autoCreateMissingPolicies: autoCreateMissing,
+      const result = await commissionBillService.commitUpdates(targetItems, {
+        autoCreateMissingPolicies: true,
+        forceUpdate: updateAll,
       });
 
       setCommitResult({
@@ -144,13 +141,14 @@ export function CommissionBillPage() {
       });
 
       // Refresh items list to reflect updated DB state
+      const targetIds = new Set(targetItems.map((t) => t.id));
       const refreshed = items.map((item) => {
-        if (item.selected) {
+        if (targetIds.has(item.id)) {
           return {
             ...item,
             currentFup: item.calculatedNewFup,
             status: 'already_up_to_date' as const,
-            selected: false,
+            selected: true,
             policyFoundInDb: true,
           };
         }
@@ -183,8 +181,6 @@ export function CommissionBillPage() {
   const upToDateCount = items.filter((i) => i.status === 'already_up_to_date').length;
   const notInDbCount = items.filter((i) => i.status === 'not_in_db').length;
   const selectedCount = items.filter((i) => i.selected).length;
-  const totalBillCommission = billTotals?.commission ?? items.reduce((sum, i) => sum + i.commissionAmount, 0);
-  const totalBillPremium = billTotals?.premium ?? items.reduce((sum, i) => sum + i.premiumAmount, 0);
 
   return (
     <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
@@ -200,7 +196,7 @@ export function CommissionBillPage() {
                 FUP Update
               </h1>
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-                Upload your LIC commission bill (PDF or Excel) to update next due dates (FUP)
+                Upload your LIC bill (PDF or Excel) to update next due dates (FUP)
               </p>
             </div>
           </div>
@@ -208,19 +204,31 @@ export function CommissionBillPage() {
 
         <div className="flex items-center gap-2">
           {items.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setItems([]);
-                setFile(null);
-                setBatchInfo(null);
-              }}
-              className="flex items-center gap-1.5"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reset</span>
-            </Button>
+            <>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => handleApplyUpdates(true)}
+                disabled={isCommitting}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-1.5 shadow-sm"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Update All ({items.length}) Policies</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setItems([]);
+                  setFile(null);
+                  setBatchInfo(null);
+                }}
+                className="flex items-center gap-1.5"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset</span>
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -324,7 +332,7 @@ export function CommissionBillPage() {
           )}
 
           {/* Metric Summary Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
               <span className="text-[11px] text-slate-400 font-medium uppercase">Total Policies</span>
               <p className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-0.5">
@@ -356,20 +364,6 @@ export function CommissionBillPage() {
               </span>
               <p className="text-lg sm:text-xl font-black text-amber-600 dark:text-amber-400 mt-0.5">
                 {notInDbCount}
-              </p>
-            </div>
-
-            <div className="p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
-              <span className="text-[11px] text-slate-400 font-medium uppercase">Bill Premium</span>
-              <p className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mt-0.5 truncate" title={formatCurrency(totalBillPremium)}>
-                {formatCurrency(totalBillPremium)}
-              </p>
-            </div>
-
-            <div className="p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
-              <span className="text-[11px] text-slate-400 font-medium uppercase">Bill Commission</span>
-              <p className="text-base sm:text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 truncate" title={formatCurrency(totalBillCommission)}>
-                {formatCurrency(totalBillCommission)}
               </p>
             </div>
           </div>
@@ -466,26 +460,32 @@ export function CommissionBillPage() {
                 )}
               </div>
 
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                  {selectedCount} of {items.length} selected
-                </span>
-
+              <div className="flex items-center gap-2">
                 <Button
                   variant="primary"
-                  onClick={handleApplyUpdates}
-                  disabled={selectedCount === 0 || isCommitting}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-2 shadow-xs"
+                  onClick={() => handleApplyUpdates(true)}
+                  disabled={items.length === 0 || isCommitting}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-1.5 shadow-sm text-xs px-3.5 py-2"
                 >
                   {isCommitting ? (
-                    <span>Saving Updates...</span>
+                    <span>Updating Policies...</span>
                   ) : (
                     <>
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>Save Updates ({selectedCount})</span>
+                      <span>Select All &amp; Update ({items.length} Policies)</span>
                     </>
                   )}
                 </Button>
+                {selectedCount > 0 && selectedCount !== items.length && (
+                  <Button
+                    variant="outline"
+                    onClick={() => handleApplyUpdates(false)}
+                    disabled={isCommitting}
+                    className="text-xs px-3 py-2"
+                  >
+                    Update Selected ({selectedCount})
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -518,7 +518,6 @@ export function CommissionBillPage() {
                     <th className="p-3">Mode</th>
                     <th className="p-3">Current FUP</th>
                     <th className="p-3">New FUP</th>
-                    <th className="p-3 text-right">Premium / Comm.</th>
                     <th className="p-3 text-center">Status</th>
                   </tr>
                 </thead>
@@ -621,18 +620,6 @@ export function CommissionBillPage() {
                               Advances from {formatDate(item.currentFup)}
                             </span>
                           )}
-                        </td>
-
-                        {/* Premium & Commission */}
-                        <td className="p-3 text-right">
-                          <div className="flex flex-col items-end">
-                            <span className="font-semibold text-slate-900 dark:text-white">
-                              {formatCurrency(item.premiumAmount)}
-                            </span>
-                            <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-                              Comm: {formatCurrency(item.commissionAmount)}
-                            </span>
-                          </div>
                         </td>
 
                         {/* Status Badge */}

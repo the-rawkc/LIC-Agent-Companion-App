@@ -84,4 +84,31 @@ describe('Commission Bill (Annexure-A) Parser & Mode Inference', () => {
     expect(normalizeMode('Mly')).toBe('Monthly');
     expect(normalizeMode('NACH')).toBe('Monthly');
   });
+
+  it('correctly handles duplicate rows by choosing the latest date in commissionBillService', async () => {
+    const rawRows = [
+      {
+        sNo: '1',
+        phName: 'Priyanshu Ruhela',
+        policyNo: '208793226',
+        dueDt: '15/03/2026',
+        premium: '16664.00',
+        commission: '833.20',
+      },
+      {
+        sNo: '2',
+        phName: 'Priyanshu Ruhela',
+        policyNo: '208793226',
+        dueDt: '15/09/2026',
+        premium: '16664.00',
+        commission: '833.20',
+      },
+    ];
+
+    const preview = await (await import('@/services/commission/commissionBillService')).commissionBillService.preparePreview(rawRows);
+    expect(preview.length).toBe(1);
+    expect(preview[0].policyNo).toBe('208793226');
+    expect(preview[0].paidDueDate).toBe('2026-09-15');
+    expect(preview[0].calculatedNewFup).toBe('2027-03-15');
+  });
 });

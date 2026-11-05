@@ -19,27 +19,51 @@ export function formatCurrency(amount: number | null | undefined, showSymbol: bo
 }
 
 /**
- * Robust date parser handling DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD
- * Returns normalized 'YYYY-MM-DD' or null if invalid / 00/00/0000
+ * Robust date parser handling Date objects, Excel serials (45230, 45230.5),
+ * DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY, DD/MM/YY, YYYY-MM-DD, and text dates.
+ * Returns normalized 'YYYY-MM-DD' or null if invalid / missing.
  */
-export function parseDateToISO(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const trimmed = raw.trim();
-  
-  // LIC report often uses 00/00/0000 or 99/99/9999 for missing or lifetime dates
-  if (trimmed === '00/00/0000' || trimmed === '0/0/0000' || trimmed.startsWith('00/')) {
+export function parseDateToISO(raw: any): string | null {
+  if (raw === null || raw === undefined) return null;
+
+  // Handle native Date objects
+  if (raw instanceof Date) {
+    if (isNaN(raw.getTime())) return null;
+    const yyyy = raw.getUTCFullYear();
+    const mm = String(raw.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(raw.getUTCDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  const trimmed = String(raw).trim();
+  if (!trimmed || trimmed === '00/00/0000' || trimmed === '0/0/0000' || trimmed.startsWith('00/')) {
     return null;
   }
   if (trimmed === '99/99/9999') {
-    return '2099-12-31'; // Or preserve as special end of century
+    return '2099-12-31';
   }
 
-  // Check DD/MM/YYYY or DD-MM-YYYY
-  const dmyMatch = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  // Handle Excel serial numbers (integers or floats e.g. 45230, 45230.0, 45230.5: years ~1954 to 2075)
+  const numVal = Number(trimmed);
+  if (!isNaN(numVal) && numVal >= 20000 && numVal <= 65000) {
+    const date = new Date(Math.round((numVal - 25569) * 86400 * 1000));
+    if (!isNaN(date.getTime())) {
+      const yyyy = date.getUTCFullYear();
+      const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const dd = String(date.getUTCDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+  }
+
+  // Check DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY (supports 2-digit and 4-digit years)
+  const dmyMatch = trimmed.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
   if (dmyMatch) {
     const day = parseInt(dmyMatch[1], 10);
     const month = parseInt(dmyMatch[2], 10);
-    const year = parseInt(dmyMatch[3], 10);
+    let year = parseInt(dmyMatch[3], 10);
+    if (year < 100) {
+      year = year < 50 ? 2000 + year : 1900 + year;
+    }
     
     if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
       const paddedDay = day.toString().padStart(2, '0');
@@ -48,8 +72,8 @@ export function parseDateToISO(raw: string | null | undefined): string | null {
     }
   }
 
-  // Check YYYY-MM-DD
-  const ymdMatch = trimmed.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  // Check YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD
+  const ymdMatch = trimmed.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
   if (ymdMatch) {
     const year = parseInt(ymdMatch[1], 10);
     const month = parseInt(ymdMatch[2], 10);
@@ -62,21 +86,7 @@ export function parseDateToISO(raw: string | null | undefined): string | null {
     }
   }
 
-  // Check Excel serial number (integers between 20000 and 60000: years ~1954 to 2064)
-  if (/^\d{5}$/.test(trimmed)) {
-    const serial = parseInt(trimmed, 10);
-    if (serial >= 20000 && serial <= 60000) {
-      const date = new Date(Math.round((serial - 25569) * 86400 * 1000));
-      if (!isNaN(date.getTime())) {
-        const yyyy = date.getUTCFullYear();
-        const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
-        const dd = String(date.getUTCDate()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd}`;
-      }
-    }
-  }
-
-  // Check text month names like "15-May-2026" or "15/May/2026" or "May 15, 2026"
+  // Check text dates e.g. "15-May-2026", "15 May 2026", "May 15, 2026"
   const parsedTimestamp = Date.parse(trimmed);
   if (!isNaN(parsedTimestamp)) {
     const date = new Date(parsedTimestamp);
