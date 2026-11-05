@@ -20,6 +20,11 @@ export const customerRepository = {
     return await db.customers.get(id);
   },
 
+  async findByNormalizedName(name: string): Promise<Customer | undefined> {
+    const norm = normalizeSearchString(name);
+    return await db.customers.where('normalizedName').equals(norm).first();
+  },
+
   async getWithSummary(id: string): Promise<CustomerWithSummary | undefined> {
     const customer = await db.customers.get(id);
     if (!customer) return undefined;

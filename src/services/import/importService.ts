@@ -389,21 +389,6 @@ export const importService = {
    * Check if current database contains outdated or mismatched policy rows from prior imports
    */
   async checkNeedsDataRepair(): Promise<boolean> {
-    const count = await db.policies.count();
-    if (count === 0) return false;
-    
-    // Check policy 242647587 (must be Ravi Mohan Rohela)
-    const p1 = await db.policies.where('policyNumber').equals('242647587').first();
-    if (p1 && p1.customerName !== 'Ravi Mohan Rohela') {
-      return true;
-    }
-
-    // Check policy 242647528 (must be CHITRANSH RUHELA)
-    const p3 = await db.policies.where('policyNumber').equals('242647528').first();
-    if (p3 && p3.customerName !== 'CHITRANSH RUHELA') {
-      return true;
-    }
-
     return false;
   },
 

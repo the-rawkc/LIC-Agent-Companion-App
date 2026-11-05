@@ -16,7 +16,8 @@ import {
   CheckCircle2,
   Phone,
   Cloud,
-  ArrowDownCircle
+  ArrowDownCircle,
+  Receipt
 } from 'lucide-react';
 import { StatCard } from '@/components/shared/StatCard';
 import { Badge } from '@/components/shared/Badge';
@@ -25,7 +26,6 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { AgencyCloudModal } from '@/components/auth/AgencyCloudModal';
 import { analyticsService, type DashboardStats } from '@/features/analytics/analyticsService';
 import { importService } from '@/services/import/importService';
-import { SAMPLE_RAW_POLICY_ROWS } from '@/services/sampleData/licSampleRecords';
 import { reminderRepository } from '@/db/repositories/reminderRepository';
 import { authService } from '@/services/auth/authService';
 import { getActiveAgencyCode } from '@/db/database';
@@ -36,11 +36,8 @@ export function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'fup' | 'maturities' | 'reminders'>('fup');
-  const [isDemoLoading, setIsDemoLoading] = useState(false);
   const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
   const [recoveredBanner, setRecoveredBanner] = useState<string | null>(null);
-  const [hasOutdatedData, setHasOutdatedData] = useState(false);
-  const [isReloadingExcel, setIsReloadingExcel] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
@@ -68,10 +65,6 @@ export function DashboardPage() {
         }
       }
 
-      // Check if browser has mismatched/outdated data from previous imports
-      const needsRepair = await importService.checkNeedsDataRepair();
-      setHasOutdatedData(needsRepair);
-
       setStats(data);
     } catch (err) {
       console.error('Failed to load dashboard statistics', err);
@@ -79,26 +72,6 @@ export function DashboardPage() {
       setIsLoading(false);
     }
   }
-
-  const handleCleanAndReloadExcel = async () => {
-    setIsReloadingExcel(true);
-    try {
-      const res = await importService.resetAndReloadUserExcelData();
-      setHasOutdatedData(false);
-      setRecoveredBanner(`Successfully deleted old records and cleanly imported ${res.totalLoaded} policies from Excel!`);
-      setTimeout(() => setRecoveredBanner(null), 6000);
-      await loadDashboardData();
-    } catch (err) {
-      console.error('Failed to reload Excel policies', err);
-      alert('Failed to reload Excel policies: ' + String(err));
-    } finally {
-      setIsReloadingExcel(false);
-    }
-  };
-
-  const handleLoadDemoData = async () => {
-    await handleCleanAndReloadExcel();
-  };
 
   const handleToggleReminder = async (id: string) => {
     await reminderRepository.toggleStatus(id);
@@ -128,33 +101,6 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* Outdated / Corrupt Data Repair Alert */}
-      {hasOutdatedData && (
-        <div className="p-4 sm:p-5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-in fade-in">
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 font-bold shadow-xs">
-              <AlertCircle className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold">Outdated Policy Records in Browser</h3>
-              <p className="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
-                Your browser contains previous records where customer names do not match policy numbers. Click below to delete all old records and cleanly reload your 1,516 policies from your Excel file.
-              </p>
-            </div>
-          </div>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={handleCleanAndReloadExcel}
-            isLoading={isReloadingExcel}
-            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold border-none shrink-0"
-            leftIcon={<Sparkles className="w-4 h-4 text-slate-950" />}
-          >
-            Delete All & Reload 1,516 Policies
-          </Button>
-        </div>
-      )}
-
       {/* Welcome Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 rounded-3xl p-5 sm:p-6 text-white shadow-xl relative overflow-hidden">
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-blue-500/10 blur-3xl rounded-full pointer-events-none" />
@@ -173,6 +119,15 @@ export function DashboardPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/fup-update')}
+              className="border-emerald-400/50 text-emerald-300 hover:bg-emerald-400/10 font-bold bg-emerald-950/20"
+              leftIcon={<Receipt className="w-4 h-4 text-emerald-400" />}
+            >
+              FUP Update
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -235,12 +190,10 @@ export function DashboardPage() {
           <EmptyState
             icon={<FileText className="w-8 h-8 text-blue-600" />}
             title="No policy records yet"
-            description="Your app is ready. Upload your LIC policy list (Excel or PDF) or load your 1,516 policies directly."
+            description="Your app is ready. Upload your LIC policy list (Excel or PDF) to get started."
             actionLabel="Import Policies"
             onAction={() => navigate('/import')}
             actionIcon={<Upload className="w-4 h-4" />}
-            secondaryActionLabel={isReloadingExcel ? 'Loading 1,516 Policies...' : 'Load 1,516 Policies from Excel'}
-            onSecondaryAction={handleCleanAndReloadExcel}
           />
         </div>
       ) : (
@@ -279,6 +232,35 @@ export function DashboardPage() {
                 document.getElementById('action-feed')?.scrollIntoView({ behavior: 'smooth' });
               }}
             />
+          </div>
+
+          {/* Dedicated Quick Action Banner: FUP Update */}
+          <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-emerald-950/70 via-slate-900 to-slate-900 border border-emerald-500/40 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-emerald-500 text-slate-950 flex items-center justify-center shrink-0 font-bold shadow-md">
+                <Receipt className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm sm:text-base font-bold text-white">FUP Update</h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-emerald-500 text-slate-950">
+                    New Module
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Upload your monthly commission bill (PDF/Excel) to automatically advance FUP dates from paid due dates.
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => navigate('/fup-update')}
+              className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold border-none shrink-0"
+              leftIcon={<Receipt className="w-4 h-4 text-slate-950" />}
+            >
+              Open FUP Update ➔
+            </Button>
           </div>
 
           {/* Action Feed Tabs (Attention FUP, Upcoming Maturities, Today's Follow-ups) */}
@@ -487,16 +469,13 @@ export function DashboardPage() {
               </div>
             </button>
             <button
-              onClick={handleLoadDemoData}
-              disabled={isDemoLoading}
+              onClick={() => navigate('/fup-update')}
               className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-400 dark:hover:border-amber-600 transition flex items-center gap-3 text-left shadow-xs"
             >
-              <Sparkles className="w-5 h-5 text-amber-500 shrink-0" />
+              <Receipt className="w-5 h-5 text-amber-500 shrink-0" />
               <div>
-                <p className="text-xs font-bold text-slate-900 dark:text-white">
-                  {isDemoLoading ? 'Loading...' : 'Sample Data'}
-                </p>
-                <p className="text-[11px] text-slate-400">Add test policies</p>
+                <p className="text-xs font-bold text-slate-900 dark:text-white">FUP Update</p>
+                <p className="text-[11px] text-slate-400">Update policy FUP</p>
               </div>
             </button>
           </div>

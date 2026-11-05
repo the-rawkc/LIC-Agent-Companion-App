@@ -20,7 +20,8 @@ import {
   User,
   LayoutDashboard,
   LogOut,
-  Sparkles
+  Sparkles,
+  Receipt
 } from 'lucide-react';
 import { AppLogo } from '../shared/AppLogo';
 import { GlobalSearchModal } from '../shared/GlobalSearchModal';
@@ -119,9 +120,17 @@ export function AppLayout({ children }: AppLayoutProps) {
     { to: '/reminders', label: 'Reminders', icon: Bell },
   ];
 
+  const desktopNavItems = [
+    { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/customers', label: 'Customers', icon: Users },
+    { to: '/policies', label: 'Policies', icon: FileText },
+    { to: '/fup-update', label: 'FUP Update', icon: Receipt, isHighlight: true },
+    { to: '/reminders', label: 'Reminders', icon: Bell },
+  ];
+
   const moreItems = [
+    { to: '/fup-update', label: 'FUP Update', icon: Receipt, desc: 'Upload commission bill to advance FUP for paid policies', isNew: true },
     { to: '/greetings', label: 'Festival Greeting Cards', icon: Sparkles, desc: 'Create festive cards with your photo to send clients' },
-    { to: '/reminders', label: 'Follow-ups & Reminders', icon: Bell, desc: 'Payment due dates & customer calls' },
     { to: '/profile', label: 'Agent Profile', icon: User, desc: 'Your name, agency code, branch & visiting card' },
     { to: '/analytics', label: 'Business Summary', icon: BarChart3, desc: 'Total business, plans & earnings chart' },
     { to: '/import', label: 'Import Policies', icon: Upload, desc: 'Add policies from LIC Excel or PDF file' },
@@ -240,22 +249,29 @@ export function AppLayout({ children }: AppLayoutProps) {
         {!isLandingPage && (
           <aside className="hidden lg:flex flex-col w-64 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shrink-0">
             <nav className="space-y-1">
-              {navItems.map((item) => {
+              {desktopNavItems.map((item) => {
                 const Icon = item.icon;
                 return (
                   <NavLink
                     key={item.to}
                     to={item.to}
                     className={({ isActive }) =>
-                      `flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all tap-effect ${
+                      `flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all tap-effect ${
                         isActive
                           ? 'bg-slate-900 text-white dark:bg-blue-600 shadow-sm'
                           : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60'
                       }`
                     }
                   >
-                    <Icon className="w-5 h-5" />
-                    <span>{item.label}</span>
+                    <div className="flex items-center gap-3">
+                      <Icon className="w-5 h-5" />
+                      <span>{item.label}</span>
+                    </div>
+                    {item.isHighlight && (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide bg-emerald-500 text-slate-950">
+                        New
+                      </span>
+                    )}
                   </NavLink>
                 );
               })}
@@ -360,6 +376,8 @@ export function AppLayout({ children }: AppLayoutProps) {
               onClick={() => setIsMoreMenuOpen(true)}
               className={`flex flex-col items-center justify-center h-full transition-all select-none tap-effect ${
                 isMoreMenuOpen ||
+                location.pathname.startsWith('/fup-update') ||
+                location.pathname.startsWith('/commission-bill') ||
                 location.pathname.startsWith('/profile') ||
                 location.pathname.startsWith('/analytics') ||
                 location.pathname.startsWith('/import') ||
@@ -404,11 +422,18 @@ export function AppLayout({ children }: AppLayoutProps) {
                     <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
                       <Icon className="w-5 h-5" />
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white">
-                        {item.label}
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                          {item.label}
+                        </p>
+                        {item.isNew && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-emerald-500 text-slate-950">
+                            New
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                         {item.desc}
                       </p>
                     </div>

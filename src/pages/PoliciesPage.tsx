@@ -16,7 +16,8 @@ import {
   Square,
   Trash2,
   Sun,
-  Moon
+  Moon,
+  Receipt
 } from 'lucide-react';
 import { policyRepository, type PolicyFilterOptions } from '@/db/repositories/policyRepository';
 import { customerRepository } from '@/db/repositories/customerRepository';
@@ -522,6 +523,15 @@ export function PoliciesPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/fup-update')}
+              leftIcon={<Receipt className="w-3.5 h-3.5 text-emerald-600" />}
+              className="text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20"
+            >
+              FUP Update
+            </Button>
             <Button
               variant="outline"
               size="sm"

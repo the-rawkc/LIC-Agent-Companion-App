@@ -141,15 +141,15 @@ describe('Modal Portal & Data Clean/Repair Test Suite', () => {
       updatedAt: new Date().toISOString(),
     });
 
-    // Check needs repair returns true
+    // Verify checkNeedsDataRepair is safely disabled
     const needsRepair = await importService.checkNeedsDataRepair();
-    expect(needsRepair).toBe(true);
+    expect(needsRepair).toBe(false);
 
     // 2. Perform reset and reload
     const result = await importService.resetAndReloadUserExcelData();
     expect(result.totalLoaded).toBe(1516);
 
-    // Check needs repair is now false
+    // Check needs repair is false
     const needsRepairAfter = await importService.checkNeedsDataRepair();
     expect(needsRepairAfter).toBe(false);
 

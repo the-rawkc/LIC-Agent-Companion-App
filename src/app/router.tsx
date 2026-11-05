@@ -10,6 +10,7 @@ import { PolicyDetailsPage } from '@/pages/PolicyDetailsPage';
 import { RemindersPage } from '@/pages/RemindersPage';
 import { AnalyticsPage } from '@/pages/AnalyticsPage';
 import { ImportPage } from '@/pages/ImportPage';
+import { CommissionBillPage } from '@/pages/CommissionBillPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { GreetingsPage } from '@/pages/GreetingsPage';
 import { authService } from '@/services/auth/authService';
@@ -115,6 +116,30 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <ImportPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/fup-update"
+        element={
+          <ProtectedRoute>
+            <CommissionBillPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/commission-bill"
+        element={
+          <ProtectedRoute>
+            <CommissionBillPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/commission"
+        element={
+          <ProtectedRoute>
+            <Navigate to="/commission-bill" replace />
           </ProtectedRoute>
         }
       />

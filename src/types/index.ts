@@ -154,3 +154,53 @@ export interface AppSettings {
   theme: 'light' | 'dark' | 'system';
   reportDate: string;
 }
+
+export interface RawCommissionRow {
+  sNo?: string;
+  phName: string;
+  policyNo: string;
+  planTerm?: string;
+  dueDt: string;
+  riskDate?: string;
+  cbo?: string;
+  adjDate?: string;
+  premium?: number | string;
+  commission?: number | string;
+  pageNumber?: number;
+  rawText?: string;
+}
+
+export type CommissionItemStatus = 'ready_to_update' | 'already_up_to_date' | 'not_in_db';
+
+export interface CommissionBillPreviewItem {
+  id: string;
+  sNo?: number;
+  policyNo: string;
+  customerName: string;
+  planTerm: string;
+  paidDueDate: string; // ISO YYYY-MM-DD
+  riskDate?: string | null; // ISO YYYY-MM-DD
+  cbo?: string;
+  adjDate?: string | null; // ISO YYYY-MM-DD
+  premiumAmount: number;
+  commissionAmount: number;
+  policyFoundInDb: boolean;
+  existingPolicyId?: string;
+  currentFup: string | null; // Current FUP in DB
+  mode: PremiumMode; // e.g. 'Half-Yearly', 'Quarterly', 'Yearly', 'Monthly'
+  calculatedNewFup: string; // Projected Next FUP ISO
+  status: CommissionItemStatus;
+  selected: boolean;
+  occurrencesInBill?: number;
+}
+
+export interface CommissionBillParseResult {
+  items: RawCommissionRow[];
+  batchInfo?: string;
+  agencyCode?: string;
+  totalPremium?: number;
+  totalCommission?: number;
+  totalPages: number;
+  warnings: string[];
+}
+

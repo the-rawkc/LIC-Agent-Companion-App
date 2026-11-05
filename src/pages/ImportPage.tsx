@@ -13,7 +13,8 @@ import {
   Clock,
   Sparkles,
   Edit2,
-  Check
+  Check,
+  Receipt
 } from 'lucide-react';
 import { extractPoliciesFromPdf } from '@/services/pdf/extractPdfText';
 import { extractPoliciesFromExcel } from '@/services/excel/extractExcelData';
@@ -252,6 +253,31 @@ export function ImportPage() {
 
       {activeTab === 'upload' ? (
         <div className="space-y-6">
+          {/* Commission Bill Promotion Banner */}
+          <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-emerald-100 dark:bg-emerald-900/60 rounded-xl text-emerald-700 dark:text-emerald-300">
+                <Receipt className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Have a monthly Commission Bill (Annexure-A)?
+                </h4>
+                <p className="text-xs text-slate-600 dark:text-slate-300">
+                  Upload your commission bill PDF to automatically advance FUP dates for paid policies!
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/fup-update')}
+              className="text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 shrink-0 self-start sm:self-auto"
+            >
+              Go to FUP Update ➔
+            </Button>
+          </div>
+
           {/* File Picker Box */}
           {!preview && !isProcessing && (
             <div
