@@ -165,9 +165,9 @@ export function PoliciesPage() {
 
   // Trigger background cloud pull on mount to keep data fresh across devices
   useEffect(() => {
-    const { agencyCode, pin } = d1SyncService.getCredentials();
-    if (agencyCode && pin) {
-      d1SyncService.pullFromCloud(agencyCode, pin)
+    const { agencyCode, pin, pinHash } = d1SyncService.getCredentials();
+    if (agencyCode && (pin || pinHash)) {
+      d1SyncService.pullFromCloud(agencyCode, pin || '')
         .then((res) => {
           if (res.policiesCount > 0) {
             loadPolicies();
@@ -181,20 +181,21 @@ export function PoliciesPage() {
   const handleManualSync = async () => {
     setIsSyncing(true);
     try {
-      const { agencyCode, pin } = d1SyncService.getCredentials();
-      if (!agencyCode || !pin) {
-        setSyncToast('Please log in with Agency Code & PIN to sync.');
+      const { agencyCode, pin, pinHash } = d1SyncService.getCredentials();
+      if (!agencyCode || (!pin && !pinHash)) {
+        setSyncToast('Please log in with your Agency Code & PIN to synchronize.');
         return;
       }
-      const res = await d1SyncService.fullTwoWaySync(agencyCode, pin);
-      setSyncToast(`Cloud Sync Complete: ${res.pulledCount} policies pulled, ${res.pushedCount} backed up.`);
+      const pullRes = await d1SyncService.pullFromCloud(agencyCode, pin || '');
+      await d1SyncService.pushToCloud(agencyCode, pin || '');
+      setSyncToast(`Cloud Sync Complete: ${pullRes.policiesCount} policies updated across all devices.`);
       await loadPolicies();
       await loadLastAddedBatch();
     } catch (err: any) {
       setSyncToast(`Sync failed: ${err.message || String(err)}`);
     } finally {
       setIsSyncing(false);
-      setTimeout(() => setSyncToast(null), 4000);
+      setTimeout(() => setSyncToast(null), 5000);
     }
   };
 

@@ -153,13 +153,24 @@ export const d1SyncService = {
     const deletedLogs = await targetDb.auditLogs.where({ entityType: 'policy', action: 'delete' }).toArray();
     const deletedPolicyIds = Array.from(new Set(deletedLogs.map((l) => l.entityId)));
 
+    // Strip bulky raw extraction caches to keep payload lightweight and avoid D1 SQL size limits
+    const sanitizedPolicies = policies.map((p) => {
+      const { rawExtractedValues, extractionWarnings, ...rest } = p;
+      return rest;
+    });
+
+    const creds = this.getCredentials();
+    const pinVal = (pin || creds.pin || '').trim();
+    const pinHashVal = creds.pinHash || '';
+
     const res = await fetch(`${base}/api/sync/push`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         agencyCode: sanitized,
-        pin: pin.trim(),
-        policies,
+        pin: pinVal,
+        pinHash: pinHashVal,
+        policies: sanitizedPolicies,
         customers,
         reminders,
         profile,
@@ -214,12 +225,17 @@ export const d1SyncService = {
     const base = await this.getApiBaseUrl();
     const targetDb = getDatabase(sanitized);
 
+    const creds = this.getCredentials();
+    const pinVal = (pin || creds.pin || '').trim();
+    const pinHashVal = creds.pinHash || '';
+
     const res = await fetch(`${base}/api/sync/pull`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         agencyCode: sanitized,
-        pin: pin.trim(),
+        pin: pinVal,
+        pinHash: pinHashVal,
       }),
     });
 
@@ -397,10 +413,10 @@ export const d1SyncService = {
   },
 
   /**
-   * Helper to retrieve currently authenticated agencyCode and pin from any storage layer
+   * Helper to retrieve currently authenticated agencyCode and pin/pinHash from any storage layer
    */
-  getCredentials(): { agencyCode: string | null; pin: string | null } {
-    if (typeof window === 'undefined') return { agencyCode: null, pin: null };
+  getCredentials(): { agencyCode: string | null; pin: string | null; pinHash: string | null } {
+    if (typeof window === 'undefined') return { agencyCode: null, pin: null, pinHash: null };
     const agencyCode =
       sessionStorage.getItem('lic_active_agency_code') ||
       localStorage.getItem('lic_active_agency_code') ||
@@ -410,7 +426,22 @@ export const d1SyncService = {
       sessionStorage.getItem('lic_session_pin') ||
       localStorage.getItem('lic_session_pin') ||
       null;
-    return { agencyCode, pin };
+
+    let pinHash: string | null = null;
+    try {
+      const raw = localStorage.getItem('lic_agent_accounts_registry');
+      if (raw && agencyCode) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          const acc = parsed.find((a) => a.agencyCode.toUpperCase() === agencyCode.toUpperCase());
+          if (acc?.pinHash) {
+            pinHash = acc.pinHash;
+          }
+        }
+      }
+    } catch {}
+
+    return { agencyCode, pin, pinHash };
   },
 
   /**
@@ -419,8 +450,8 @@ export const d1SyncService = {
    */
   triggerAutoSync(delayMs = 1200): void {
     if (typeof window === 'undefined') return;
-    const { agencyCode, pin } = this.getCredentials();
-    if (!agencyCode || !pin) return;
+    const { agencyCode, pin, pinHash } = this.getCredentials();
+    if (!agencyCode || (!pin && !pinHash)) return;
 
     if (autoSyncTimer) {
       clearTimeout(autoSyncTimer);
@@ -428,7 +459,7 @@ export const d1SyncService = {
 
     autoSyncTimer = setTimeout(async () => {
       try {
-        await this.pushToCloud(agencyCode, pin);
+        await this.pushToCloud(agencyCode, pin || '');
         console.log(`[CloudSync] Background sync successfully uploaded records for Agent ${agencyCode}`);
       } catch (err: any) {
         console.warn('[CloudSync] Background sync notice:', err?.message || err);

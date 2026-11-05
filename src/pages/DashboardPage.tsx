@@ -60,17 +60,17 @@ export function DashboardPage() {
       }
 
       let data = await analyticsService.getDashboardStats();
-      const pin = sessionStorage.getItem('lic_session_pin') || localStorage.getItem('lic_session_pin') || undefined;
+      const { agencyCode, pin, pinHash } = d1SyncService.getCredentials();
 
-      if (code && pin) {
+      if (agencyCode && (pin || pinHash)) {
         if (data.totalPolicies === 0) {
-          const res = await authService.autoRestoreOrMigrateData(code, pin);
+          const res = await authService.autoRestoreOrMigrateData(agencyCode, pin || '');
           if (res.restored) {
             data = await analyticsService.getDashboardStats();
           }
         } else {
           // Keep all devices uniform in background by merging latest cloud changes
-          d1SyncService.pullFromCloud(code, pin).then((res) => {
+          d1SyncService.pullFromCloud(agencyCode, pin || '').then((res) => {
             if (res.policiesCount > 0) {
               analyticsService.getDashboardStats().then(setStats).catch(() => {});
             }

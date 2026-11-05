@@ -119,11 +119,11 @@ export function AppLayout({ children }: AppLayoutProps) {
     let isSyncing = false;
     const syncFromCloud = async () => {
       if (isSyncing || typeof navigator === 'undefined' || !navigator.onLine) return;
-      const { agencyCode, pin } = d1SyncService.getCredentials();
-      if (!agencyCode || !pin) return;
+      const { agencyCode, pin, pinHash } = d1SyncService.getCredentials();
+      if (!agencyCode || (!pin && !pinHash)) return;
       try {
         isSyncing = true;
-        await d1SyncService.pullFromCloud(agencyCode, pin);
+        await d1SyncService.pullFromCloud(agencyCode, pin || '');
       } catch (err) {
         // Silent background fallback
       } finally {
@@ -133,6 +133,13 @@ export function AppLayout({ children }: AppLayoutProps) {
 
     // Sync on initial app load
     syncFromCloud();
+
+    // Periodic live sync every 25 seconds while tab is active
+    const intervalTimer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        syncFromCloud();
+      }
+    }, 25000);
 
     // Sync whenever tab becomes visible (e.g. user opens device or switches back to tab)
     const handleVisibility = () => {
@@ -150,6 +157,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     window.addEventListener('online', handleOnline);
 
     return () => {
+      clearInterval(intervalTimer);
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('online', handleOnline);
     };

@@ -2,10 +2,44 @@ import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
+import fs from 'fs'
+
+const SYNC_STORE_FILE = path.resolve(import.meta.dirname, '.sync_store.json');
 
 function localSyncPlugin(): Plugin {
-  const localAgents = new Map<string, { pin: string; agentName?: string; createdAt: string; lastSyncAt: string }>();
+  const localAgents = new Map<string, { pin?: string; pinHash?: string; agentName?: string; createdAt: string; lastSyncAt: string }>();
   const localData = new Map<string, { policies: any[]; customers: any[]; reminders: any[]; profile?: any; updatedAt: string }>();
+
+  // Restore existing sync store from disk if present
+  try {
+    if (fs.existsSync(SYNC_STORE_FILE)) {
+      const saved = JSON.parse(fs.readFileSync(SYNC_STORE_FILE, 'utf-8'));
+      if (saved.agents) {
+        for (const [k, v] of Object.entries(saved.agents)) {
+          localAgents.set(k, v as any);
+        }
+      }
+      if (saved.data) {
+        for (const [k, v] of Object.entries(saved.data)) {
+          localData.set(k, v as any);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Could not read .sync_store.json:', e);
+  }
+
+  function persistStore() {
+    try {
+      const out = {
+        agents: Object.fromEntries(localAgents.entries()),
+        data: Object.fromEntries(localData.entries()),
+      };
+      fs.writeFileSync(SYNC_STORE_FILE, JSON.stringify(out, null, 2), 'utf-8');
+    } catch (e) {
+      console.warn('Could not persist .sync_store.json:', e);
+    }
+  }
 
   function jsonRes(res: any, data: any, status = 200) {
     res.statusCode = status;
@@ -48,23 +82,35 @@ function localSyncPlugin(): Plugin {
 
     const agencyCode = String(body.agencyCode || '').trim();
     const pin = String(body.pin || '').trim();
+    const pinHash = String(body.pinHash || '').trim();
+
+    function isAuthMatch(agent: { pin?: string; pinHash?: string }): boolean {
+      if (pin && agent.pin && agent.pin === pin) return true;
+      if (pinHash && agent.pinHash && agent.pinHash === pinHash) return true;
+      if (!agent.pin && !agent.pinHash) return true;
+      // If agent has PIN saved, accept it
+      if (pin && agent.pin) return agent.pin === pin;
+      return false;
+    }
 
     if (endpoint === 'auth' && req.method === 'POST') {
       if (!agencyCode || agencyCode.length < 4) {
         return jsonRes(res, { error: 'Agency code must be at least 4 characters.' }, 400);
       }
-      if (!pin || pin.length < 4) {
-        return jsonRes(res, { error: 'Security PIN must be at least 4 digits.' }, 400);
+      if (!pin && !pinHash) {
+        return jsonRes(res, { error: 'Security PIN or credentials required.' }, 400);
       }
 
       const existing = localAgents.get(agencyCode);
       if (!existing) {
         localAgents.set(agencyCode, {
           pin,
+          pinHash,
           agentName: body.agentName,
           createdAt: new Date().toISOString(),
           lastSyncAt: new Date().toISOString(),
         });
+        persistStore();
         return jsonRes(res, {
           success: true,
           isNew: true,
@@ -74,9 +120,13 @@ function localSyncPlugin(): Plugin {
         });
       }
 
-      if (existing.pin !== pin) {
+      if (!isAuthMatch(existing)) {
         return jsonRes(res, { error: 'Invalid security PIN for this Agency Code.' }, 401);
       }
+
+      if (pin && !existing.pin) existing.pin = pin;
+      if (pinHash && !existing.pinHash) existing.pinHash = pinHash;
+      persistStore();
 
       return jsonRes(res, {
         success: true,
@@ -92,11 +142,12 @@ function localSyncPlugin(): Plugin {
       if (!existing) {
         localAgents.set(agencyCode, {
           pin,
+          pinHash,
           agentName: body.agentName,
           createdAt: new Date().toISOString(),
           lastSyncAt: new Date().toISOString(),
         });
-      } else if (existing.pin !== pin) {
+      } else if (!isAuthMatch(existing)) {
         return jsonRes(res, { error: 'Invalid security PIN.' }, 401);
       }
 
@@ -111,6 +162,9 @@ function localSyncPlugin(): Plugin {
 
       const updatedAgent = localAgents.get(agencyCode)!;
       updatedAgent.lastSyncAt = now;
+      if (pin && !updatedAgent.pin) updatedAgent.pin = pin;
+      if (pinHash && !updatedAgent.pinHash) updatedAgent.pinHash = pinHash;
+      persistStore();
 
       return jsonRes(res, {
         success: true,
@@ -129,7 +183,7 @@ function localSyncPlugin(): Plugin {
       if (!existing) {
         return jsonRes(res, { error: 'No database record found for Agency Code: ' + agencyCode }, 404);
       }
-      if (existing.pin !== pin) {
+      if (!isAuthMatch(existing)) {
         return jsonRes(res, { error: 'Invalid security PIN for this Agency Code.' }, 401);
       }
 
@@ -233,6 +287,9 @@ export default defineConfig({
     alias: {
       '@': path.resolve(import.meta.dirname, './src')
     }
+  },
+  server: {
+    host: true,
   },
   // @ts-ignore
   test: {

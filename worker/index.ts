@@ -90,6 +90,17 @@ async function ensureSchema(db: D1Database): Promise<void> {
         )
       `),
       db.prepare(`
+        CREATE TABLE IF NOT EXISTS cloud_data_chunks (
+          agency_code TEXT NOT NULL,
+          chunk_index INTEGER NOT NULL,
+          chunk_json TEXT NOT NULL,
+          total_chunks INTEGER NOT NULL,
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY (agency_code, chunk_index)
+        )
+      `),
+      db.prepare(`CREATE INDEX IF NOT EXISTS idx_chunks_agency ON cloud_data_chunks (agency_code)`),
+      db.prepare(`
         CREATE TABLE IF NOT EXISTS cloud_policies (
           id TEXT PRIMARY KEY,
           agency_code TEXT NOT NULL,
@@ -205,9 +216,17 @@ export async function handleSyncRequest(request: Request, env: Env): Promise<Res
           });
         }
 
-        // Verify existing PIN
-        const computedHash = await hashPin(pin, existing.pin_salt);
-        if (computedHash !== existing.pin_hash) {
+        // Verify credentials via PIN or persistent PBKDF2 hash
+        const pinHash = String(body.pinHash || '').trim();
+        let isAuth = false;
+        if (pin) {
+          const computedHash = await hashPin(pin, existing.pin_salt);
+          if (computedHash === existing.pin_hash) isAuth = true;
+        } else if (pinHash && pinHash === existing.pin_hash) {
+          isAuth = true;
+        }
+
+        if (!isAuth) {
           return jsonResponse({ error: 'Invalid security PIN for this Agency Code.' }, 401);
         }
 
@@ -230,6 +249,7 @@ export async function handleSyncRequest(request: Request, env: Env): Promise<Res
         const body: any = await request.json();
         const agencyCode = String(body.agencyCode || '').trim();
         const pin = String(body.pin || '').trim();
+        const pinHash = String(body.pinHash || '').trim();
 
         // Auth check
         const existing = await env.DB.prepare('SELECT * FROM agents WHERE agency_code = ?')
@@ -240,26 +260,56 @@ export async function handleSyncRequest(request: Request, env: Env): Promise<Res
           return jsonResponse({ error: 'Agency code not found. Please register or verify first.' }, 404);
         }
 
-        const computedHash = await hashPin(pin, existing.pin_salt);
-        if (computedHash !== existing.pin_hash) {
+        let isAuth = false;
+        if (pin) {
+          const computedHash = await hashPin(pin, existing.pin_salt);
+          if (computedHash === existing.pin_hash) isAuth = true;
+        } else if (pinHash && pinHash === existing.pin_hash) {
+          isAuth = true;
+        }
+
+        if (!isAuth) {
           return jsonResponse({ error: 'Invalid security PIN.' }, 401);
         }
 
-        const policies: any[] = Array.isArray(body.policies) ? body.policies : [];
+        const rawPolicies: any[] = Array.isArray(body.policies) ? body.policies : [];
         const customers: any[] = Array.isArray(body.customers) ? body.customers : [];
         const reminders: any[] = Array.isArray(body.reminders) ? body.reminders : [];
         const profile = body.profile || null;
         const now = new Date().toISOString();
 
-        // 1. Store complete dataset in cloud_agent_data (1 single atomic query)
-        const payloadJson = JSON.stringify({
-          policies,
+        // Clean policies to prevent payload bloating
+        const policies = rawPolicies.map((p) => {
+          const { rawExtractedValues, extractionWarnings, ...rest } = p;
+          return rest;
+        });
+
+        // 1. Chunk policies into 200-record blocks so each query is under 100KB (never exceeds D1 limits)
+        const CHUNK_SIZE = 200;
+        const totalChunks = Math.ceil(policies.length / CHUNK_SIZE) || 1;
+        const statements: any[] = [
+          env.DB.prepare('DELETE FROM cloud_data_chunks WHERE agency_code = ?').bind(agencyCode),
+        ];
+
+        for (let i = 0; i < totalChunks; i++) {
+          const chunkPolicies = policies.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+          statements.push(
+            env.DB.prepare(
+              `INSERT INTO cloud_data_chunks (agency_code, chunk_index, chunk_json, total_chunks, updated_at)
+               VALUES (?, ?, ?, ?, ?)`
+            ).bind(agencyCode, i, JSON.stringify(chunkPolicies), totalChunks, now)
+          );
+        }
+
+        // Store summary & other tables in cloud_agent_data
+        const summaryJson = JSON.stringify({
+          policies: policies.length <= 200 ? policies : [],
           customers,
           reminders,
           profile,
         });
 
-        const statements: any[] = [
+        statements.push(
           env.DB.prepare(
             `INSERT INTO cloud_agent_data (agency_code, data_json, policies_count, customers_count, reminders_count, updated_at)
              VALUES (?, ?, ?, ?, ?, ?)
@@ -269,9 +319,9 @@ export async function handleSyncRequest(request: Request, env: Env): Promise<Res
                customers_count = excluded.customers_count,
                reminders_count = excluded.reminders_count,
                updated_at = excluded.updated_at`
-          ).bind(agencyCode, payloadJson, policies.length, customers.length, reminders.length, now),
-          env.DB.prepare('UPDATE agents SET last_sync_at = ? WHERE agency_code = ?').bind(now, agencyCode),
-        ];
+          ).bind(agencyCode, summaryJson, policies.length, customers.length, reminders.length, now),
+          env.DB.prepare('UPDATE agents SET last_sync_at = ? WHERE agency_code = ?').bind(now, agencyCode)
+        );
 
         if (profile) {
           statements.push(
@@ -285,7 +335,7 @@ export async function handleSyncRequest(request: Request, env: Env): Promise<Res
           );
         }
 
-        // Execute fast batch (at most 3 statements, zero subrequest limit issues)
+        // Execute batch safely
         await env.DB.batch(statements);
 
         return jsonResponse({
@@ -310,6 +360,7 @@ export async function handleSyncRequest(request: Request, env: Env): Promise<Res
         const body: any = await request.json();
         const agencyCode = String(body.agencyCode || '').trim();
         const pin = String(body.pin || '').trim();
+        const pinHash = String(body.pinHash || '').trim();
 
         const existing = await env.DB.prepare('SELECT * FROM agents WHERE agency_code = ?')
           .bind(agencyCode)
@@ -319,31 +370,68 @@ export async function handleSyncRequest(request: Request, env: Env): Promise<Res
           return jsonResponse({ error: 'No database record found for Agency Code: ' + agencyCode }, 404);
         }
 
-        const computedHash = await hashPin(pin, existing.pin_salt);
-        if (computedHash !== existing.pin_hash) {
+        let isAuth = false;
+        if (pin) {
+          const computedHash = await hashPin(pin, existing.pin_salt);
+          if (computedHash === existing.pin_hash) isAuth = true;
+        } else if (pinHash && pinHash === existing.pin_hash) {
+          isAuth = true;
+        }
+
+        if (!isAuth) {
           return jsonResponse({ error: 'Invalid security PIN for this Agency Code.' }, 401);
         }
 
-        // 1. Try pulling complete pristine dataset from cloud_agent_data
+        // 1. Try pulling reassembled chunks from cloud_data_chunks
+        let policies: any[] = [];
+        try {
+          const chunkRows = await env.DB.prepare(
+            'SELECT chunk_json FROM cloud_data_chunks WHERE agency_code = ? ORDER BY chunk_index ASC'
+          )
+            .bind(agencyCode)
+            .all<{ chunk_json: string }>();
+
+          if (chunkRows?.results && chunkRows.results.length > 0) {
+            for (const r of chunkRows.results) {
+              const part = JSON.parse(r.chunk_json);
+              if (Array.isArray(part)) policies.push(...part);
+            }
+          }
+        } catch {}
+
+        // 2. Fallback to cloud_agent_data for customers, reminders, and profile
         const agentData = await env.DB.prepare(
           'SELECT data_json, updated_at FROM cloud_agent_data WHERE agency_code = ?'
         )
           .bind(agencyCode)
           .first<{ data_json: string; updated_at: string }>();
 
+        let customers: any[] = [];
+        let reminders: any[] = [];
+        let profile: any = null;
+
         if (agentData?.data_json) {
-          const parsed = JSON.parse(agentData.data_json);
-          return jsonResponse({
-            success: true,
-            agencyCode,
-            agentName: existing.agent_name || 'Agent ' + agencyCode,
-            lastSyncAt: agentData.updated_at || existing.last_sync_at,
-            policies: parsed.policies || [],
-            customers: parsed.customers || [],
-            reminders: parsed.reminders || [],
-            profile: parsed.profile || null,
-          });
+          try {
+            const parsed = JSON.parse(agentData.data_json);
+            if (policies.length === 0 && Array.isArray(parsed.policies) && parsed.policies.length > 0) {
+              policies = parsed.policies;
+            }
+            if (Array.isArray(parsed.customers)) customers = parsed.customers;
+            if (Array.isArray(parsed.reminders)) reminders = parsed.reminders;
+            if (parsed.profile) profile = parsed.profile;
+          } catch {}
         }
+
+        return jsonResponse({
+          success: true,
+          agencyCode,
+          agentName: existing.agent_name || 'Agent ' + agencyCode,
+          lastSyncAt: agentData?.updated_at || existing.last_sync_at,
+          policies,
+          customers,
+          reminders,
+          profile,
+        });
 
         // Fallback: Check granular cloud_policies table (up to 10,000 records)
         const policyRows = await env.DB.prepare(

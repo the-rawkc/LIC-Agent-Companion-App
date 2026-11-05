@@ -380,10 +380,10 @@ export const commissionBillService = {
 
     if (updatedCount > 0 || createdCount > 0) {
       // Immediate push to Cloudflare D1 so updates are instantaneously live across all agent devices
-      const { agencyCode, pin } = d1SyncService.getCredentials();
-      if (agencyCode && pin) {
+      const { agencyCode, pin, pinHash } = d1SyncService.getCredentials();
+      if (agencyCode && (pin || pinHash)) {
         try {
-          await d1SyncService.pushToCloud(agencyCode, pin);
+          await d1SyncService.pushToCloud(agencyCode, pin || '');
           console.log(`[CommissionBill] Direct Cloud sync successfully completed for Agent ${agencyCode}`);
         } catch (e) {
           console.warn('[CommissionBill] Direct Cloud sync error, falling back to background autoSync:', e);
