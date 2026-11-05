@@ -8,7 +8,7 @@ const SYNC_STORE_FILE = path.resolve(import.meta.dirname, '.sync_store.json');
 
 function localSyncPlugin(): Plugin {
   const localAgents = new Map<string, { pin?: string; pinHash?: string; agentName?: string; createdAt: string; lastSyncAt: string }>();
-  const localData = new Map<string, { policies: any[]; customers: any[]; reminders: any[]; profile?: any; updatedAt: string }>();
+  const localData = new Map<string, { policies: any[]; customers: any[]; reminders: any[]; profile?: any; lastAddedBatch?: any; updatedAt: string }>();
 
   // Restore existing sync store from disk if present
   try {
@@ -157,6 +157,7 @@ function localSyncPlugin(): Plugin {
         customers: Array.isArray(body.customers) ? body.customers : [],
         reminders: Array.isArray(body.reminders) ? body.reminders : [],
         profile: body.profile || null,
+        lastAddedBatch: body.lastAddedBatch || null,
         updatedAt: now,
       });
 
@@ -192,6 +193,7 @@ function localSyncPlugin(): Plugin {
         customers: [],
         reminders: [],
         profile: null,
+        lastAddedBatch: null,
         updatedAt: existing.lastSyncAt,
       };
 
@@ -204,6 +206,7 @@ function localSyncPlugin(): Plugin {
         customers: data.customers,
         reminders: data.reminders,
         profile: data.profile,
+        lastAddedBatch: data.lastAddedBatch || null,
       });
     }
 

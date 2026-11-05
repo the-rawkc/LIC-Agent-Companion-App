@@ -148,6 +148,8 @@ export const d1SyncService = {
     const reminders = await targetDb.reminders.toArray();
     const profileItem = await targetDb.appSettings.get('agent_profile');
     const profile = profileItem?.value || null;
+    const lastAddedItem = await targetDb.appSettings.get('last_added_batch');
+    const lastAddedBatch = lastAddedItem?.value || null;
 
     // Track deleted policies so cloud replica stays in sync
     const deletedLogs = await targetDb.auditLogs.where({ entityType: 'policy', action: 'delete' }).toArray();
@@ -174,6 +176,7 @@ export const d1SyncService = {
         customers,
         reminders,
         profile,
+        lastAddedBatch,
         deletedPolicyIds,
       }),
     });
@@ -310,7 +313,13 @@ export const d1SyncService = {
       if (cloudReminders.length > 0) {
         await targetDb.reminders.bulkPut(cloudReminders);
       }
-      if (newlyPulledPolicies.length > 0) {
+      if (data.lastAddedBatch) {
+        await targetDb.appSettings.put({
+          key: 'last_added_batch',
+          value: data.lastAddedBatch,
+          updatedAt: new Date().toISOString(),
+        });
+      } else if (newlyPulledPolicies.length > 0) {
         await targetDb.appSettings.put({
           key: 'last_added_batch',
           value: {

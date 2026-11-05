@@ -3,6 +3,7 @@ import { policyRepository } from '@/db/repositories/policyRepository';
 import { customerRepository } from '@/db/repositories/customerRepository';
 import { advanceFupDate, parseDateToISO, generateUUID, parseCleanNumber } from '@/utils/formatters';
 import { d1SyncService } from '@/services/cloud/d1SyncService';
+import userUploadedPoliciesData from '@/services/sampleData/userUploadedPolicies.json';
 import type {
   RawCommissionRow,
   CommissionBillPreviewItem,
@@ -10,6 +11,20 @@ import type {
   PremiumMode,
   Policy,
 } from '@/types';
+
+/**
+ * Pre-compiled lookup set of the 1,516 verified base policies.
+ * Used to immediately distinguish the baseline portfolio from newly added policies.
+ */
+export const BASE_POLICY_NUMBERS = new Set<string>(
+  (userUploadedPoliciesData as any[]).map((r) => String(r.policyNo || '').replace(/[^0-9]/g, ''))
+);
+
+export function isBasePolicy(policyNumber: string): boolean {
+  const clean = policyNumber.replace(/[^0-9]/g, '').trim();
+  if (!clean) return false;
+  return BASE_POLICY_NUMBERS.has(clean) || BASE_POLICY_NUMBERS.has(clean.replace(/^0+/, ''));
+}
 
 /**
  * Infer probable premium mode from the interval between Risk Date (DOC) and Paid Due Date

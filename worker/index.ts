@@ -307,6 +307,7 @@ export async function handleSyncRequest(request: Request, env: Env): Promise<Res
           customers,
           reminders,
           profile,
+          lastAddedBatch: body.lastAddedBatch || null,
         });
 
         statements.push(
@@ -409,6 +410,7 @@ export async function handleSyncRequest(request: Request, env: Env): Promise<Res
         let customers: any[] = [];
         let reminders: any[] = [];
         let profile: any = null;
+        let lastAddedBatch: any = null;
 
         if (agentData?.data_json) {
           try {
@@ -419,6 +421,7 @@ export async function handleSyncRequest(request: Request, env: Env): Promise<Res
             if (Array.isArray(parsed.customers)) customers = parsed.customers;
             if (Array.isArray(parsed.reminders)) reminders = parsed.reminders;
             if (parsed.profile) profile = parsed.profile;
+            if (parsed.lastAddedBatch) lastAddedBatch = parsed.lastAddedBatch;
           } catch {}
         }
 
@@ -431,6 +434,7 @@ export async function handleSyncRequest(request: Request, env: Env): Promise<Res
           customers,
           reminders,
           profile,
+          lastAddedBatch,
         });
 
         // Fallback: Check granular cloud_policies table (up to 10,000 records)

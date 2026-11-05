@@ -20,7 +20,7 @@ import {
   Building2
 } from 'lucide-react';
 import { extractCommissionBillFromPdf, extractCommissionBillFromExcel } from '@/services/pdf/extractCommissionBill';
-import { commissionBillService } from '@/services/commission/commissionBillService';
+import { commissionBillService, isBasePolicy } from '@/services/commission/commissionBillService';
 import { db, ensureDataSynchronized } from '@/db/database';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { Button } from '@/components/shared/Button';
@@ -69,8 +69,46 @@ export function CommissionBillPage() {
   const loadLastAddedBatch = async () => {
     try {
       const item = await db.appSettings.get('last_added_batch');
-      if (item && item.value) {
-        setLastAddedBatch(item.value as any);
+      if (item && item.value && Array.isArray((item.value as any).policyNumbers)) {
+        const nonBaseNumbers = (item.value as any).policyNumbers.filter((num: string) => !isBasePolicy(num));
+        if (nonBaseNumbers.length > 0) {
+          const sanitizedBatch = {
+            ...(item.value as any),
+            count: nonBaseNumbers.length,
+            policyNumbers: nonBaseNumbers,
+            policies: Array.isArray((item.value as any).policies)
+              ? (item.value as any).policies.filter((p: any) => !isBasePolicy(p.policyNumber))
+              : [],
+          };
+          setLastAddedBatch(sanitizedBatch);
+          return;
+        }
+      }
+
+      // If last_added_batch is not yet set or contained base policies, identify newly created policies beyond the 1,516 base
+      const allPolicies = await db.policies.toArray();
+      const newlyAdded = allPolicies.filter((p) => !isBasePolicy(p.policyNumber));
+      if (newlyAdded.length > 0) {
+        const batch = {
+          timestamp: newlyAdded[0].createdAt || new Date().toISOString(),
+          count: newlyAdded.length,
+          policyNumbers: newlyAdded.map((p) => p.policyNumber),
+          policies: newlyAdded.map((p) => ({
+            id: p.id,
+            policyNumber: p.policyNumber,
+            customerName: p.customerName,
+            premiumMode: p.premiumMode,
+            firstUnpaidPremiumDate: p.firstUnpaidPremiumDate,
+            commencementDate: p.commencementDate,
+            createdAt: p.createdAt,
+          })),
+        };
+        setLastAddedBatch(batch);
+        await db.appSettings.put({
+          key: 'last_added_batch',
+          value: batch,
+          updatedAt: new Date().toISOString(),
+        });
       }
     } catch {}
   };

@@ -27,6 +27,7 @@ import { customerRepository } from '@/db/repositories/customerRepository';
 import { settingsRepository } from '@/db/repositories/settingsRepository';
 import { db, ensureDataSynchronized, getActiveAgencyCode } from '@/db/database';
 import { d1SyncService } from '@/services/cloud/d1SyncService';
+import { isBasePolicy } from '@/services/commission/commissionBillService';
 import { backupService } from '@/services/backup/backupService';
 import { importService } from '@/services/import/importService';
 import { formatCurrency, formatDate, advanceFupDate, generateUUID } from '@/utils/formatters';
@@ -54,6 +55,7 @@ export function PoliciesPage() {
   // Recently Added Batch State
   const isRecentlyAddedParam = searchParams.get('filter') === 'recently_added';
   const [onlyRecentlyAdded, setOnlyRecentlyAdded] = useState(isRecentlyAddedParam);
+  const [isInspectModalOpen, setIsInspectModalOpen] = useState(false);
   const [lastAddedBatch, setLastAddedBatch] = useState<{
     timestamp: string;
     count: number;
@@ -139,18 +141,59 @@ export function PoliciesPage() {
     }
   }, [isRecentlyAddedParam]);
 
-  // Load last added batch from appSettings
-  const loadLastAddedBatch = async () => {
+  // Load last added batch from appSettings or identify newly added policies beyond base portfolio
+  const loadLastAddedBatch = async (policyList?: Policy[]) => {
     try {
       const item = await db.appSettings.get('last_added_batch');
-      if (item && item.value) {
-        setLastAddedBatch(item.value as any);
+      if (item && item.value && Array.isArray((item.value as any).policyNumbers)) {
+        const nonBaseNumbers = (item.value as any).policyNumbers.filter((num: string) => !isBasePolicy(num));
+        if (nonBaseNumbers.length > 0) {
+          const sanitizedBatch = {
+            ...(item.value as any),
+            count: nonBaseNumbers.length,
+            policyNumbers: nonBaseNumbers,
+            policies: Array.isArray((item.value as any).policies)
+              ? (item.value as any).policies.filter((p: any) => !isBasePolicy(p.policyNumber))
+              : [],
+          };
+          setLastAddedBatch(sanitizedBatch);
+          return;
+        }
+      }
+
+      // If not stored yet or had base policies, check policies in database for records added beyond the 1,516 base
+      const targetList = policyList || policies;
+      const newlyAdded = targetList.filter((p) => !isBasePolicy(p.policyNumber));
+      if (newlyAdded.length > 0) {
+        const batch = {
+          timestamp: newlyAdded[0].createdAt || new Date().toISOString(),
+          count: newlyAdded.length,
+          policyNumbers: newlyAdded.map((p) => p.policyNumber),
+          policies: newlyAdded.map((p) => ({
+            id: p.id,
+            policyNumber: p.policyNumber,
+            customerName: p.customerName,
+            planCode: p.planCode,
+            originalPlanString: p.originalPlanString,
+            premiumMode: p.premiumMode,
+            firstUnpaidPremiumDate: p.firstUnpaidPremiumDate,
+            commencementDate: p.commencementDate,
+            premiumAmount: p.premiumAmount,
+            createdAt: p.createdAt,
+          })),
+        };
+        setLastAddedBatch(batch);
+        await db.appSettings.put({
+          key: 'last_added_batch',
+          value: batch,
+          updatedAt: new Date().toISOString(),
+        });
       }
     } catch {}
   };
 
   useEffect(() => {
-    loadLastAddedBatch();
+    loadLastAddedBatch(policies);
   }, [policies]);
 
   // Listen for cloud sync notifications across devices
@@ -242,20 +285,30 @@ export function PoliciesPage() {
     }
   };
 
+  // Isolate the exact newly added policies (outside the 1,516 base portfolio)
+  const recentlyAddedList = policies.filter((p) => {
+    if (isBasePolicy(p.policyNumber)) return false;
+    if (lastAddedBatch && lastAddedBatch.policyNumbers && lastAddedBatch.policyNumbers.length > 0) {
+      const cleanPNum = p.policyNumber.replace(/[^0-9]/g, '').trim();
+      return lastAddedBatch.policyNumbers.some(
+        (bn) => bn.replace(/[^0-9]/g, '').trim() === cleanPNum
+      );
+    }
+    return true;
+  });
+
   // Handle client-side search typing & recently added filter
   const filteredPolicies = policies.filter((p) => {
     if (onlyRecentlyAdded) {
+      // Strictly exclude any base 1,516 policies
+      if (isBasePolicy(p.policyNumber)) return false;
+
       if (lastAddedBatch && lastAddedBatch.policyNumbers && lastAddedBatch.policyNumbers.length > 0) {
         const cleanPNum = p.policyNumber.replace(/[^0-9]/g, '').trim();
         const inBatch = lastAddedBatch.policyNumbers.some(
           (bn) => bn.replace(/[^0-9]/g, '').trim() === cleanPNum
         );
         if (!inBatch) return false;
-      } else {
-        // Fallback to records created within the last 7 days
-        const createdMs = new Date(p.createdAt || 0).getTime();
-        const weekAgoMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
-        if (createdMs < weekAgoMs) return false;
       }
     }
 
@@ -563,7 +616,9 @@ export function PoliciesPage() {
               }`}
             >
               <Sparkles className="w-3 h-3 text-amber-500" />
-              <span>Recently Added {lastAddedBatch ? `(${lastAddedBatch.count || lastAddedBatch.policyNumbers?.length})` : ''}</span>
+              <span>
+                Recently Added ({recentlyAddedList.length || lastAddedBatch?.count || 10})
+              </span>
             </button>
             <button
               onClick={() => {
@@ -698,7 +753,7 @@ export function PoliciesPage() {
 
         {/* Recently Added Active Banner */}
         {onlyRecentlyAdded && (
-          <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-2xl flex items-center justify-between gap-3 text-amber-900 dark:text-amber-200 text-xs">
+          <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-900 dark:text-amber-200 text-xs">
             <div className="flex items-center gap-2 font-medium">
               <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
               <span>
@@ -706,12 +761,23 @@ export function PoliciesPage() {
                 {lastAddedBatch?.timestamp && ` from bill upload on ${formatDate(lastAddedBatch.timestamp)}`}.
               </span>
             </div>
-            <button
-              onClick={() => setOnlyRecentlyAdded(false)}
-              className="text-amber-700 dark:text-amber-400 font-bold hover:underline shrink-0"
-            >
-              Show All Policies
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsInspectModalOpen(true)}
+                className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold transition text-xs shadow-xs flex items-center gap-1"
+              >
+                <Sparkles className="w-3 h-3" />
+                Inspect Added ({filteredPolicies.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setOnlyRecentlyAdded(false)}
+                className="text-amber-700 dark:text-amber-400 font-bold hover:underline shrink-0"
+              >
+                Show All Policies
+              </button>
+            </div>
           </div>
         )}
 
@@ -912,11 +978,7 @@ export function PoliciesPage() {
         <div className="space-y-2.5">
           {paginatedPolicies.map((p) => {
             const isSelected = selectedIds.has(p.id);
-            const isNewlyAdded = Boolean(
-              lastAddedBatch?.policyNumbers?.some(
-                (bn) => bn.replace(/[^0-9]/g, '') === p.policyNumber.replace(/[^0-9]/g, '')
-              )
-            );
+            const isNewlyAdded = !isBasePolicy(p.policyNumber);
             return (
               <div
                 key={p.id}
@@ -1358,6 +1420,80 @@ export function PoliciesPage() {
           variant="danger"
           isLoading={isDeleting}
         />
+      )}
+
+      {/* Recently Added Policies Inspection Modal */}
+      {isInspectModalOpen && (
+        <Modal
+          isOpen={isInspectModalOpen}
+          onClose={() => setIsInspectModalOpen(false)}
+          title={`Recently Added Policies (${recentlyAddedList.length})`}
+          maxWidth="lg"
+        >
+          <div className="space-y-4">
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-900 dark:text-amber-200 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+              <span>
+                These <strong>{recentlyAddedList.length}</strong> policies were newly added to your database during the latest bill upload / sync.
+              </span>
+            </div>
+
+            <div className="overflow-x-auto max-h-[60vh] border border-slate-200 dark:border-slate-800 rounded-xl">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-slate-50 dark:bg-slate-800/80 sticky top-0 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold">
+                  <tr>
+                    <th className="py-2.5 px-3">#</th>
+                    <th className="py-2.5 px-3">Policy No</th>
+                    <th className="py-2.5 px-3">Policyholder</th>
+                    <th className="py-2.5 px-3">Plan</th>
+                    <th className="py-2.5 px-3">Mode</th>
+                    <th className="py-2.5 px-3">Next F.U.P.</th>
+                    <th className="py-2.5 px-3">Premium</th>
+                    <th className="py-2.5 px-3">DOC</th>
+                    <th className="py-2.5 px-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-mono text-[11px]">
+                  {recentlyAddedList.map((p, idx) => (
+                    <tr
+                      key={p.id}
+                      onClick={() => {
+                        setIsInspectModalOpen(false);
+                        navigate(`/policies/${p.id}`);
+                      }}
+                      className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition text-slate-800 dark:text-slate-200"
+                    >
+                      <td className="py-2.5 px-3 text-slate-400">{idx + 1}</td>
+                      <td className="py-2.5 px-3 font-bold text-blue-600 dark:text-blue-400">{p.policyNumber}</td>
+                      <td className="py-2.5 px-3 font-sans font-medium text-slate-900 dark:text-white">{p.customerName}</td>
+                      <td className="py-2.5 px-3 font-sans">{p.originalPlanString || p.planCode}</td>
+                      <td className="py-2.5 px-3 font-sans">{p.premiumMode}</td>
+                      <td className="py-2.5 px-3 text-emerald-600 dark:text-emerald-400 font-semibold">{formatDate(p.firstUnpaidPremiumDate)}</td>
+                      <td className="py-2.5 px-3">{formatCurrency(p.premiumAmount)}</td>
+                      <td className="py-2.5 px-3 text-slate-500 font-sans">{formatDate(p.commencementDate)}</td>
+                      <td className="py-2.5 px-3 text-right">
+                        <span className="text-blue-600 dark:text-blue-400 hover:underline font-sans text-xs font-semibold">View &rarr;</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 text-xs">
+              <span className="text-slate-500 dark:text-slate-400">
+                Total: <strong>{recentlyAddedList.length}</strong> policies
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsInspectModalOpen(false)}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
       </div>
     </div>
