@@ -229,9 +229,11 @@ export function PoliciesPage() {
         setSyncToast('Please log in with your Agency Code & PIN to synchronize.');
         return;
       }
+      // Two-way sync: Push local state first (so recent bill uploads reach cloud), then pull & merge, then push unified state
+      await d1SyncService.pushToCloud(agencyCode, pin || '');
       const pullRes = await d1SyncService.pullFromCloud(agencyCode, pin || '');
       await d1SyncService.pushToCloud(agencyCode, pin || '');
-      setSyncToast(`Cloud Sync Complete: ${pullRes.policiesCount} policies updated across all devices.`);
+      setSyncToast(`Cloud Sync Complete: ${pullRes.policiesCount} policies synchronized uniformly across all devices.`);
       await loadPolicies();
       await loadLastAddedBatch();
     } catch (err: any) {

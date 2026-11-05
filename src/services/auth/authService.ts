@@ -455,17 +455,7 @@ export const authService = {
             await agentDb.auditLogs.bulkPut(auditLogs);
           });
 
-          // Also push to Cloudflare D1 so their data is backed up to cloud under their agency code!
-          if (pin) {
-            try {
-              await d1SyncService.pushToCloud(sanitized, pin);
-            } catch {
-              // offline mode
-            }
-          }
-
           console.log(`Successfully migrated ${policies.length} records from legacy database to ${sanitized}!`);
-          return { restored: true, count: policies.length, source: 'legacy' };
         }
       }
     } catch (e) {

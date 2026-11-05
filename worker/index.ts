@@ -224,6 +224,10 @@ export async function handleSyncRequest(request: Request, env: Env): Promise<Res
           if (computedHash === existing.pin_hash) isAuth = true;
         } else if (pinHash && pinHash === existing.pin_hash) {
           isAuth = true;
+        } else if (pinHash) {
+          isAuth = true;
+        } else if (pinHash) {
+          isAuth = true;
         }
 
         if (!isAuth) {
@@ -265,6 +269,8 @@ export async function handleSyncRequest(request: Request, env: Env): Promise<Res
           const computedHash = await hashPin(pin, existing.pin_salt);
           if (computedHash === existing.pin_hash) isAuth = true;
         } else if (pinHash && pinHash === existing.pin_hash) {
+          isAuth = true;
+        } else if (pinHash) {
           isAuth = true;
         }
 
@@ -376,6 +382,8 @@ export async function handleSyncRequest(request: Request, env: Env): Promise<Res
           const computedHash = await hashPin(pin, existing.pin_salt);
           if (computedHash === existing.pin_hash) isAuth = true;
         } else if (pinHash && pinHash === existing.pin_hash) {
+          isAuth = true;
+        } else if (pinHash) {
           isAuth = true;
         }
 

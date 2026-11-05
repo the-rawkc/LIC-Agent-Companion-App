@@ -162,7 +162,9 @@ export const commissionBillService = {
       let selected = true;
 
       if (policyFound) {
-        if (!currentFup || currentFup < calculatedNewFup) {
+        const curIso = parseDateToISO(currentFup) || '';
+        const newIso = parseDateToISO(calculatedNewFup) || '';
+        if (!currentFup || !curIso || !newIso || curIso < newIso) {
           status = 'ready_to_update';
           selected = true;
         } else {
@@ -207,7 +209,9 @@ export const commissionBillService = {
     let status: CommissionItemStatus = item.status;
 
     if (item.policyFoundInDb) {
-      if (!item.currentFup || item.currentFup < calculatedNewFup) {
+      const curIso = parseDateToISO(item.currentFup) || '';
+      const newIso = parseDateToISO(calculatedNewFup) || '';
+      if (!item.currentFup || !curIso || !newIso || curIso < newIso) {
         status = 'ready_to_update';
       } else {
         status = 'already_up_to_date';
@@ -269,9 +273,11 @@ export const commissionBillService = {
 
           if (policy) {
             const oldFup = policy.firstUnpaidPremiumDate || policy.commencementDate;
+            const oldFupIso = parseDateToISO(oldFup) || '';
+            const newFupIso = parseDateToISO(item.calculatedNewFup) || '';
 
             // Date safety rule: preserve latest date unless forceUpdate is specified
-            if (oldFup && oldFup >= item.calculatedNewFup && !options?.forceUpdate) {
+            if (oldFupIso && newFupIso && oldFupIso >= newFupIso && !options?.forceUpdate) {
               skippedCount++;
               continue;
             }

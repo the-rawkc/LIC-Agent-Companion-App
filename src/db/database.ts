@@ -108,9 +108,11 @@ export function switchAgentDatabase(agencyCode: string): LICDatabase {
  * Automatically synchronizes policies and customer records across database
  * instances so the user always sees the exact same data everywhere without clicking buttons.
  */
-let hasAutoSynced = false;
-export async function ensureDataSynchronized(): Promise<void> {
-  if (hasAutoSynced || typeof window === 'undefined') return;
+let lastSyncCheckTime = 0;
+export async function ensureDataSynchronized(force = false): Promise<void> {
+  const now = Date.now();
+  if (!force && (now - lastSyncCheckTime < 3000 || typeof window === 'undefined')) return;
+  lastSyncCheckTime = now;
   try {
     const active = getDatabase();
     const legacy = getLegacyDatabase();
@@ -134,7 +136,6 @@ export async function ensureDataSynchronized(): Promise<void> {
         await active.reminders.bulkPut(reminders);
         await active.auditLogs.bulkPut(auditLogs);
       });
-      hasAutoSynced = true;
     } else if (legacyCount === 0 && activeCount > 0) {
       const [policies, customers, reminders, auditLogs] = await Promise.all([
         active.policies.toArray(),
@@ -148,25 +149,17 @@ export async function ensureDataSynchronized(): Promise<void> {
         await legacy.reminders.bulkPut(reminders);
         await legacy.auditLogs.bulkPut(auditLogs);
       });
-      hasAutoSynced = true;
     } else if (activeCount > 0 && legacyCount > 0 && activeCount !== legacyCount) {
-      // Reconcile records between active agent DB and legacy DB
+      // Reconcile records between active agent DB and legacy DB: whichever has more policies updates the other
       const [activeList, legacyList] = await Promise.all([
         active.policies.toArray(),
         legacy.policies.toArray(),
       ]);
-      const activeNums = new Set(activeList.map((p) => p.policyNumber.replace(/[^0-9]/g, '')));
-      const legacyNums = new Set(legacyList.map((p) => p.policyNumber.replace(/[^0-9]/g, '')));
-
-      const missingInLegacy = activeList.filter((p) => !legacyNums.has(p.policyNumber.replace(/[^0-9]/g, '')));
-      if (missingInLegacy.length > 0) {
-        await legacy.policies.bulkPut(missingInLegacy);
+      if (activeList.length >= legacyList.length) {
+        await legacy.policies.bulkPut(activeList);
+      } else {
+        await active.policies.bulkPut(legacyList);
       }
-      const missingInActive = legacyList.filter((p) => !activeNums.has(p.policyNumber.replace(/[^0-9]/g, '')));
-      if (missingInActive.length > 0) {
-        await active.policies.bulkPut(missingInActive);
-      }
-      hasAutoSynced = true;
     }
   } catch (err) {
     console.warn('Auto data sync notice:', err);

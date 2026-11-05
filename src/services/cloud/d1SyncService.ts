@@ -1,5 +1,6 @@
-import { getDatabase } from '@/db/database';
+import { getDatabase, getLegacyDatabase } from '@/db/database';
 import { settingsRepository } from '@/db/repositories/settingsRepository';
+import { parseDateToISO } from '@/utils/formatters';
 import type { Policy, Customer, Reminder } from '@/types';
 
 export interface SyncStatus {
@@ -192,6 +193,14 @@ export const d1SyncService = {
         value: data.syncedAt,
         updatedAt: new Date().toISOString(),
       });
+      const legacyDb = getLegacyDatabase();
+      if (legacyDb.name !== targetDb.name) {
+        await legacyDb.appSettings.put({
+          key: 'last_cloud_sync',
+          value: data.syncedAt,
+          updatedAt: new Date().toISOString(),
+        });
+      }
     } catch {
       // ignore
     }
@@ -278,13 +287,16 @@ export const d1SyncService = {
         : null;
 
       if (existing) {
-        // Decide which FUP is more up to date:
-        // Pick whichever FUP is further in the future to prevent regression
-        const existingFup = existing.firstUnpaidPremiumDate || existing.commencementDate;
-        const cloudFup = cp.firstUnpaidPremiumDate || cp.commencementDate;
-        let chosenFup = existingFup;
-        if (cloudFup && (!existingFup || cloudFup >= existingFup)) {
-          chosenFup = cloudFup;
+        // Parse dates to ISO to prevent string comparison bugs between 'DD/MM/YYYY' and 'YYYY-MM-DD'
+        const existingFupIso = parseDateToISO(existing.firstUnpaidPremiumDate || existing.commencementDate) || '';
+        const cloudFupIso = parseDateToISO(cp.firstUnpaidPremiumDate || cp.commencementDate) || '';
+        const isCloudNewer = Boolean(cp.updatedAt && (!existing.updatedAt || cp.updatedAt >= existing.updatedAt));
+
+        let chosenFup = cp.firstUnpaidPremiumDate || existing.firstUnpaidPremiumDate;
+        if (existingFupIso && cloudFupIso) {
+          chosenFup = (cloudFupIso >= existingFupIso || isCloudNewer)
+            ? cp.firstUnpaidPremiumDate
+            : existing.firstUnpaidPremiumDate;
         }
 
         policiesToPut.push({
@@ -294,13 +306,24 @@ export const d1SyncService = {
           customerId: existing.customerId || cp.customerId,
           firstUnpaidPremiumDate: chosenFup,
           premiumMode: cp.premiumMode || existing.premiumMode,
-          updatedAt: (cp.updatedAt && (!existing.updatedAt || cp.updatedAt > existing.updatedAt)) ? cp.updatedAt : existing.updatedAt,
+          updatedAt: isCloudNewer ? (cp.updatedAt || new Date().toISOString()) : existing.updatedAt,
         });
       } else {
         policiesToPut.push(cp);
         newlyPulledPolicies.push(cp);
       }
     }
+
+    // Reconcile and clean any local orphan records that do not exist in cloud portfolio
+    const cloudPolicyIds = new Set(cloudPolicies.map((p) => p.id));
+    const cloudPolicyNums = new Set(
+      cloudPolicies.map((p) => p.policyNumber.replace(/[^0-9]/g, '').trim()).filter(Boolean)
+    );
+    const orphanPolicyIds = cloudPolicies.length >= 1000
+      ? localPolicies
+          .filter((lp) => !cloudPolicyIds.has(lp.id) && !cloudPolicyNums.has(lp.policyNumber.replace(/[^0-9]/g, '').trim()))
+          .map((lp) => lp.id)
+      : [];
 
     // Atomically merge records into local IndexedDB
     await targetDb.transaction('rw', [targetDb.policies, targetDb.customers, targetDb.reminders, targetDb.appSettings], async () => {
@@ -309,6 +332,9 @@ export const d1SyncService = {
       }
       if (policiesToPut.length > 0) {
         await targetDb.policies.bulkPut(policiesToPut);
+      }
+      if (orphanPolicyIds.length > 0) {
+        await targetDb.policies.bulkDelete(orphanPolicyIds);
       }
       if (cloudReminders.length > 0) {
         await targetDb.reminders.bulkPut(cloudReminders);
@@ -361,6 +387,26 @@ export const d1SyncService = {
         });
       }
     });
+
+    // Mirror to legacyDb so all databases on the device stay in 100% sync
+    try {
+      const legacyDb = getLegacyDatabase();
+      if (legacyDb.name !== targetDb.name) {
+        await legacyDb.transaction('rw', [legacyDb.policies, legacyDb.customers, legacyDb.reminders, legacyDb.appSettings], async () => {
+          if (cloudCustomers.length > 0) await legacyDb.customers.bulkPut(cloudCustomers);
+          if (policiesToPut.length > 0) await legacyDb.policies.bulkPut(policiesToPut);
+          if (orphanPolicyIds.length > 0) await legacyDb.policies.bulkDelete(orphanPolicyIds);
+          if (cloudReminders.length > 0) await legacyDb.reminders.bulkPut(cloudReminders);
+          if (data.lastAddedBatch) {
+            await legacyDb.appSettings.put({
+              key: 'last_added_batch',
+              value: data.lastAddedBatch,
+              updatedAt: new Date().toISOString(),
+            });
+          }
+        });
+      }
+    } catch {}
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(

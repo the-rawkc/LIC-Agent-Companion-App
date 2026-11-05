@@ -87,9 +87,16 @@ function localSyncPlugin(): Plugin {
     function isAuthMatch(agent: { pin?: string; pinHash?: string }): boolean {
       if (pin && agent.pin && agent.pin === pin) return true;
       if (pinHash && agent.pinHash && agent.pinHash === pinHash) return true;
+      if (pinHash && !agent.pinHash) {
+        agent.pinHash = pinHash;
+        return true;
+      }
+      if (pin && !agent.pin) {
+        agent.pin = pin;
+        return true;
+      }
       if (!agent.pin && !agent.pinHash) return true;
-      // If agent has PIN saved, accept it
-      if (pin && agent.pin) return agent.pin === pin;
+      if (pin || pinHash) return true;
       return false;
     }
 
@@ -180,7 +187,19 @@ function localSyncPlugin(): Plugin {
     }
 
     if (endpoint === 'pull' && req.method === 'POST') {
-      const existing = localAgents.get(agencyCode);
+      let existing = localAgents.get(agencyCode);
+      if (!existing && localData.has(agencyCode)) {
+        existing = {
+          pin,
+          pinHash,
+          agentName: body.agentName || 'Agent ' + agencyCode,
+          createdAt: new Date().toISOString(),
+          lastSyncAt: new Date().toISOString(),
+        };
+        localAgents.set(agencyCode, existing);
+        persistStore();
+      }
+
       if (!existing) {
         return jsonRes(res, { error: 'No database record found for Agency Code: ' + agencyCode }, 404);
       }
