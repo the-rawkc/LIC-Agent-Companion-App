@@ -185,7 +185,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     { to: '/analytics', label: 'Business Summary', icon: BarChart3, desc: 'Total business, plans & earnings chart' },
     { to: '/import', label: 'Import Policies', icon: Upload, desc: 'Add policies from LIC Excel or PDF file' },
     { to: '/settings', label: 'Backup & Export', icon: HardDrive, desc: 'Save backup file or export to Excel' },
-    { to: '/settings', label: 'Settings & Phone Sync', icon: Settings, desc: 'Online sync across phones, PIN lock & theme' },
+    { to: '/settings', label: 'Settings & Security', icon: Settings, desc: 'PIN lock, dark mode, and data management' },
   ];
 
   const isLandingPage = location.pathname === '/';

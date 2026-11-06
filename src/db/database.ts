@@ -72,8 +72,7 @@ export function getActiveDbName(): string {
 }
 
 /**
- * Access the legacy single-tenant database ('LICAgentCompanionDB')
- * used before multi-tenant agency partitioning.
+ * Access the canonical application database ('LICAgentCompanionDB')
  */
 export function getLegacyDatabase(): LICDatabase {
   const name = 'LICAgentCompanionDB';
@@ -87,7 +86,6 @@ export function getDatabase(agencyCode?: string): LICDatabase {
   const name = agencyCode && agencyCode.trim()
     ? `LICAgentCompanionDB_${agencyCode.trim().toUpperCase()}`
     : getActiveDbName();
-
   if (!dbInstances.has(name)) {
     dbInstances.set(name, new LICDatabase(name));
   }
@@ -105,64 +103,52 @@ export function switchAgentDatabase(agencyCode: string): LICDatabase {
 }
 
 /**
- * Automatically synchronizes policies and customer records across database
- * instances so the user always sees the exact same data everywhere without clicking buttons.
+ * Automatically migrates existing records to unified database if main DB is empty
  */
-let lastSyncCheckTime = 0;
-export async function ensureDataSynchronized(force = false): Promise<void> {
-  const now = Date.now();
-  if (!force && (now - lastSyncCheckTime < 3000 || typeof window === 'undefined')) return;
-  lastSyncCheckTime = now;
+let hasAutoSynced = false;
+export async function ensureDataSynchronized(): Promise<void> {
+  if (hasAutoSynced || typeof window === 'undefined') return;
   try {
     const active = getDatabase();
     const legacy = getLegacyDatabase();
     if (active.name === legacy.name) return;
+
+    const activeCode = getActiveAgencyCode();
+    if (!activeCode) return;
+
+    const migrationKey = `lic_migrated_legacy_${activeCode.toUpperCase()}`;
+    const resetKey = `lic_data_reset_${activeCode.toUpperCase()}`;
+    if (localStorage.getItem(migrationKey) || localStorage.getItem(resetKey)) {
+      return;
+    }
 
     const [activeCount, legacyCount] = await Promise.all([
       active.policies.count(),
       legacy.policies.count(),
     ]);
 
+    // Only migrate once from legacy to active when active is completely empty
+    // and legacy contains unpartitioned user data. Never resurrect deleted records.
     if (activeCount === 0 && legacyCount > 0) {
-      const [policies, customers, reminders, auditLogs] = await Promise.all([
+      const [policies, customers, reminders, auditLogs, appSettings] = await Promise.all([
         legacy.policies.toArray(),
         legacy.customers.toArray(),
         legacy.reminders.toArray(),
         legacy.auditLogs.toArray(),
+        legacy.appSettings.toArray(),
       ]);
-      await active.transaction('rw', [active.policies, active.customers, active.reminders, active.auditLogs], async () => {
+      await active.transaction('rw', [active.policies, active.customers, active.reminders, active.auditLogs, active.appSettings], async () => {
         await active.policies.bulkPut(policies);
         await active.customers.bulkPut(customers);
         await active.reminders.bulkPut(reminders);
         await active.auditLogs.bulkPut(auditLogs);
+        await active.appSettings.bulkPut(appSettings);
       });
-    } else if (legacyCount === 0 && activeCount > 0) {
-      const [policies, customers, reminders, auditLogs] = await Promise.all([
-        active.policies.toArray(),
-        active.customers.toArray(),
-        active.reminders.toArray(),
-        active.auditLogs.toArray(),
-      ]);
-      await legacy.transaction('rw', [legacy.policies, legacy.customers, legacy.reminders, legacy.auditLogs], async () => {
-        await legacy.policies.bulkPut(policies);
-        await legacy.customers.bulkPut(customers);
-        await legacy.reminders.bulkPut(reminders);
-        await legacy.auditLogs.bulkPut(auditLogs);
-      });
-    } else if (activeCount > 0 && legacyCount > 0 && activeCount !== legacyCount) {
-      // Reconcile records between active agent DB and legacy DB: whichever has more policies updates the other
-      const [activeList, legacyList] = await Promise.all([
-        active.policies.toArray(),
-        legacy.policies.toArray(),
-      ]);
-      if (activeList.length >= legacyList.length) {
-        await legacy.policies.bulkPut(activeList);
-      } else {
-        await active.policies.bulkPut(legacyList);
-      }
+      localStorage.setItem(migrationKey, 'true');
+      hasAutoSynced = true;
     }
   } catch (err) {
-    console.warn('Auto data sync notice:', err);
+    console.warn('Initial data migration notice:', err);
   }
 }
 

@@ -18,9 +18,7 @@ import {
   Sun,
   Moon,
   Receipt,
-  Sparkles,
-  Cloud,
-  RefreshCw
+  Sparkles
 } from 'lucide-react';
 import { policyRepository, type PolicyFilterOptions } from '@/db/repositories/policyRepository';
 import { customerRepository } from '@/db/repositories/customerRepository';
@@ -62,10 +60,6 @@ export function PoliciesPage() {
     policyNumbers: string[];
     policies?: Array<{ policyNumber: string; customerName: string; premiumMode: string; firstUnpaidPremiumDate: string }>;
   } | null>(null);
-
-  // Cloud Sync Status & Notification
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncToast, setSyncToast] = useState<string | null>(null);
 
   // Manual Payment Recording State
   const [paymentPolicy, setPaymentPolicy] = useState<Policy | null>(null);
@@ -220,29 +214,6 @@ export function PoliciesPage() {
         .catch(() => {});
     }
   }, []);
-
-  const handleManualSync = async () => {
-    setIsSyncing(true);
-    try {
-      const { agencyCode, pin, pinHash } = d1SyncService.getCredentials();
-      if (!agencyCode || (!pin && !pinHash)) {
-        setSyncToast('Please log in with your Agency Code & PIN to synchronize.');
-        return;
-      }
-      // Two-way sync: Push local state first (so recent bill uploads reach cloud), then pull & merge, then push unified state
-      await d1SyncService.pushToCloud(agencyCode, pin || '');
-      const pullRes = await d1SyncService.pullFromCloud(agencyCode, pin || '');
-      await d1SyncService.pushToCloud(agencyCode, pin || '');
-      setSyncToast(`Cloud Sync Complete: ${pullRes.policiesCount} policies synchronized uniformly across all devices.`);
-      await loadPolicies();
-      await loadLastAddedBatch();
-    } catch (err: any) {
-      setSyncToast(`Sync failed: ${err.message || String(err)}`);
-    } finally {
-      setIsSyncing(false);
-      setTimeout(() => setSyncToast(null), 5000);
-    }
-  };
 
   useEffect(() => {
     loadPolicies();
@@ -699,17 +670,6 @@ export function PoliciesPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={handleManualSync}
-              disabled={isSyncing}
-              leftIcon={<Cloud className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-blue-600' : 'text-slate-500'}`} />}
-              className="text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
-              title="Sync latest FUPs & policies across all your devices"
-            >
-              {isSyncing ? 'Syncing...' : 'Sync Cloud'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
               onClick={() => navigate('/fup-update')}
               leftIcon={<Receipt className="w-3.5 h-3.5 text-emerald-600" />}
               className="text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20"
@@ -744,14 +704,6 @@ export function PoliciesPage() {
             </Button>
           </div>
         </div>
-
-        {/* Cloud Sync Toast */}
-        {syncToast && (
-          <div className="p-3.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-300 dark:border-blue-800 rounded-2xl flex items-center gap-3 text-blue-800 dark:text-blue-200 text-xs font-semibold animate-in fade-in">
-            <Cloud className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" />
-            <span>{syncToast}</span>
-          </div>
-        )}
 
         {/* Recently Added Active Banner */}
         {onlyRecentlyAdded && (

@@ -15,17 +15,13 @@ import {
   AlertTriangle,
   Info,
   Calendar,
-  Smartphone,
-  Cloud,
-  RefreshCw,
-  ArrowUpCircle,
-  ArrowDownCircle,
-  Sparkles
+  Sparkles,
+  Smartphone
 } from 'lucide-react';
 import { pinService } from '@/services/security/pinService';
 import { backupService, type BackupPayload } from '@/services/backup/backupService';
 import { importService } from '@/services/import/importService';
-import { d1SyncService, type SyncConfig, type SyncStatus } from '@/services/cloud/d1SyncService';
+import { d1SyncService } from '@/services/cloud/d1SyncService';
 import { settingsRepository } from '@/db/repositories/settingsRepository';
 import { db, getActiveAgencyCode } from '@/db/database';
 import { Button } from '@/components/shared/Button';
@@ -33,7 +29,6 @@ import { Badge } from '@/components/shared/Badge';
 import { Modal } from '@/components/shared/Modal';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { PinSetupModal } from '@/components/security/PinSetupModal';
-import { AgencyCloudModal } from '@/components/auth/AgencyCloudModal';
 import { formatDate } from '@/utils/formatters';
 
 export function SettingsPage() {
@@ -86,48 +81,10 @@ export function SettingsPage() {
     }
   };
 
-  // Cloudflare D1 Sync state
-  const [syncConfig, setSyncConfig] = useState<SyncConfig | null>(null);
-  const [d1Status, setD1Status] = useState<SyncStatus | null>(null);
-  const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
-  const [cloudModalMode, setCloudModalMode] = useState<'sync' | 'push' | 'pull'>('sync');
-  const [isCheckingD1, setIsCheckingD1] = useState(false);
-  const [apiUrlInput, setApiUrlInput] = useState('');
-  const [apiUrlSaved, setApiUrlSaved] = useState(false);
-
   useEffect(() => {
     loadSettings();
     checkStorage();
-    checkCloudStatus();
-
-    const handleSynced = () => {
-      checkCloudStatus();
-    };
-    window.addEventListener('lic_cloud_synced', handleSynced);
-    return () => window.removeEventListener('lic_cloud_synced', handleSynced);
   }, []);
-
-  async function checkCloudStatus() {
-    setIsCheckingD1(true);
-    try {
-      const config = await d1SyncService.getSyncConfig();
-      setSyncConfig(config);
-      setApiUrlInput(config.apiUrl || '');
-      const status = await d1SyncService.checkConnection();
-      setD1Status(status);
-    } catch {
-      // ignore
-    } finally {
-      setIsCheckingD1(false);
-    }
-  }
-
-  const handleSaveApiUrl = async () => {
-    await d1SyncService.setApiBaseUrl(apiUrlInput);
-    setApiUrlSaved(true);
-    setTimeout(() => setApiUrlSaved(false), 2500);
-    await checkCloudStatus();
-  };
 
   async function loadSettings() {
     const pinConfigured = await pinService.isPinConfigured();
@@ -278,16 +235,53 @@ export function SettingsPage() {
     }
   };
 
+  const [isResetting, setIsResetting] = useState(false);
+
   const handleResetDatabase = async () => {
-    await Promise.all([
-      db.policies.clear(),
-      db.customers.clear(),
-      db.reminders.clear(),
-      db.importHistory.clear(),
-      db.auditLogs.clear(),
-    ]);
-    setIsResetConfirmOpen(false);
-    alert('All local application records have been cleared.');
+    setIsResetting(true);
+    try {
+      await Promise.all([
+        db.policies.clear(),
+        db.customers.clear(),
+        db.reminders.clear(),
+        db.importHistory.clear(),
+        db.auditLogs.clear(),
+        db.appSettings.clear(),
+      ]);
+
+      // Clear all Dexie databases in the browser to eliminate any ghost/legacy records
+      if (typeof indexedDB !== 'undefined' && indexedDB.databases) {
+        try {
+          const dbs = await indexedDB.databases();
+          for (const d of dbs) {
+            if (d.name && d.name.startsWith('LICAgentCompanionDB')) {
+              const req = indexedDB.deleteDatabase(d.name);
+              await new Promise((resolve) => {
+                req.onsuccess = resolve;
+                req.onerror = resolve;
+                req.onblocked = resolve;
+              });
+            }
+          }
+        } catch {}
+      }
+
+      // Clear server sync store too so other devices stay uniformly cleared
+      try {
+        const { agencyCode, pin } = d1SyncService.getCredentials();
+        if (agencyCode) {
+          await d1SyncService.pushToCloud(agencyCode, pin || '');
+        }
+      } catch {}
+
+      setIsResetConfirmOpen(false);
+      alert('All policy and customer records have been permanently cleared.');
+      window.location.reload();
+    } catch (err: any) {
+      alert('Failed to reset database: ' + (err.message || String(err)));
+    } finally {
+      setIsResetting(false);
+    }
   };
 
   return (
@@ -372,113 +366,6 @@ export function SettingsPage() {
               Set 4-Digit PIN
             </Button>
           )}
-        </div>
-      </div>
-
-      {/* Cloudflare D1 Cloud Sync */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-blue-200 dark:border-blue-900/60 p-5 sm:p-6 shadow-xs space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-              <Cloud className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                  Online Cloud Sync (Free & Safe)
-                </h2>
-                <Badge variant={d1Status?.d1Ready ? 'success' : 'default'} size="sm">
-                  {d1Status?.d1Ready ? 'Connected' : 'Ready'}
-                </Badge>
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Automatically backup and restore all policies using your <strong>Agency Code</strong>. Never lose data if you uninstall the app or switch phones.
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={checkCloudStatus}
-            disabled={isCheckingD1}
-            title="Check online sync status"
-            className="p-2 text-slate-400 hover:text-blue-600 transition"
-          >
-            <RefreshCw className={`w-4 h-4 ${isCheckingD1 ? 'animate-spin text-blue-600' : ''}`} />
-          </button>
-        </div>
-
-        {/* Agency Info bar */}
-        <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <span className="text-[11px] text-slate-400 block uppercase font-medium">Agency Code</span>
-            <span className="font-mono font-bold text-slate-800 dark:text-slate-200 text-sm">
-              {syncConfig?.agencyCode || 'Not registered'}
-            </span>
-            {syncConfig?.agentName && (
-              <span className="text-xs text-slate-500 ml-2">({syncConfig.agentName})</span>
-            )}
-          </div>
-          <div>
-            <span className="text-[11px] text-slate-400 block uppercase font-medium">Last Online Backup</span>
-            <span className="font-medium text-slate-700 dark:text-slate-300">
-              {syncConfig?.lastSyncAt ? formatDate(syncConfig.lastSyncAt, 'medium') : 'Not synced yet'}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2.5 pt-1">
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => {
-              setCloudModalMode('sync');
-              setIsCloudModalOpen(true);
-            }}
-            leftIcon={<RefreshCw className="w-4 h-4" />}
-          >
-            Sync Across Devices
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setCloudModalMode('pull');
-              setIsCloudModalOpen(true);
-            }}
-            leftIcon={<ArrowDownCircle className="w-4 h-4" />}
-          >
-            Download from Online Backup
-          </Button>
-        </div>
-
-        {/* Cloud Sync Server URL Configuration */}
-        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 text-xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-            <div>
-              <span className="font-semibold text-slate-800 dark:text-slate-200 block">
-                Server Address (Advanced)
-              </span>
-              <span className="text-[11px] text-slate-400">
-                Leave empty for standard automatic sync, or enter a custom server address.
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={apiUrlInput}
-                onChange={(e) => setApiUrlInput(e.target.value)}
-                placeholder="https://... (default: automatic)"
-                className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs w-64 focus:ring-2 focus:ring-blue-500 font-mono text-[11px]"
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSaveApiUrl}
-              >
-                {apiUrlSaved ? 'Saved!' : 'Save'}
-              </Button>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -880,18 +767,9 @@ export function SettingsPage() {
         onConfirm={handleResetDatabase}
         title="Clear All Database Records"
         message="Are you completely sure? This will delete all policy and customer records permanently. Ensure you have exported a backup first."
-        confirmLabel="Yes, Clear All"
-      />
-
-      {/* Cloudflare D1 Sync Modal */}
-      <AgencyCloudModal
-        isOpen={isCloudModalOpen}
-        onClose={() => setIsCloudModalOpen(false)}
-        mode={cloudModalMode}
-        onSuccess={() => {
-          checkCloudStatus();
-          loadSettings();
-        }}
+        confirmLabel={isResetting ? "Clearing..." : "Yes, Clear All"}
+        isLoading={isResetting}
+        variant="danger"
       />
     </div>
   );

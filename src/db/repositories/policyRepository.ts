@@ -1,4 +1,4 @@
-import { db } from '../database';
+import { db, getLegacyDatabase } from '../database';
 import type { Policy, PolicyRecordStatus } from '@/types';
 import { normalizeSearchString, advanceFupDate, generateUUID } from '@/utils/formatters';
 import { d1SyncService } from '@/services/cloud/d1SyncService';
@@ -89,6 +89,13 @@ export const policyRepository = {
     if (existing) {
       await db.policies.delete(id);
       await db.reminders.where('policyId').equals(id).delete();
+      try {
+        const legacy = getLegacyDatabase();
+        if (legacy.name !== db.name) {
+          await legacy.policies.delete(id);
+          await legacy.reminders.where('policyId').equals(id).delete();
+        }
+      } catch {}
       await db.auditLogs.add({
         id: generateUUID(),
         entityType: 'policy',
@@ -104,11 +111,23 @@ export const policyRepository = {
   async bulkDelete(ids: string[]): Promise<number> {
     if (!ids || ids.length === 0) return 0;
     let deletedCount = 0;
+    let legacyDb: any = null;
+    try {
+      const leg = getLegacyDatabase();
+      if (leg.name !== db.name) legacyDb = leg;
+    } catch {}
+
     for (const id of ids) {
       const existing = await db.policies.get(id);
       if (existing) {
         await db.policies.delete(id);
         await db.reminders.where('policyId').equals(id).delete();
+        if (legacyDb) {
+          try {
+            await legacyDb.policies.delete(id);
+            await legacyDb.reminders.where('policyId').equals(id).delete();
+          } catch {}
+        }
         await db.auditLogs.add({
           id: generateUUID(),
           entityType: 'policy',
