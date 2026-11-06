@@ -1,6 +1,6 @@
 import { db, getLegacyDatabase } from '../database';
 import type { Customer, Policy } from '@/types';
-import { normalizeSearchString, generateUUID } from '@/utils/formatters';
+import { normalizeSearchString, generateUUID, parseDateToISO } from '@/utils/formatters';
 import { d1SyncService } from '@/services/cloud/d1SyncService';
 
 export interface CustomerWithSummary extends Customer {
@@ -40,6 +40,11 @@ export const customerRepository = {
     if (!customer) return undefined;
 
     const policies = await db.policies.where('customerId').equals(id).toArray();
+    policies.sort((a, b) => {
+      const dateA = parseDateToISO(a.commencementDate) || a.commencementDate || '';
+      const dateB = parseDateToISO(b.commencementDate) || b.commencementDate || '';
+      return dateB.localeCompare(dateA);
+    });
     const policyCount = policies.length;
     const totalSumAssured = policies.reduce((sum, p) => sum + p.sumAssured, 0);
     const totalRecordedPremium = policies.reduce((sum, p) => sum + p.premiumAmount, 0);

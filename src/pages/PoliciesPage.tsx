@@ -18,7 +18,8 @@ import {
   Sun,
   Moon,
   Receipt,
-  Sparkles
+  Sparkles,
+  ArrowUpDown
 } from 'lucide-react';
 import { policyRepository, type PolicyFilterOptions } from '@/db/repositories/policyRepository';
 import { customerRepository } from '@/db/repositories/customerRepository';
@@ -28,7 +29,7 @@ import { d1SyncService } from '@/services/cloud/d1SyncService';
 import { isBasePolicy } from '@/services/commission/commissionBillService';
 import { backupService } from '@/services/backup/backupService';
 import { importService } from '@/services/import/importService';
-import { formatCurrency, formatDate, advanceFupDate, generateUUID, normalizeSearchString } from '@/utils/formatters';
+import { formatCurrency, formatDate, advanceFupDate, generateUUID, normalizeSearchString, parseDateToISO } from '@/utils/formatters';
 import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
 import { Modal } from '@/components/shared/Modal';
@@ -47,6 +48,7 @@ export function PoliciesPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>('');
   const [selectedFupMonth, setSelectedFupMonth] = useState('');
   const [onlyWarnings, setOnlyWarnings] = useState(false);
+  const [sortBy, setSortBy] = useState<'doc_desc' | 'doc_asc' | 'fup_asc' | 'fup_desc' | 'premium_desc' | 'serial_asc' | 'policy_asc' | 'name_asc'>('doc_desc');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -217,13 +219,13 @@ export function PoliciesPage() {
 
   useEffect(() => {
     loadPolicies();
-  }, [selectedPlan, selectedMode, selectedStatus, selectedFupMonth, onlyWarnings]);
+  }, [selectedPlan, selectedMode, selectedStatus, selectedFupMonth, onlyWarnings, sortBy]);
 
   async function loadPolicies() {
     setIsLoading(true);
     try {
       await ensureDataSynchronized();
-      const filters: PolicyFilterOptions = {};
+      const filters: PolicyFilterOptions = { sortBy };
       if (selectedPlan) filters.planCode = selectedPlan;
       if (selectedMode) filters.premiumMode = selectedMode;
       if (selectedStatus) filters.recordStatus = selectedStatus as PolicyRecordStatus;
@@ -294,14 +296,52 @@ export function PoliciesPage() {
     );
   });
 
+  // Sort policies (default: in desc order last comes first as per DOC)
+  const sortedPolicies = [...filteredPolicies].sort((a, b) => {
+    if (sortBy === 'doc_desc') {
+      const dateA = parseDateToISO(a.commencementDate) || a.commencementDate || '';
+      const dateB = parseDateToISO(b.commencementDate) || b.commencementDate || '';
+      const cmp = dateB.localeCompare(dateA);
+      if (cmp !== 0) return cmp;
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    }
+    if (sortBy === 'doc_asc') {
+      const dateA = parseDateToISO(a.commencementDate) || a.commencementDate || '';
+      const dateB = parseDateToISO(b.commencementDate) || b.commencementDate || '';
+      return dateA.localeCompare(dateB);
+    }
+    if (sortBy === 'fup_asc') {
+      const fupA = parseDateToISO(a.firstUnpaidPremiumDate) || a.firstUnpaidPremiumDate || '';
+      const fupB = parseDateToISO(b.firstUnpaidPremiumDate) || b.firstUnpaidPremiumDate || '';
+      return fupA.localeCompare(fupB);
+    }
+    if (sortBy === 'fup_desc') {
+      const fupA = parseDateToISO(a.firstUnpaidPremiumDate) || a.firstUnpaidPremiumDate || '';
+      const fupB = parseDateToISO(b.firstUnpaidPremiumDate) || b.firstUnpaidPremiumDate || '';
+      return fupB.localeCompare(fupA);
+    }
+    if (sortBy === 'premium_desc') {
+      return (b.premiumAmount || 0) - (a.premiumAmount || 0);
+    }
+    if (sortBy === 'policy_asc') {
+      return a.policyNumber.localeCompare(b.policyNumber);
+    }
+    if (sortBy === 'name_asc') {
+      return (a.customerName || '').localeCompare(b.customerName || '');
+    }
+    const sA = a.sourceSerialNumber ?? 9999999;
+    const sB = b.sourceSerialNumber ?? 9999999;
+    return sA - sB;
+  });
+
   const isShowAll = pageSize === 'all';
-  const effectivePageSize = isShowAll ? filteredPolicies.length || 1 : pageSize;
-  const totalPages = isShowAll ? 1 : Math.max(1, Math.ceil(filteredPolicies.length / effectivePageSize));
+  const effectivePageSize = isShowAll ? sortedPolicies.length || 1 : pageSize;
+  const totalPages = isShowAll ? 1 : Math.max(1, Math.ceil(sortedPolicies.length / effectivePageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
 
   const paginatedPolicies = isShowAll
-    ? filteredPolicies
-    : filteredPolicies.slice(
+    ? sortedPolicies
+    : sortedPolicies.slice(
         (safeCurrentPage - 1) * effectivePageSize,
         safeCurrentPage * effectivePageSize
       );
@@ -648,6 +688,29 @@ export function PoliciesPage() {
                 </button>
               )}
             </div>
+
+            {/* Sort Selector: default D.O.C. Descending (newest first) */}
+            <div className="flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-0.5 shrink-0 sm:ml-auto">
+              <ArrowUpDown className="w-3 h-3 text-slate-400 shrink-0" />
+              <span className="text-[10px] font-semibold text-slate-500">Sort:</span>
+              <select
+                value={sortBy}
+                onChange={(e) => {
+                  setSortBy(e.target.value as any);
+                  setCurrentPage(1);
+                }}
+                className="text-[11px] font-semibold bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
+              >
+                <option value="doc_desc">D.O.C. (Newest First / Desc)</option>
+                <option value="doc_asc">D.O.C. (Oldest First / Asc)</option>
+                <option value="fup_asc">F.U.P. (Due Earliest)</option>
+                <option value="fup_desc">F.U.P. (Due Latest)</option>
+                <option value="premium_desc">Premium (High to Low)</option>
+                <option value="serial_asc">Original Serial #</option>
+                <option value="policy_asc">Policy Number</option>
+                <option value="name_asc">Customer Name</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -930,9 +993,12 @@ export function PoliciesPage() {
         />
       ) : (
         <div className="space-y-2.5">
-          {paginatedPolicies.map((p) => {
+          {paginatedPolicies.map((p, idx) => {
             const isSelected = selectedIds.has(p.id);
-            const isNewlyAdded = !isBasePolicy(p.policyNumber);
+            const isNewlyAdded = !isBasePolicy(p.policyNumber) || (lastAddedBatch?.policyNumbers?.includes(p.policyNumber) ?? false);
+            const itemIndex = isShowAll
+              ? idx + 1
+              : (safeCurrentPage - 1) * effectivePageSize + idx + 1;
             return (
               <div
                 key={p.id}
@@ -959,8 +1025,11 @@ export function PoliciesPage() {
                         <Square className="w-4 h-4 text-slate-300 dark:text-slate-600" />
                       )}
                     </button>
-                    <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-mono text-[11px] font-bold shrink-0">
-                      {p.sourceSerialNumber || '#'}
+                    <div
+                      className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-mono text-[11px] font-bold shrink-0"
+                      title={`Item #${itemIndex}${p.sourceSerialNumber ? ` (Original S.No: ${p.sourceSerialNumber})` : ''}`}
+                    >
+                      {itemIndex}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -1063,13 +1132,13 @@ export function PoliciesPage() {
           })}
 
           {/* Pagination Bar with Prev, Pages, Next, and All */}
-          {filteredPolicies.length > 0 && (
+          {sortedPolicies.length > 0 && (
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-5 pb-2 px-2 border-t border-slate-200 dark:border-slate-800">
               {/* Item count text */}
               <div className="text-xs text-slate-600 dark:text-slate-400 font-medium text-center sm:text-left">
                 {isShowAll ? (
                   <span>
-                    Showing <strong className="text-slate-900 dark:text-white">all {filteredPolicies.length}</strong> policies
+                    Showing <strong className="text-slate-900 dark:text-white">all {sortedPolicies.length}</strong> policies
                   </span>
                 ) : (
                   <span>
@@ -1079,11 +1148,11 @@ export function PoliciesPage() {
                     </strong>{' '}
                     to{' '}
                     <strong className="text-slate-900 dark:text-white">
-                      {Math.min(safeCurrentPage * effectivePageSize, filteredPolicies.length)}
+                      {Math.min(safeCurrentPage * effectivePageSize, sortedPolicies.length)}
                     </strong>{' '}
                     of{' '}
                     <strong className="text-slate-900 dark:text-white">
-                      {filteredPolicies.length}
+                      {sortedPolicies.length}
                     </strong>{' '}
                     policies
                   </span>

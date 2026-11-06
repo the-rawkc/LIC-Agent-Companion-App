@@ -1,6 +1,6 @@
 import { db, getLegacyDatabase } from '../database';
 import type { Policy, PolicyRecordStatus } from '@/types';
-import { normalizeSearchString, advanceFupDate, generateUUID } from '@/utils/formatters';
+import { normalizeSearchString, advanceFupDate, generateUUID, parseDateToISO } from '@/utils/formatters';
 import { d1SyncService } from '@/services/cloud/d1SyncService';
 
 export interface PolicyFilterOptions {
@@ -283,20 +283,24 @@ export const policyRepository = {
       }
     }
 
-    // Default sorting: Preserves exact original Excel/report row order (sourceSerialNumber: 1, 2, 3...)
-    const sortBy = filters?.sortBy || 'serial_asc';
+    // Default sorting: Descending by DOC (Date of Commencement) - latest/newest comes first
+    const sortBy = filters?.sortBy || 'doc_desc';
     collection.sort((a, b) => {
-      if (sortBy === 'serial_asc') {
-        const sA = a.sourceSerialNumber ?? 9999999;
-        const sB = b.sourceSerialNumber ?? 9999999;
-        if (sA !== sB) return sA - sB;
-        return (b.commencementDate || '').localeCompare(a.commencementDate || '');
-      }
       if (sortBy === 'doc_desc') {
-        return (b.commencementDate || '').localeCompare(a.commencementDate || '');
+        const dateA = parseDateToISO(a.commencementDate) || a.commencementDate || '';
+        const dateB = parseDateToISO(b.commencementDate) || b.commencementDate || '';
+        const cmp = dateB.localeCompare(dateA);
+        if (cmp !== 0) return cmp;
+        const crA = a.createdAt || '';
+        const crB = b.createdAt || '';
+        return crB.localeCompare(crA);
       }
       if (sortBy === 'doc_asc') {
-        return (a.commencementDate || '').localeCompare(b.commencementDate || '');
+        const dateA = parseDateToISO(a.commencementDate) || a.commencementDate || '';
+        const dateB = parseDateToISO(b.commencementDate) || b.commencementDate || '';
+        const cmp = dateA.localeCompare(dateB);
+        if (cmp !== 0) return cmp;
+        return (a.policyNumber || '').localeCompare(b.policyNumber || '');
       }
       if (sortBy === 'fup_asc') {
         return (a.firstUnpaidPremiumDate || '').localeCompare(b.firstUnpaidPremiumDate || '');
