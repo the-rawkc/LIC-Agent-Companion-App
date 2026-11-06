@@ -1,4 +1,4 @@
-import { db } from '../database';
+import { db, getLegacyDatabase } from '../database';
 import type { Customer, Policy } from '@/types';
 import { normalizeSearchString, generateUUID } from '@/utils/formatters';
 import { d1SyncService } from '@/services/cloud/d1SyncService';
@@ -63,7 +63,29 @@ export const customerRepository = {
       policiesByCustomer.set(p.customerId, list);
     }
 
-    return customers.map((c) => {
+    // Automatically purge any orphan customers with 0 policies
+    const orphanCustomers = customers.filter((c) => {
+      const pList = policiesByCustomer.get(c.id);
+      return !pList || pList.length === 0;
+    });
+
+    if (orphanCustomers.length > 0) {
+      const orphanIds = orphanCustomers.map((c) => c.id);
+      db.customers.bulkDelete(orphanIds).catch(() => {});
+      try {
+        const legacy = getLegacyDatabase();
+        if (legacy.name !== db.name) {
+          legacy.customers.bulkDelete(orphanIds).catch(() => {});
+        }
+      } catch {}
+    }
+
+    const activeCustomers = customers.filter((c) => {
+      const pList = policiesByCustomer.get(c.id);
+      return Boolean(pList && pList.length > 0);
+    });
+
+    return activeCustomers.map((c) => {
       const cPolicies = policiesByCustomer.get(c.id) || [];
       const totalSumAssured = cPolicies.reduce((sum, p) => sum + p.sumAssured, 0);
       const totalRecordedPremium = cPolicies.reduce((sum, p) => sum + p.premiumAmount, 0);
@@ -82,6 +104,57 @@ export const customerRepository = {
         nextUpcomingDate: upcomingDates[0] || null,
       };
     });
+  },
+
+  /**
+   * Automatically deletes all customers who have 0 associated policies
+   */
+  async cleanupOrphanCustomers(options?: { forceAll?: boolean }): Promise<number> {
+    const [allCustomers, allPolicies] = await Promise.all([
+      db.customers.toArray(),
+      db.policies.toArray(),
+    ]);
+
+    const activeCustomerIds = new Set(allPolicies.map((p) => p.customerId).filter(Boolean));
+    const nowMs = Date.now();
+    const GRACE_PERIOD_MS = 60 * 1000; // 60 seconds grace period for brand new customers unless forceAll
+
+    const orphanCustomers = allCustomers.filter((c) => {
+      if (activeCustomerIds.has(c.id)) return false;
+      if (options?.forceAll) return true;
+      const createdMs = c.createdAt ? new Date(c.createdAt).getTime() : 0;
+      return (nowMs - createdMs) > GRACE_PERIOD_MS;
+    });
+
+    if (orphanCustomers.length === 0) return 0;
+
+    let legacyDb: any = null;
+    try {
+      const leg = getLegacyDatabase();
+      if (leg.name !== db.name) legacyDb = leg;
+    } catch {}
+
+    const orphanIds = orphanCustomers.map((c) => c.id);
+    await db.customers.bulkDelete(orphanIds);
+    if (legacyDb) {
+      try {
+        await legacyDb.customers.bulkDelete(orphanIds);
+      } catch {}
+    }
+
+    const nowIso = new Date().toISOString();
+    const auditEntries = orphanCustomers.map((c) => ({
+      id: generateUUID(),
+      entityType: 'customer' as const,
+      entityId: c.id,
+      action: 'delete' as const,
+      timestamp: nowIso,
+      summary: `Cleaned up customer "${c.displayName}" (0 policies)`,
+    }));
+    await db.auditLogs.bulkAdd(auditEntries);
+
+    d1SyncService.triggerAutoSync();
+    return orphanCustomers.length;
   },
 
   async create(customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): Promise<Customer> {
@@ -192,6 +265,12 @@ export const customerRepository = {
         throw new Error(`Cannot delete customer with ${associatedPolicies} active policies. Please reassign or delete policies first.`);
       }
       await db.customers.delete(id);
+      try {
+        const legacy = getLegacyDatabase();
+        if (legacy.name !== db.name) {
+          await legacy.customers.delete(id);
+        }
+      } catch {}
       await db.auditLogs.add({
         id: generateUUID(),
         entityType: 'customer',

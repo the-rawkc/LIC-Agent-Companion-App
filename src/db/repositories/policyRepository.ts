@@ -87,15 +87,22 @@ export const policyRepository = {
   async delete(id: string): Promise<void> {
     const existing = await db.policies.get(id);
     if (existing) {
+      const customerId = existing.customerId;
       await db.policies.delete(id);
       await db.reminders.where('policyId').equals(id).delete();
+      let legacyDb: any = null;
       try {
         const legacy = getLegacyDatabase();
-        if (legacy.name !== db.name) {
-          await legacy.policies.delete(id);
-          await legacy.reminders.where('policyId').equals(id).delete();
-        }
+        if (legacy.name !== db.name) legacyDb = legacy;
       } catch {}
+
+      if (legacyDb) {
+        try {
+          await legacyDb.policies.delete(id);
+          await legacyDb.reminders.where('policyId').equals(id).delete();
+        } catch {}
+      }
+
       await db.auditLogs.add({
         id: generateUUID(),
         entityType: 'policy',
@@ -104,6 +111,29 @@ export const policyRepository = {
         timestamp: new Date().toISOString(),
         summary: `Deleted policy ${existing.policyNumber}`,
       });
+
+      // When the policy is deleted, if its customer now has 0 policies, delete the customer too
+      if (customerId) {
+        const remainingCount = await db.policies.where('customerId').equals(customerId).count();
+        if (remainingCount === 0) {
+          const cust = await db.customers.get(customerId);
+          await db.customers.delete(customerId);
+          if (legacyDb) {
+            try {
+              await legacyDb.customers.delete(customerId);
+            } catch {}
+          }
+          await db.auditLogs.add({
+            id: generateUUID(),
+            entityType: 'customer',
+            entityId: customerId,
+            action: 'delete',
+            timestamp: new Date().toISOString(),
+            summary: `Deleted customer "${cust?.displayName || customerId}" because all associated policies were deleted`,
+          });
+        }
+      }
+
       d1SyncService.triggerAutoSync();
     }
   },
@@ -117,9 +147,12 @@ export const policyRepository = {
       if (leg.name !== db.name) legacyDb = leg;
     } catch {}
 
+    const affectedCustomerIds = new Set<string>();
+
     for (const id of ids) {
       const existing = await db.policies.get(id);
       if (existing) {
+        if (existing.customerId) affectedCustomerIds.add(existing.customerId);
         await db.policies.delete(id);
         await db.reminders.where('policyId').equals(id).delete();
         if (legacyDb) {
@@ -139,6 +172,29 @@ export const policyRepository = {
         deletedCount++;
       }
     }
+
+    // Clean up any affected customers who now have 0 remaining policies
+    for (const custId of affectedCustomerIds) {
+      const remainingCount = await db.policies.where('customerId').equals(custId).count();
+      if (remainingCount === 0) {
+        const cust = await db.customers.get(custId);
+        await db.customers.delete(custId);
+        if (legacyDb) {
+          try {
+            await legacyDb.customers.delete(custId);
+          } catch {}
+        }
+        await db.auditLogs.add({
+          id: generateUUID(),
+          entityType: 'customer',
+          entityId: custId,
+          action: 'delete',
+          timestamp: new Date().toISOString(),
+          summary: `Deleted customer "${cust?.displayName || custId}" because all associated policies were deleted`,
+        });
+      }
+    }
+
     if (deletedCount > 0) {
       d1SyncService.triggerAutoSync();
     }

@@ -159,9 +159,15 @@ function localSyncPlugin(): Plugin {
       }
 
       const now = new Date().toISOString();
+      const pushedPolicies = Array.isArray(body.policies) ? body.policies : [];
+      const activeCustomerIds = new Set(pushedPolicies.map((p: any) => p.customerId).filter(Boolean));
+      const pushedCustomers = Array.isArray(body.customers)
+        ? (activeCustomerIds.size > 0 ? body.customers.filter((c: any) => activeCustomerIds.has(c.id)) : [])
+        : [];
+
       localData.set(agencyCode, {
-        policies: Array.isArray(body.policies) ? body.policies : [],
-        customers: Array.isArray(body.customers) ? body.customers : [],
+        policies: pushedPolicies,
+        customers: pushedCustomers,
         reminders: Array.isArray(body.reminders) ? body.reminders : [],
         profile: body.profile || null,
         lastAddedBatch: body.lastAddedBatch || null,
@@ -179,8 +185,8 @@ function localSyncPlugin(): Plugin {
         agencyCode,
         syncedAt: now,
         counts: {
-          policies: body.policies?.length || 0,
-          customers: body.customers?.length || 0,
+          policies: pushedPolicies.length,
+          customers: pushedCustomers.length,
           reminders: body.reminders?.length || 0,
         },
       });

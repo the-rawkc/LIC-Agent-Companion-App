@@ -79,8 +79,9 @@ export function CustomersPage() {
   async function loadCustomers() {
     setIsLoading(true);
     try {
+      await customerRepository.cleanupOrphanCustomers({ forceAll: true });
       const data = await customerRepository.getAllWithSummary();
-      setCustomers(data);
+      setCustomers(data.filter((c) => c.policyCount > 0));
     } catch (err) {
       console.error('Failed to load customers', err);
     } finally {

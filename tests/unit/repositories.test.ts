@@ -217,6 +217,102 @@ describe('Database Repositories & Business Logic', () => {
     await expect(customerRepository.delete(cust.id)).rejects.toThrow(/Cannot delete customer with 1 active policies/);
   });
 
+  it('automatically deletes customer when their last policy is deleted (uniform deletion)', async () => {
+    const cust = await customerRepository.create({
+      displayName: 'Single Policy User',
+      normalizedName: 'single policy user',
+      mobileNumber: '9111223344',
+    });
+
+    const policy: Policy = {
+      id: 'pol-del-1',
+      policyNumber: '888777666',
+      customerId: cust.id,
+      customerName: 'Single Policy User',
+      planCode: '914',
+      term: 20,
+      premiumPayingTerm: 20,
+      originalPlanString: '914/20/20',
+      sumAssured: 200000,
+      commencementDate: '2021-01-01',
+      premiumMode: 'Yearly',
+      firstUnpaidPremiumDate: '2026-01-01',
+      premiumAmount: 10000,
+      maturityDate: '2041-01-01',
+      dateOfBirth: null,
+      sourceSerialNumber: 1,
+      sourceReportDate: '2026-10-29',
+      sourceImportId: null,
+      rawExtractedValues: {},
+      extractionWarnings: [],
+      recordStatus: 'active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await policyRepository.create(policy);
+
+    // Verify both policy and customer exist
+    expect(await policyRepository.getById('pol-del-1')).toBeDefined();
+    expect(await customerRepository.getById(cust.id)).toBeDefined();
+
+    // Delete policy -> customer should be deleted automatically!
+    await policyRepository.delete('pol-del-1');
+
+    expect(await policyRepository.getById('pol-del-1')).toBeUndefined();
+    expect(await customerRepository.getById(cust.id)).toBeUndefined();
+  });
+
+  it('cleans up all orphan customers with 0 policies using cleanupOrphanCustomers', async () => {
+    // Create orphan customers with 0 policies
+    await customerRepository.create({
+      displayName: 'Orphan User A',
+      normalizedName: 'orphan user a',
+    });
+    await customerRepository.create({
+      displayName: 'Orphan User B',
+      normalizedName: 'orphan user b',
+    });
+
+    // Active customer with a policy
+    const activeCust = await customerRepository.create({
+      displayName: 'Active User C',
+      normalizedName: 'active user c',
+    });
+    await policyRepository.create({
+      id: 'pol-active-c',
+      policyNumber: '777666555',
+      customerId: activeCust.id,
+      customerName: 'Active User C',
+      planCode: '914',
+      term: 15,
+      premiumPayingTerm: 15,
+      originalPlanString: '914/15/15',
+      sumAssured: 100000,
+      commencementDate: '2022-01-01',
+      premiumMode: 'Half-Yearly',
+      firstUnpaidPremiumDate: '2026-07-01',
+      premiumAmount: 4000,
+      maturityDate: '2037-01-01',
+      dateOfBirth: null,
+      sourceSerialNumber: 2,
+      sourceReportDate: '2026-10-29',
+      sourceImportId: null,
+      rawExtractedValues: {},
+      extractionWarnings: [],
+      recordStatus: 'active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    const cleanedCount = await customerRepository.cleanupOrphanCustomers({ forceAll: true });
+    expect(cleanedCount).toBe(2);
+
+    const remainingCustomers = await customerRepository.getAll();
+    expect(remainingCustomers).toHaveLength(1);
+    expect(remainingCustomers[0].displayName).toBe('Active User C');
+  });
+
   it('saves and retrieves agent profile including custom avatar photo', async () => {
     const customPhoto = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD';
     await profileRepository.saveProfile({

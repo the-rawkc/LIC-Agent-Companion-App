@@ -147,6 +147,22 @@ export async function ensureDataSynchronized(): Promise<void> {
       localStorage.setItem(migrationKey, 'true');
       hasAutoSynced = true;
     }
+
+    // Always clean up orphan customers with 0 policies
+    const allPolicies = await active.policies.toArray();
+    const activeCustomerIds = new Set(allPolicies.map((p) => p.customerId).filter(Boolean));
+    const allCustomers = await active.customers.toArray();
+    const orphanCustomerIds = allCustomers
+      .filter((c) => !activeCustomerIds.has(c.id))
+      .map((c) => c.id);
+    if (orphanCustomerIds.length > 0) {
+      await active.customers.bulkDelete(orphanCustomerIds);
+      if (legacy.name !== active.name) {
+        try {
+          await legacy.customers.bulkDelete(orphanCustomerIds);
+        } catch {}
+      }
+    }
   } catch (err) {
     console.warn('Initial data migration notice:', err);
   }
