@@ -48,6 +48,12 @@ export function RemindersPage() {
 
   useEffect(() => {
     loadData();
+
+    const handleSync = () => {
+      loadData();
+    };
+    window.addEventListener('lic_cloud_synced', handleSync);
+    return () => window.removeEventListener('lic_cloud_synced', handleSync);
   }, []);
 
   async function loadData() {

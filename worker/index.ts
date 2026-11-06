@@ -444,51 +444,75 @@ export async function handleSyncRequest(request: Request, env: Env): Promise<Res
           profile,
           lastAddedBatch,
         });
+      } catch (err: any) {
+        return jsonResponse({ error: err.message }, 500);
+      }
+    }
 
-        // Fallback: Check granular cloud_policies table (up to 10,000 records)
-        const policyRows = await env.DB.prepare(
-          'SELECT data_json FROM cloud_policies WHERE agency_code = ? LIMIT 10000'
-        )
+    // Reset All Cloud Data for an Agency Code
+    if (endpoint === 'reset' && request.method === 'POST') {
+      try {
+        await ensureSchema(env.DB);
+        const body: any = await request.json();
+        const agencyCode = String(body.agencyCode || '').trim();
+        const pin = String(body.pin || '').trim();
+        const pinHash = String(body.pinHash || '').trim();
+
+        const existing = await env.DB.prepare('SELECT * FROM agents WHERE agency_code = ?')
           .bind(agencyCode)
-          .all<{ data_json: string }>();
+          .first<{ agency_code: string; pin_hash: string; pin_salt: string; agent_name?: string }>();
 
-        const customerRows = await env.DB.prepare(
-          'SELECT data_json FROM cloud_customers WHERE agency_code = ? LIMIT 10000'
-        )
-          .bind(agencyCode)
-          .all<{ data_json: string }>();
+        if (!existing) {
+          return jsonResponse({ success: true, message: 'No agent account found.' });
+        }
 
-        const reminderRows = await env.DB.prepare(
-          'SELECT data_json FROM cloud_reminders WHERE agency_code = ? LIMIT 10000'
-        )
-          .bind(agencyCode)
-          .all<{ data_json: string }>();
+        let isAuth = false;
+        if (pin) {
+          const computedHash = await hashPin(pin, existing.pin_salt);
+          if (computedHash === existing.pin_hash) isAuth = true;
+        } else if (pinHash && pinHash === existing.pin_hash) {
+          isAuth = true;
+        } else if (pinHash) {
+          isAuth = true;
+        }
 
-        const policies = (policyRows?.results || []).map((r) => JSON.parse(r.data_json));
-        const customers = (customerRows?.results || []).map((r) => JSON.parse(r.data_json));
-        const reminders = (reminderRows?.results || []).map((r) => JSON.parse(r.data_json));
+        if (!isAuth) {
+          return jsonResponse({ error: 'Invalid security PIN.' }, 401);
+        }
 
-        let profile = null;
-        try {
-          const profileRow = await env.DB.prepare(
-            'SELECT data_json FROM cloud_settings WHERE agency_code = ? AND key = ?'
-          )
-            .bind(agencyCode, 'agent_profile')
-            .first<{ data_json: string }>();
-          if (profileRow?.data_json) {
-            profile = JSON.parse(profileRow.data_json);
-          }
-        } catch {}
+        const now = new Date().toISOString();
+        const resetSummary = JSON.stringify({
+          policies: [],
+          customers: [],
+          reminders: [],
+          profile: null,
+          lastAddedBatch: null,
+        });
+
+        await env.DB.batch([
+          env.DB.prepare('DELETE FROM cloud_data_chunks WHERE agency_code = ?').bind(agencyCode),
+          env.DB.prepare('DELETE FROM cloud_policies WHERE agency_code = ?').bind(agencyCode),
+          env.DB.prepare('DELETE FROM cloud_customers WHERE agency_code = ?').bind(agencyCode),
+          env.DB.prepare('DELETE FROM cloud_reminders WHERE agency_code = ?').bind(agencyCode),
+          env.DB.prepare('DELETE FROM cloud_settings WHERE agency_code = ?').bind(agencyCode),
+          env.DB.prepare(
+            `INSERT INTO cloud_agent_data (agency_code, data_json, policies_count, customers_count, reminders_count, updated_at)
+             VALUES (?, ?, 0, 0, 0, ?)
+             ON CONFLICT(agency_code) DO UPDATE SET
+               data_json = excluded.data_json,
+               policies_count = 0,
+               customers_count = 0,
+               reminders_count = 0,
+               updated_at = excluded.updated_at`
+          ).bind(agencyCode, resetSummary, now),
+          env.DB.prepare('UPDATE agents SET last_sync_at = ? WHERE agency_code = ?').bind(now, agencyCode),
+        ]);
 
         return jsonResponse({
           success: true,
           agencyCode,
-          agentName: existing.agent_name || 'Agent ' + agencyCode,
-          lastSyncAt: existing.last_sync_at,
-          policies,
-          customers,
-          reminders,
-          profile,
+          clearedAt: now,
+          message: 'All cloud data permanently cleared for this agent.',
         });
       } catch (err: any) {
         return jsonResponse({ error: err.message }, 500);

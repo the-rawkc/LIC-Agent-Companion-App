@@ -1,7 +1,7 @@
 import { db, ensureDataSynchronized } from '@/db/database';
 import { policyRepository } from '@/db/repositories/policyRepository';
 import { customerRepository } from '@/db/repositories/customerRepository';
-import { advanceFupDate, parseDateToISO, generateUUID, parseCleanNumber } from '@/utils/formatters';
+import { advanceFupDate, parseDateToISO, generateUUID, parseCleanNumber, normalizeSearchString } from '@/utils/formatters';
 import { d1SyncService } from '@/services/cloud/d1SyncService';
 import userUploadedPoliciesData from '@/services/sampleData/userUploadedPolicies.json';
 import type {
@@ -315,7 +315,7 @@ export const commissionBillService = {
               customer = {
                 id: customerId,
                 displayName: item.customerName,
-                normalizedName: item.customerName.toLowerCase().trim(),
+                normalizedName: normalizeSearchString(item.customerName),
                 createdAt: now,
                 updatedAt: now,
               };

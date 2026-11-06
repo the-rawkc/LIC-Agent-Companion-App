@@ -235,6 +235,30 @@ function localSyncPlugin(): Plugin {
       });
     }
 
+    if (endpoint === 'reset' && req.method === 'POST') {
+      const existing = localAgents.get(agencyCode);
+      if (existing && !isAuthMatch(existing)) {
+        return jsonRes(res, { error: 'Invalid security PIN.' }, 401);
+      }
+      localData.set(agencyCode, {
+        policies: [],
+        customers: [],
+        reminders: [],
+        profile: null,
+        lastAddedBatch: null,
+        updatedAt: new Date().toISOString(),
+      });
+      if (existing) {
+        existing.lastSyncAt = new Date().toISOString();
+      }
+      persistStore();
+      return jsonRes(res, {
+        success: true,
+        agencyCode,
+        message: 'All cloud data permanently cleared for this agent.',
+      });
+    }
+
     jsonRes(res, { error: 'Not found' }, 404);
   };
 

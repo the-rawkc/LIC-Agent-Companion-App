@@ -22,6 +22,12 @@ export function AnalyticsPage() {
 
   useEffect(() => {
     loadAnalytics();
+
+    const handleSync = () => {
+      loadAnalytics();
+    };
+    window.addEventListener('lic_cloud_synced', handleSync);
+    return () => window.removeEventListener('lic_cloud_synced', handleSync);
   }, []);
 
   async function loadAnalytics() {

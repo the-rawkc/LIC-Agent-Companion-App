@@ -23,7 +23,7 @@ import { backupService, type BackupPayload } from '@/services/backup/backupServi
 import { importService } from '@/services/import/importService';
 import { d1SyncService } from '@/services/cloud/d1SyncService';
 import { settingsRepository } from '@/db/repositories/settingsRepository';
-import { db, getActiveAgencyCode } from '@/db/database';
+import { db, getActiveAgencyCode, wipeAllDataFromEveryTable } from '@/db/database';
 import { Button } from '@/components/shared/Button';
 import { Badge } from '@/components/shared/Badge';
 import { Modal } from '@/components/shared/Modal';
@@ -240,42 +240,10 @@ export function SettingsPage() {
   const handleResetDatabase = async () => {
     setIsResetting(true);
     try {
-      await Promise.all([
-        db.policies.clear(),
-        db.customers.clear(),
-        db.reminders.clear(),
-        db.importHistory.clear(),
-        db.auditLogs.clear(),
-        db.appSettings.clear(),
-      ]);
-
-      // Clear all Dexie databases in the browser to eliminate any ghost/legacy records
-      if (typeof indexedDB !== 'undefined' && indexedDB.databases) {
-        try {
-          const dbs = await indexedDB.databases();
-          for (const d of dbs) {
-            if (d.name && d.name.startsWith('LICAgentCompanionDB')) {
-              const req = indexedDB.deleteDatabase(d.name);
-              await new Promise((resolve) => {
-                req.onsuccess = resolve;
-                req.onerror = resolve;
-                req.onblocked = resolve;
-              });
-            }
-          }
-        } catch {}
-      }
-
-      // Clear server sync store too so other devices stay uniformly cleared
-      try {
-        const { agencyCode, pin } = d1SyncService.getCredentials();
-        if (agencyCode) {
-          await d1SyncService.pushToCloud(agencyCode, pin || '');
-        }
-      } catch {}
+      await wipeAllDataFromEveryTable({ resetCloud: true });
 
       setIsResetConfirmOpen(false);
-      alert('All policy and customer records have been permanently cleared.');
+      alert('All tables and cloud records have been permanently cleared. The app is reset.');
       window.location.reload();
     } catch (err: any) {
       alert('Failed to reset database: ' + (err.message || String(err)));

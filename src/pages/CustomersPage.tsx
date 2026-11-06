@@ -23,7 +23,7 @@ import {
 import { customerRepository, type CustomerWithSummary } from '@/db/repositories/customerRepository';
 import { settingsRepository } from '@/db/repositories/settingsRepository';
 import { backupService } from '@/services/backup/backupService';
-import { formatCurrency, formatDate } from '@/utils/formatters';
+import { formatCurrency, formatDate, normalizeSearchString } from '@/utils/formatters';
 import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
 import { Modal } from '@/components/shared/Modal';
@@ -64,6 +64,12 @@ export function CustomersPage() {
     settingsRepository.get<string>('theme', 'light').then((theme) => {
       setIsDarkMode(theme === 'dark' || document.documentElement.classList.contains('dark'));
     });
+
+    const handleSync = () => {
+      loadCustomers();
+    };
+    window.addEventListener('lic_cloud_synced', handleSync);
+    return () => window.removeEventListener('lic_cloud_synced', handleSync);
   }, []);
 
   const toggleTheme = async () => {
@@ -135,7 +141,7 @@ export function CustomersPage() {
     try {
       const created = await customerRepository.create({
         displayName: newCustomerName.trim(),
-        normalizedName: newCustomerName.trim().toLowerCase(),
+        normalizedName: normalizeSearchString(newCustomerName.trim()),
         mobileNumber: newCustomerMobile.trim() || undefined,
         notes: newCustomerNotes.trim() || undefined,
       });

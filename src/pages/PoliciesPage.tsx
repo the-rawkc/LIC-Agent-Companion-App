@@ -28,7 +28,7 @@ import { d1SyncService } from '@/services/cloud/d1SyncService';
 import { isBasePolicy } from '@/services/commission/commissionBillService';
 import { backupService } from '@/services/backup/backupService';
 import { importService } from '@/services/import/importService';
-import { formatCurrency, formatDate, advanceFupDate, generateUUID } from '@/utils/formatters';
+import { formatCurrency, formatDate, advanceFupDate, generateUUID, normalizeSearchString } from '@/utils/formatters';
 import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
 import { Modal } from '@/components/shared/Modal';
@@ -342,7 +342,7 @@ export function PoliciesPage() {
       if (!customerId) {
         const cust = await customerRepository.create({
           displayName: addCustomerName.trim(),
-          normalizedName: addCustomerName.trim().toLowerCase(),
+          normalizedName: normalizeSearchString(addCustomerName.trim()),
         });
         customerId = cust.id;
       }

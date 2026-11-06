@@ -1,4 +1,4 @@
-import { getDatabase, getLegacyDatabase } from '@/db/database';
+import { getDatabase, getLegacyDatabase, purgeOrphanCustomersFromDb } from '@/db/database';
 import { settingsRepository } from '@/db/repositories/settingsRepository';
 import { parseDateToISO } from '@/utils/formatters';
 import type { Policy, Customer, Reminder } from '@/types';
@@ -230,6 +230,35 @@ export const d1SyncService = {
   },
 
   /**
+   * Permanently clears all records for this agencyCode from Cloudflare D1
+   */
+  async resetCloudData(agencyCode: string, pin?: string): Promise<boolean> {
+    const sanitized = agencyCode.trim().toUpperCase();
+    const base = await this.getApiBaseUrl();
+    const creds = this.getCredentials();
+    const pinVal = (pin || creds.pin || '').trim();
+    const pinHashVal = creds.pinHash || '';
+
+    try {
+      const res = await fetch(`${base}/api/sync/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agencyCode: sanitized,
+          pin: pinVal,
+          pinHash: pinHashVal,
+        }),
+      });
+
+      const data = await safeJson(res);
+      return Boolean(data.success);
+    } catch (err) {
+      console.warn('Cloud reset notice:', err);
+      return false;
+    }
+  },
+
+  /**
    * Pull all cloud policies, customers, and reminders for Agency Code and merge into local IndexedDB
    */
   async pullFromCloud(
@@ -271,16 +300,52 @@ export const d1SyncService = {
     const cloudReminders: Reminder[] = Array.isArray(data.reminders) ? data.reminders : [];
     const cloudProfile = data.profile || null;
 
-    // Filter out any policies & customers marked as deleted locally
-    const deletedLogs = await targetDb.auditLogs.where({ entityType: 'policy', action: 'delete' }).toArray();
-    const deletedSet = new Set(deletedLogs.map((l) => l.entityId));
+    // 1. If cloud is empty (e.g. wiped/reset or new), mirror 0 state locally across all tables
+    if (cloudPolicies.length === 0) {
+      await targetDb.transaction('rw', [targetDb.policies, targetDb.customers, targetDb.reminders, targetDb.appSettings], async () => {
+        await targetDb.policies.clear();
+        await targetDb.customers.clear();
+        await targetDb.reminders.clear();
+        await targetDb.appSettings.delete('last_added_batch');
+        if (data.lastSyncAt) {
+          await targetDb.appSettings.put({
+            key: 'last_cloud_sync',
+            value: data.lastSyncAt,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      });
 
-    const deletedCustomerLogs = await targetDb.auditLogs.where({ entityType: 'customer', action: 'delete' }).toArray();
-    const deletedCustomerSet = new Set(deletedCustomerLogs.map((l) => l.entityId));
+      try {
+        const legacyDb = getLegacyDatabase();
+        if (legacyDb.name !== targetDb.name) {
+          await legacyDb.policies.clear();
+          await legacyDb.customers.clear();
+          await legacyDb.reminders.clear();
+        }
+      } catch {}
 
-    const validCloudCustomers = cloudCustomers.filter((c) => !deletedCustomerSet.has(c.id));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('lic_cloud_synced', {
+            detail: {
+              agencyCode: sanitized,
+              syncedAt: data.lastSyncAt,
+              counts: { policies: 0, customers: 0, reminders: 0 },
+            },
+          })
+        );
+      }
 
-    // Reconcile existing local policies by policyNumber so FUP updates and new policies merge cleanly across devices
+      return {
+        policiesCount: 0,
+        customersCount: 0,
+        remindersCount: 0,
+        lastSyncAt: data.lastSyncAt,
+      };
+    }
+
+    // 2. Reconcile existing local policies by policyNumber so FUP updates and new policies merge cleanly across devices
     const localPolicies = await targetDb.policies.toArray();
     const localPolicyByNumber = new Map<string, Policy>();
     for (const lp of localPolicies) {
@@ -294,8 +359,6 @@ export const d1SyncService = {
     const newlyPulledPolicies: Policy[] = [];
     const policiesToPut: Policy[] = [];
     for (const cp of cloudPolicies) {
-      if (deletedSet.has(cp.id)) continue;
-
       const cleanCpNum = cp.policyNumber.replace(/[^0-9]/g, '').trim();
       const existing = cleanCpNum
         ? localPolicyByNumber.get(cleanCpNum) || localPolicyByNumber.get(cleanCpNum.replace(/^0+/, ''))
@@ -334,16 +397,17 @@ export const d1SyncService = {
     const cloudPolicyNums = new Set(
       cloudPolicies.map((p) => p.policyNumber.replace(/[^0-9]/g, '').trim()).filter(Boolean)
     );
-    const orphanPolicyIds = cloudPolicies.length >= 1000
-      ? localPolicies
-          .filter((lp) => !cloudPolicyIds.has(lp.id) && !cloudPolicyNums.has(lp.policyNumber.replace(/[^0-9]/g, '').trim()))
-          .map((lp) => lp.id)
-      : [];
+    const orphanPolicyIds = localPolicies
+      .filter((lp) => {
+        const cleanNum = lp.policyNumber.replace(/[^0-9]/g, '').trim();
+        return !cloudPolicyIds.has(lp.id) && !cloudPolicyNums.has(cleanNum);
+      })
+      .map((lp) => lp.id);
 
     // Atomically merge records into local IndexedDB
     await targetDb.transaction('rw', [targetDb.policies, targetDb.customers, targetDb.reminders, targetDb.appSettings], async () => {
-      if (validCloudCustomers.length > 0) {
-        await targetDb.customers.bulkPut(validCloudCustomers);
+      if (cloudCustomers.length > 0) {
+        await targetDb.customers.bulkPut(cloudCustomers);
       }
       if (policiesToPut.length > 0) {
         await targetDb.policies.bulkPut(policiesToPut);
@@ -403,23 +467,14 @@ export const d1SyncService = {
       }
     });
 
-    // Clean up any orphan customers who have 0 remaining policies
-    const allFinalPolicies = await targetDb.policies.toArray();
-    const finalCustIdsWithPolicies = new Set(allFinalPolicies.map((p) => p.customerId).filter(Boolean));
-    const allFinalCustomers = await targetDb.customers.toArray();
-    const orphanCustomerIds = allFinalCustomers
-      .filter((c) => !finalCustIdsWithPolicies.has(c.id))
-      .map((c) => c.id);
-
-    if (orphanCustomerIds.length > 0) {
-      await targetDb.customers.bulkDelete(orphanCustomerIds);
-      try {
-        const legacyDb = getLegacyDatabase();
-        if (legacyDb.name !== targetDb.name) {
-          await legacyDb.customers.bulkDelete(orphanCustomerIds);
-        }
-      } catch {}
-    }
+    // Clean up any orphan or duplicate customers who have 0 remaining policies
+    await purgeOrphanCustomersFromDb(targetDb);
+    try {
+      const legacyDb = getLegacyDatabase();
+      if (legacyDb.name !== targetDb.name) {
+        await purgeOrphanCustomersFromDb(legacyDb);
+      }
+    } catch {}
 
     // Mirror to legacyDb so all databases on the device stay in 100% sync
     try {

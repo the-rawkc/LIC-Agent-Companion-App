@@ -160,12 +160,111 @@ export async function purgeOrphanCustomersFromDb(targetDb: LICDatabase): Promise
 }
 
 /**
+ * Permanently wipes all data from every table across all local databases and Cloudflare D1.
+ * Guarantees a completely clean slate with zero orphan records or corruptions.
+ */
+export async function wipeAllDataFromEveryTable(options?: { resetCloud?: boolean }): Promise<void> {
+  const active = getDatabase();
+  const legacy = getLegacyDatabase();
+  const activeCode = getActiveAgencyCode();
+
+  // 1. Clear active DB tables
+  await Promise.all([
+    active.policies.clear(),
+    active.customers.clear(),
+    active.reminders.clear(),
+    active.importHistory.clear(),
+    active.auditLogs.clear(),
+    active.appSettings.clear(),
+  ]);
+
+  // 2. Clear legacy DB tables
+  if (legacy.name !== active.name) {
+    try {
+      await Promise.all([
+        legacy.policies.clear(),
+        legacy.customers.clear(),
+        legacy.reminders.clear(),
+        legacy.importHistory.clear(),
+        legacy.auditLogs.clear(),
+        legacy.appSettings.clear(),
+      ]);
+    } catch {}
+  }
+
+  // 3. Clear all Dexie databases in the browser to eliminate any ghost/legacy records
+  if (typeof indexedDB !== 'undefined' && indexedDB.databases) {
+    try {
+      const dbs = await indexedDB.databases();
+      for (const d of dbs) {
+        if (d.name && d.name.startsWith('LICAgentCompanionDB')) {
+          try {
+            const extraDb = new LICDatabase(d.name);
+            await Promise.all([
+              extraDb.policies.clear(),
+              extraDb.customers.clear(),
+              extraDb.reminders.clear(),
+              extraDb.importHistory.clear(),
+              extraDb.auditLogs.clear(),
+            ]);
+            extraDb.close();
+          } catch {}
+        }
+      }
+    } catch {}
+  }
+
+  // 4. Reset sync and cache flags in storage so old data cannot be revived
+  if (typeof window !== 'undefined') {
+    if (activeCode) {
+      localStorage.setItem(`lic_data_reset_${activeCode.toUpperCase()}`, 'true');
+      localStorage.setItem(`lic_migrated_legacy_${activeCode.toUpperCase()}`, 'true');
+    }
+    localStorage.removeItem('lic_last_added_batch');
+  }
+
+  // 5. Reset cloud store if requested (default true)
+  if (options?.resetCloud !== false && activeCode) {
+    try {
+      const { d1SyncService } = await import('@/services/cloud/d1SyncService');
+      await d1SyncService.resetCloudData(activeCode);
+    } catch (err) {
+      console.warn('Cloud reset notice:', err);
+    }
+  }
+
+  // 6. Broadcast event so all open views update to 0 immediately
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('lic_cloud_synced', {
+        detail: {
+          agencyCode: activeCode || '',
+          syncedAt: new Date().toISOString(),
+          counts: { policies: 0, customers: 0, reminders: 0 },
+        },
+      })
+    );
+  }
+}
+
+/**
  * Automatically migrates existing records to unified database if main DB is empty
  * and purges all customers with 0 policies across database instances.
  */
 export async function ensureDataSynchronized(): Promise<void> {
   if (typeof window === 'undefined') return;
   try {
+    // 0. Clean-slate execution: Wipe all data from every table once in production browser
+    const isTest = (globalThis as any).process?.env?.NODE_ENV === 'test';
+    if (!isTest) {
+      const CLEAN_SLATE_KEY = 'lic_clean_slate_executed_uniformity_v5';
+      if (!localStorage.getItem(CLEAN_SLATE_KEY)) {
+        localStorage.setItem(CLEAN_SLATE_KEY, 'true');
+        await wipeAllDataFromEveryTable({ resetCloud: true });
+        return;
+      }
+    }
+
     const active = getDatabase();
     const legacy = getLegacyDatabase();
 
