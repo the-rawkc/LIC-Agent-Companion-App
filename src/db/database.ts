@@ -112,14 +112,46 @@ export async function purgeOrphanCustomersFromDb(targetDb: LICDatabase): Promise
       targetDb.customers.toArray(),
     ]);
 
-    const activeCustomerIds = new Set(allPolicies.map((p) => p.customerId).filter(Boolean));
-    const orphanCustomerIds = allCustomers
-      .filter((c) => !activeCustomerIds.has(c.id))
-      .map((c) => c.id);
+    const policiesByCustomerId = new Map<string, number>();
+    for (const p of allPolicies) {
+      if (!p.customerId) continue;
+      policiesByCustomerId.set(p.customerId, (policiesByCustomerId.get(p.customerId) || 0) + 1);
+    }
 
-    if (orphanCustomerIds.length > 0) {
-      await targetDb.customers.bulkDelete(orphanCustomerIds);
-      return orphanCustomerIds.length;
+    const customersByName = new Map<string, Customer[]>();
+    for (const c of allCustomers) {
+      const nameKey = (c.displayName || '').toLowerCase().replace(/[^\w\s]/g, '').trim();
+      const list = customersByName.get(nameKey) || [];
+      list.push(c);
+      customersByName.set(nameKey, list);
+    }
+
+    const deleteIds: string[] = [];
+
+    // For any duplicate names, keep only the one with policies, mark 0-policy duplicates for deletion
+    for (const [nameKey, custList] of customersByName.entries()) {
+      if (nameKey && custList.length > 1) {
+        custList.sort((a, b) => (policiesByCustomerId.get(b.id) || 0) - (policiesByCustomerId.get(a.id) || 0));
+        const duplicates = custList.slice(1);
+        for (const d of duplicates) {
+          if ((policiesByCustomerId.get(d.id) || 0) === 0) {
+            deleteIds.push(d.id);
+          }
+        }
+      }
+    }
+
+    // Also mark any customer with 0 policies for deletion
+    for (const c of allCustomers) {
+      if ((policiesByCustomerId.get(c.id) || 0) === 0) {
+        deleteIds.push(c.id);
+      }
+    }
+
+    const uniqueDeleteIds = Array.from(new Set(deleteIds));
+    if (uniqueDeleteIds.length > 0) {
+      await targetDb.customers.bulkDelete(uniqueDeleteIds);
+      return uniqueDeleteIds.length;
     }
   } catch (err) {
     console.warn('Orphan customer purge notice:', err);

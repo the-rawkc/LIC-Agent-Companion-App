@@ -17,7 +17,8 @@ import {
   Square,
   Sun,
   Moon,
-  X
+  X,
+  Sparkles
 } from 'lucide-react';
 import { customerRepository, type CustomerWithSummary } from '@/db/repositories/customerRepository';
 import { settingsRepository } from '@/db/repositories/settingsRepository';
@@ -55,6 +56,7 @@ export function CustomersPage() {
 
   // Theme State
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [cleanNotice, setCleanNotice] = useState<string | null>(null);
 
   useEffect(() => {
     loadCustomers();
@@ -79,7 +81,7 @@ export function CustomersPage() {
   async function loadCustomers() {
     setIsLoading(true);
     try {
-      await customerRepository.cleanupOrphanCustomers({ forceAll: true });
+      await customerRepository.deduplicateAndPurgeOrphans();
       const data = await customerRepository.getAllWithSummary();
       setCustomers(data.filter((c) => c.policyCount > 0));
     } catch (err) {
@@ -88,6 +90,20 @@ export function CustomersPage() {
       setIsLoading(false);
     }
   }
+
+  const handleCleanDuplicates = async () => {
+    setIsLoading(true);
+    try {
+      const res = await customerRepository.deduplicateAndPurgeOrphans();
+      await loadCustomers();
+      setCleanNotice(`Cleaned up ${res.purgedOrphans} duplicate / empty customer profiles.`);
+      setTimeout(() => setCleanNotice(null), 5000);
+    } catch (err: any) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Filter and sort
   const filteredCustomers = customers
@@ -263,6 +279,16 @@ export function CustomersPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCleanDuplicates}
+              leftIcon={<Sparkles className="w-4 h-4 text-amber-500" />}
+              className="text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+              title="Automatically remove 0-policy profiles and merge duplicates"
+            >
+              Clean Duplicates
+            </Button>
             <Button
               variant="outline"
               size="sm"

@@ -61,6 +61,9 @@ export const customerRepository = {
   },
 
   async getAllWithSummary(): Promise<CustomerWithSummary[]> {
+    // Run deduplication & orphan purge first
+    await this.deduplicateAndPurgeOrphans();
+
     const [customers, policies] = await Promise.all([
       db.customers.toArray(),
       db.policies.toArray(),
@@ -68,35 +71,28 @@ export const customerRepository = {
 
     const policiesByCustomer = new Map<string, Policy[]>();
     for (const p of policies) {
+      if (!p.customerId) continue;
       const list = policiesByCustomer.get(p.customerId) || [];
       list.push(p);
       policiesByCustomer.set(p.customerId, list);
     }
 
-    // Automatically purge any orphan customers with 0 policies
-    const orphanCustomers = customers.filter((c) => {
-      const pList = policiesByCustomer.get(c.id);
-      return !pList || pList.length === 0;
-    });
+    // Filter to active customers with at least 1 policy, and guarantee uniqueness by name
+    const seenNames = new Set<string>();
+    const uniqueActiveCustomers: CustomerWithSummary[] = [];
 
-    if (orphanCustomers.length > 0) {
-      const orphanIds = orphanCustomers.map((c) => c.id);
-      try {
-        await db.customers.bulkDelete(orphanIds);
-        const legacy = getLegacyDatabase();
-        if (legacy.name !== db.name) {
-          await legacy.customers.bulkDelete(orphanIds);
-        }
-      } catch {}
-    }
-
-    const activeCustomers = customers.filter((c) => {
-      const pList = policiesByCustomer.get(c.id);
-      return Boolean(pList && pList.length > 0);
-    });
-
-    return activeCustomers.map((c) => {
+    for (const c of customers) {
       const cPolicies = policiesByCustomer.get(c.id) || [];
+      if (cPolicies.length === 0) continue;
+
+      const normName = normalizeSearchString(c.displayName || '');
+      if (seenNames.has(normName)) {
+        // Remove duplicate customer entry from database
+        db.customers.delete(c.id).catch(() => {});
+        continue;
+      }
+      seenNames.add(normName);
+
       const totalSumAssured = cPolicies.reduce((sum, p) => sum + p.sumAssured, 0);
       const totalRecordedPremium = cPolicies.reduce((sum, p) => sum + p.premiumAmount, 0);
       
@@ -105,50 +101,135 @@ export const customerRepository = {
         .filter((d): d is string => Boolean(d))
         .sort();
 
-      return {
+      uniqueActiveCustomers.push({
         ...c,
         policyCount: cPolicies.length,
         totalSumAssured,
         totalRecordedPremium,
         policies: cPolicies,
         nextUpcomingDate: upcomingDates[0] || null,
-      };
-    });
+      });
+    }
+
+    return uniqueActiveCustomers;
+  },
+
+  /**
+   * Automatically merges duplicate customers with the same name and deletes all customers with 0 policies.
+   */
+  async deduplicateAndPurgeOrphans(): Promise<{ mergedCount: number; purgedOrphans: number }> {
+    const [allCustomers, allPolicies] = await Promise.all([
+      db.customers.toArray(),
+      db.policies.toArray(),
+    ]);
+
+    // 1. Group policies by customerId
+    const policiesByCustomerId = new Map<string, Policy[]>();
+    for (const p of allPolicies) {
+      if (!p.customerId) continue;
+      const list = policiesByCustomerId.get(p.customerId) || [];
+      list.push(p);
+      policiesByCustomerId.set(p.customerId, list);
+    }
+
+    // 2. Group customers by normalized name
+    const customersByName = new Map<string, Customer[]>();
+    for (const c of allCustomers) {
+      const normKey = normalizeSearchString(c.displayName || '');
+      const list = customersByName.get(normKey) || [];
+      list.push(c);
+      customersByName.set(normKey, list);
+    }
+
+    let mergedCount = 0;
+    const customerIdsToDelete = new Set<string>();
+    const policiesToUpdate: { id: string; customerId: string }[] = [];
+
+    // 3. For any duplicate names, keep primary and merge/delete duplicates
+    for (const [normKey, custList] of customersByName.entries()) {
+      if (!normKey || custList.length <= 1) continue;
+
+      // Sort by policy count descending
+      custList.sort((a, b) => {
+        const countA = policiesByCustomerId.get(a.id)?.length || 0;
+        const countB = policiesByCustomerId.get(b.id)?.length || 0;
+        return countB - countA;
+      });
+
+      const primary = custList[0];
+      const duplicates = custList.slice(1);
+
+      for (const dup of duplicates) {
+        customerIdsToDelete.add(dup.id);
+        mergedCount++;
+
+        // Reassign any policies from duplicate to primary
+        const dupPolicies = policiesByCustomerId.get(dup.id) || [];
+        for (const p of dupPolicies) {
+          policiesToUpdate.push({ id: p.id, customerId: primary.id });
+          const primaryPolicies = policiesByCustomerId.get(primary.id) || [];
+          primaryPolicies.push(p);
+          policiesByCustomerId.set(primary.id, primaryPolicies);
+        }
+      }
+    }
+
+    // 4. Mark all remaining customers with 0 policies for deletion
+    for (const c of allCustomers) {
+      if (customerIdsToDelete.has(c.id)) continue;
+      const pCount = policiesByCustomerId.get(c.id)?.length || 0;
+      if (pCount === 0) {
+        // Check if any policy has matching name but unlinked customerId
+        const nameNorm = normalizeSearchString(c.displayName || '');
+        const matchingPolicy = allPolicies.find(
+          (p) => normalizeSearchString(p.customerName || '') === nameNorm && !customerIdsToDelete.has(p.customerId)
+        );
+        if (matchingPolicy) {
+          policiesToUpdate.push({ id: matchingPolicy.id, customerId: c.id });
+          policiesByCustomerId.set(c.id, [matchingPolicy]);
+        } else {
+          customerIdsToDelete.add(c.id);
+        }
+      }
+    }
+
+    // 5. Apply updates in database
+    let legacyDb: any = null;
+    try {
+      const leg = getLegacyDatabase();
+      if (leg.name !== db.name) legacyDb = leg;
+    } catch {}
+
+    const deleteIds = Array.from(customerIdsToDelete);
+    if (policiesToUpdate.length > 0) {
+      for (const u of policiesToUpdate) {
+        await db.policies.update(u.id, { customerId: u.customerId });
+        if (legacyDb) {
+          try {
+            await legacyDb.policies.update(u.id, { customerId: u.customerId });
+          } catch {}
+        }
+      }
+    }
+
+    if (deleteIds.length > 0) {
+      await db.customers.bulkDelete(deleteIds);
+      if (legacyDb) {
+        try {
+          await legacyDb.customers.bulkDelete(deleteIds);
+        } catch {}
+      }
+    }
+
+    return { mergedCount, purgedOrphans: deleteIds.length };
   },
 
   /**
    * Automatically deletes all customers who have 0 associated policies
    */
   async cleanupOrphanCustomers(options?: { forceAll?: boolean }): Promise<number> {
-    const [allCustomers, allPolicies] = await Promise.all([
-      db.customers.toArray(),
-      db.policies.toArray(),
-    ]);
-
-    const activeCustomerIds = new Set(allPolicies.map((p) => p.customerId).filter(Boolean));
-    const nowMs = Date.now();
-    const GRACE_PERIOD_MS = 60 * 1000; // 60 seconds grace period for brand new customers unless forceAll
-
-    const orphanCustomers = allCustomers.filter((c) => {
-      if (activeCustomerIds.has(c.id)) return false;
-      if (options?.forceAll) return true;
-      const createdMs = c.createdAt ? new Date(c.createdAt).getTime() : 0;
-      if (!Number.isFinite(createdMs) || createdMs === 0) return true;
-      return (nowMs - createdMs) > GRACE_PERIOD_MS;
-    });
-
-    if (orphanCustomers.length === 0) return 0;
-
-    const orphanIds = orphanCustomers.map((c) => c.id);
-    try {
-      await db.customers.bulkDelete(orphanIds);
-      const legacyDb = getLegacyDatabase();
-      if (legacyDb.name !== db.name) {
-        await legacyDb.customers.bulkDelete(orphanIds);
-      }
-    } catch {}
-
-    return orphanCustomers.length;
+    const res = await this.deduplicateAndPurgeOrphans();
+    return res.purgedOrphans;
   },
 
   async create(customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): Promise<Customer> {
