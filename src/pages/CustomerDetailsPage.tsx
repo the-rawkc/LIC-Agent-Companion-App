@@ -60,7 +60,7 @@ export function CustomerDetailsPage() {
     setIsLoading(true);
     try {
       const data = await customerRepository.getWithSummary(customerId);
-      if (data) {
+      if (data && data.policyCount > 0) {
         setCustomer(data);
         setEditName(data.displayName);
         setEditMobile(data.mobileNumber || '');
@@ -71,6 +71,9 @@ export function CustomerDetailsPage() {
         const rems = await reminderRepository.getByCustomerId(customerId);
         setReminders(rems);
       } else {
+        if (data && data.policyCount === 0) {
+          customerRepository.delete(customerId).catch(() => {});
+        }
         setCustomer(null);
       }
     } catch (err) {

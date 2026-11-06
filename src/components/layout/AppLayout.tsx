@@ -30,6 +30,7 @@ import { settingsRepository } from '@/db/repositories/settingsRepository';
 import { profileRepository, type AgentProfile } from '@/db/repositories/profileRepository';
 import { authService } from '@/services/auth/authService';
 import { d1SyncService } from '@/services/cloud/d1SyncService';
+import { ensureDataSynchronized } from '@/db/database';
 
 export interface AppLayoutProps {
   children: React.ReactNode;
@@ -48,6 +49,11 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [agencyCode, setAgencyCode] = useState('');
 
   const isOnline = useNetworkStatus();
+
+  // Global data synchronization & orphan cleanup on application startup
+  useEffect(() => {
+    ensureDataSynchronized().catch(() => {});
+  }, []);
 
   // Load auth state & profile details on route change
   useEffect(() => {

@@ -103,65 +103,77 @@ export function switchAgentDatabase(agencyCode: string): LICDatabase {
 }
 
 /**
- * Automatically migrates existing records to unified database if main DB is empty
+ * Purges all customers with 0 associated policies from the specified database instance
  */
-let hasAutoSynced = false;
-export async function ensureDataSynchronized(): Promise<void> {
-  if (hasAutoSynced || typeof window === 'undefined') return;
+export async function purgeOrphanCustomersFromDb(targetDb: LICDatabase): Promise<number> {
   try {
-    const active = getDatabase();
-    const legacy = getLegacyDatabase();
-    if (active.name === legacy.name) return;
-
-    const activeCode = getActiveAgencyCode();
-    if (!activeCode) return;
-
-    const migrationKey = `lic_migrated_legacy_${activeCode.toUpperCase()}`;
-    const resetKey = `lic_data_reset_${activeCode.toUpperCase()}`;
-    if (localStorage.getItem(migrationKey) || localStorage.getItem(resetKey)) {
-      return;
-    }
-
-    const [activeCount, legacyCount] = await Promise.all([
-      active.policies.count(),
-      legacy.policies.count(),
+    const [allPolicies, allCustomers] = await Promise.all([
+      targetDb.policies.toArray(),
+      targetDb.customers.toArray(),
     ]);
 
-    // Only migrate once from legacy to active when active is completely empty
-    // and legacy contains unpartitioned user data. Never resurrect deleted records.
-    if (activeCount === 0 && legacyCount > 0) {
-      const [policies, customers, reminders, auditLogs, appSettings] = await Promise.all([
-        legacy.policies.toArray(),
-        legacy.customers.toArray(),
-        legacy.reminders.toArray(),
-        legacy.auditLogs.toArray(),
-        legacy.appSettings.toArray(),
-      ]);
-      await active.transaction('rw', [active.policies, active.customers, active.reminders, active.auditLogs, active.appSettings], async () => {
-        await active.policies.bulkPut(policies);
-        await active.customers.bulkPut(customers);
-        await active.reminders.bulkPut(reminders);
-        await active.auditLogs.bulkPut(auditLogs);
-        await active.appSettings.bulkPut(appSettings);
-      });
-      localStorage.setItem(migrationKey, 'true');
-      hasAutoSynced = true;
-    }
-
-    // Always clean up orphan customers with 0 policies
-    const allPolicies = await active.policies.toArray();
     const activeCustomerIds = new Set(allPolicies.map((p) => p.customerId).filter(Boolean));
-    const allCustomers = await active.customers.toArray();
     const orphanCustomerIds = allCustomers
       .filter((c) => !activeCustomerIds.has(c.id))
       .map((c) => c.id);
+
     if (orphanCustomerIds.length > 0) {
-      await active.customers.bulkDelete(orphanCustomerIds);
-      if (legacy.name !== active.name) {
-        try {
-          await legacy.customers.bulkDelete(orphanCustomerIds);
-        } catch {}
+      await targetDb.customers.bulkDelete(orphanCustomerIds);
+      return orphanCustomerIds.length;
+    }
+  } catch (err) {
+    console.warn('Orphan customer purge notice:', err);
+  }
+  return 0;
+}
+
+/**
+ * Automatically migrates existing records to unified database if main DB is empty
+ * and purges all customers with 0 policies across database instances.
+ */
+export async function ensureDataSynchronized(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  try {
+    const active = getDatabase();
+    const legacy = getLegacyDatabase();
+
+    // 1. One-time migration from legacy unpartitioned DB if agent DB is brand new
+    if (active.name !== legacy.name) {
+      const activeCode = getActiveAgencyCode();
+      if (activeCode) {
+        const migrationKey = `lic_migrated_legacy_${activeCode.toUpperCase()}`;
+        const resetKey = `lic_data_reset_${activeCode.toUpperCase()}`;
+        if (!localStorage.getItem(migrationKey) && !localStorage.getItem(resetKey)) {
+          const [activeCount, legacyCount] = await Promise.all([
+            active.policies.count(),
+            legacy.policies.count(),
+          ]);
+
+          if (activeCount === 0 && legacyCount > 0) {
+            const [policies, customers, reminders, auditLogs, appSettings] = await Promise.all([
+              legacy.policies.toArray(),
+              legacy.customers.toArray(),
+              legacy.reminders.toArray(),
+              legacy.auditLogs.toArray(),
+              legacy.appSettings.toArray(),
+            ]);
+            await active.transaction('rw', [active.policies, active.customers, active.reminders, active.auditLogs, active.appSettings], async () => {
+              await active.policies.bulkPut(policies);
+              await active.customers.bulkPut(customers);
+              await active.reminders.bulkPut(reminders);
+              await active.auditLogs.bulkPut(auditLogs);
+              await active.appSettings.bulkPut(appSettings);
+            });
+            localStorage.setItem(migrationKey, 'true');
+          }
+        }
       }
+    }
+
+    // 2. ALWAYS purge all orphan customers with 0 policies across all active and legacy instances
+    await purgeOrphanCustomersFromDb(active);
+    if (legacy.name !== active.name) {
+      await purgeOrphanCustomersFromDb(legacy);
     }
   } catch (err) {
     console.warn('Initial data migration notice:', err);

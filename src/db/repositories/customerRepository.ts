@@ -13,7 +13,17 @@ export interface CustomerWithSummary extends Customer {
 
 export const customerRepository = {
   async getAll(): Promise<Customer[]> {
-    return await db.customers.toArray();
+    const [customers, policies] = await Promise.all([
+      db.customers.toArray(),
+      db.policies.toArray(),
+    ]);
+    const activeCustomerIds = new Set(policies.map((p) => p.customerId).filter(Boolean));
+    const nowMs = Date.now();
+    return customers.filter((c) => {
+      if (activeCustomerIds.has(c.id)) return true;
+      const createdMs = c.createdAt ? new Date(c.createdAt).getTime() : 0;
+      return Number.isFinite(createdMs) && (nowMs - createdMs) < 60000;
+    });
   },
 
   async getById(id: string): Promise<Customer | undefined> {
@@ -71,11 +81,11 @@ export const customerRepository = {
 
     if (orphanCustomers.length > 0) {
       const orphanIds = orphanCustomers.map((c) => c.id);
-      db.customers.bulkDelete(orphanIds).catch(() => {});
       try {
+        await db.customers.bulkDelete(orphanIds);
         const legacy = getLegacyDatabase();
         if (legacy.name !== db.name) {
-          legacy.customers.bulkDelete(orphanIds).catch(() => {});
+          await legacy.customers.bulkDelete(orphanIds);
         }
       } catch {}
     }
@@ -123,37 +133,21 @@ export const customerRepository = {
       if (activeCustomerIds.has(c.id)) return false;
       if (options?.forceAll) return true;
       const createdMs = c.createdAt ? new Date(c.createdAt).getTime() : 0;
+      if (!Number.isFinite(createdMs) || createdMs === 0) return true;
       return (nowMs - createdMs) > GRACE_PERIOD_MS;
     });
 
     if (orphanCustomers.length === 0) return 0;
 
-    let legacyDb: any = null;
+    const orphanIds = orphanCustomers.map((c) => c.id);
     try {
-      const leg = getLegacyDatabase();
-      if (leg.name !== db.name) legacyDb = leg;
+      await db.customers.bulkDelete(orphanIds);
+      const legacyDb = getLegacyDatabase();
+      if (legacyDb.name !== db.name) {
+        await legacyDb.customers.bulkDelete(orphanIds);
+      }
     } catch {}
 
-    const orphanIds = orphanCustomers.map((c) => c.id);
-    await db.customers.bulkDelete(orphanIds);
-    if (legacyDb) {
-      try {
-        await legacyDb.customers.bulkDelete(orphanIds);
-      } catch {}
-    }
-
-    const nowIso = new Date().toISOString();
-    const auditEntries = orphanCustomers.map((c) => ({
-      id: generateUUID(),
-      entityType: 'customer' as const,
-      entityId: c.id,
-      action: 'delete' as const,
-      timestamp: nowIso,
-      summary: `Cleaned up customer "${c.displayName}" (0 policies)`,
-    }));
-    await db.auditLogs.bulkAdd(auditEntries);
-
-    d1SyncService.triggerAutoSync();
     return orphanCustomers.length;
   },
 

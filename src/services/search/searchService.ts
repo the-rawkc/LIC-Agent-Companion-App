@@ -28,9 +28,11 @@ export const searchService = {
       policyCountByCustomer.set(p.customerId, (policyCountByCustomer.get(p.customerId) || 0) + 1);
     }
 
-    // Match Customers
+    // Match Customers (only customers who have active policies)
     const matchingCustomers = customers
       .filter((c) => {
+        const pCount = policyCountByCustomer.get(c.id) || 0;
+        if (pCount === 0) return false;
         const nameMatch = c.normalizedName.includes(q);
         const mobileMatch = c.mobileNumber ? c.mobileNumber.includes(trimmed) : false;
         return nameMatch || mobileMatch;

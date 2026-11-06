@@ -44,8 +44,9 @@ export const analyticsService = {
       db.importHistory.toArray(),
     ]);
 
+    const activeCustomerIds = new Set(policies.map((p) => p.customerId).filter(Boolean));
     const totalPolicies = policies.length;
-    const totalCustomers = customers.length;
+    const totalCustomers = activeCustomerIds.size;
     const totalRecordedPremiumSum = policies.reduce((acc, p) => acc + (p.premiumAmount || 0), 0);
     const totalSumAssured = policies.reduce((acc, p) => acc + (p.sumAssured || 0), 0);
 
@@ -128,8 +129,9 @@ export const analyticsService = {
       db.customers.toArray(),
     ]);
 
+    const activeCustomerIds = new Set(policies.map((p) => p.customerId).filter(Boolean));
     const totalPolicies = policies.length;
-    const totalCustomers = customers.length;
+    const totalCustomers = activeCustomerIds.size;
 
     // By Plan
     const planMap = new Map<string, { count: number; totalPremium: number }>();
