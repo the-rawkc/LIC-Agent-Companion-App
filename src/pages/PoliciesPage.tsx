@@ -279,9 +279,9 @@ export function PoliciesPage() {
       if (isBasePolicy(p.policyNumber)) return false;
 
       if (lastAddedBatch && lastAddedBatch.policyNumbers && lastAddedBatch.policyNumbers.length > 0) {
-        const cleanPNum = p.policyNumber.replace(/[^0-9]/g, '').trim();
+        const cleanPNum = String(p.policyNumber || '').replace(/[^0-9]/g, '').trim();
         const inBatch = lastAddedBatch.policyNumbers.some(
-          (bn) => bn.replace(/[^0-9]/g, '').trim() === cleanPNum
+          (bn) => String(bn || '').replace(/[^0-9]/g, '').trim() === cleanPNum
         );
         if (!inBatch) return false;
       }
@@ -290,9 +290,9 @@ export function PoliciesPage() {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase().trim();
     return (
-      p.policyNumber.toLowerCase().includes(q) ||
-      p.customerName.toLowerCase().includes(q) ||
-      p.planCode.toLowerCase().includes(q)
+      String(p.policyNumber || '').toLowerCase().includes(q) ||
+      String(p.customerName || '').toLowerCase().includes(q) ||
+      String(p.planCode || '').toLowerCase().includes(q)
     );
   });
 
@@ -303,7 +303,7 @@ export function PoliciesPage() {
       const dateB = parseDateToISO(b.commencementDate) || b.commencementDate || '';
       const cmp = dateB.localeCompare(dateA);
       if (cmp !== 0) return cmp;
-      return (b.createdAt || '').localeCompare(a.createdAt || '');
+      return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
     }
     if (sortBy === 'doc_asc') {
       const dateA = parseDateToISO(a.commencementDate) || a.commencementDate || '';
@@ -324,10 +324,10 @@ export function PoliciesPage() {
       return (b.premiumAmount || 0) - (a.premiumAmount || 0);
     }
     if (sortBy === 'policy_asc') {
-      return a.policyNumber.localeCompare(b.policyNumber);
+      return String(a.policyNumber || '').localeCompare(String(b.policyNumber || ''));
     }
     if (sortBy === 'name_asc') {
-      return (a.customerName || '').localeCompare(b.customerName || '');
+      return String(a.customerName || '').localeCompare(String(b.customerName || ''));
     }
     const sA = a.sourceSerialNumber ?? 9999999;
     const sB = b.sourceSerialNumber ?? 9999999;
@@ -1045,7 +1045,7 @@ export function PoliciesPage() {
                         <Badge variant="info" size="sm" className="text-[10px] py-0 px-1.5">
                           Plan {p.originalPlanString}
                         </Badge>
-                        {p.extractionWarnings.length > 0 && (
+                        {p.extractionWarnings && p.extractionWarnings.length > 0 && (
                           <span title={p.extractionWarnings.join(', ')}>
                             <Badge variant="warning" size="sm" className="text-[10px] py-0 px-1.5">
                               <AlertTriangle className="w-2.5 h-2.5 mr-1" />

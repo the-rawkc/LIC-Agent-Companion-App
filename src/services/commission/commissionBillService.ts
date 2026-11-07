@@ -20,8 +20,9 @@ export const BASE_POLICY_NUMBERS = new Set<string>(
   (userUploadedPoliciesData as any[]).map((r) => String(r.policyNo || '').replace(/[^0-9]/g, ''))
 );
 
-export function isBasePolicy(policyNumber: string): boolean {
-  const clean = policyNumber.replace(/[^0-9]/g, '').trim();
+export function isBasePolicy(policyNumber: string | null | undefined): boolean {
+  if (!policyNumber) return false;
+  const clean = String(policyNumber).replace(/[^0-9]/g, '').trim();
   if (!clean) return false;
   return BASE_POLICY_NUMBERS.has(clean) || BASE_POLICY_NUMBERS.has(clean.replace(/^0+/, ''));
 }

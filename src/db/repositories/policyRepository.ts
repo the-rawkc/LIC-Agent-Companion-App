@@ -278,7 +278,9 @@ export const policyRepository = {
       }
       if (filters.hasWarnings !== undefined) {
         collection = collection.filter((p) => 
-          filters.hasWarnings ? p.extractionWarnings.length > 0 : p.extractionWarnings.length === 0
+          filters.hasWarnings
+            ? Boolean(p.extractionWarnings && p.extractionWarnings.length > 0)
+            : Boolean(!p.extractionWarnings || p.extractionWarnings.length === 0)
         );
       }
     }

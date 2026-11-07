@@ -289,7 +289,7 @@ export function PolicyDetailsPage() {
       )}
 
       {/* Warnings Banner if any */}
-      {policy.extractionWarnings.length > 0 && (
+      {Boolean(policy.extractionWarnings && policy.extractionWarnings.length > 0) && (
         <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-2xl flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
           <div>
@@ -297,7 +297,7 @@ export function PolicyDetailsPage() {
               Extraction Warnings
             </h4>
             <ul className="mt-1 space-y-0.5 text-xs text-amber-700 dark:text-amber-300 list-disc list-inside">
-              {policy.extractionWarnings.map((w, idx) => (
+              {(policy.extractionWarnings || []).map((w, idx) => (
                 <li key={idx}>{w}</li>
               ))}
             </ul>
