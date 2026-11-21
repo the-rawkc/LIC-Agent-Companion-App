@@ -19,8 +19,7 @@ import {
   Moon,
   Sparkles,
   ArrowUpDown,
-  ArrowUpRight,
-  MessageSquare
+  ArrowUpRight
 } from 'lucide-react';
 import { policyRepository, type PolicyFilterOptions } from '@/db/repositories/policyRepository';
 import { customerRepository } from '@/db/repositories/customerRepository';
@@ -42,7 +41,6 @@ import {
   getPolicyMaturityDate,
   getPolicyLifecycleStatus,
   type PolicyLifecycleStatus,
-  openPolicyWhatsAppShare,
 } from '@/utils/formatters';
 import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
@@ -1170,21 +1168,8 @@ export function PoliciesPage() {
                     </div>
                   </div>
 
-                  {/* Right side WhatsApp + Premium */}
+                  {/* Right side Premium */}
                   <div className="flex items-center gap-2 self-end sm:self-auto text-right shrink-0">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openPolicyWhatsAppShare(p);
-                      }}
-                      className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition shadow-2xs"
-                      title="Share policy details"
-                    >
-                      <MessageSquare className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                      <span className="hidden sm:inline">Share</span>
-                    </button>
-
                     <div>
                       <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white block font-mono whitespace-nowrap leading-tight">
                         {formatCurrency(p.premiumAmount)}
