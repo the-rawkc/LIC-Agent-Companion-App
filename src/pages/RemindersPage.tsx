@@ -10,8 +10,7 @@ import {
   Filter,
   Trash2,
   User,
-  FileText,
-  RotateCw
+  FileText
 } from 'lucide-react';
 import { reminderRepository, type ReminderWithDetails } from '@/db/repositories/reminderRepository';
 import { customerRepository } from '@/db/repositories/customerRepository';
@@ -144,15 +143,6 @@ export function RemindersPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => loadData()}
-            leftIcon={<RotateCw className="w-4 h-4" />}
-            title="Refresh reminders"
-          >
-            Refresh
-          </Button>
           <Button
             variant="primary"
             size="sm"

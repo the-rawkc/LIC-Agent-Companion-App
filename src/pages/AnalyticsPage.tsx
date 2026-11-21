@@ -11,7 +11,6 @@ import {
   TrendingUp,
   Info,
   ChevronRight,
-  RotateCw,
   Edit2,
   Check,
   X
@@ -172,16 +171,6 @@ export function AnalyticsPage() {
             <span>Portfolio Analytics & Insights</span>
           </h1>
         </div>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => loadAnalytics()}
-          leftIcon={<RotateCw className="w-4 h-4" />}
-          title="Refresh analytics data"
-        >
-          Refresh
-        </Button>
       </div>
 
       {/* Overview Stat Cards */}

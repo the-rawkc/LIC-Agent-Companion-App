@@ -15,7 +15,8 @@ import {
   AlertTriangle,
   Info,
   Calendar,
-  Sparkles
+  Sparkles,
+  GitMerge
 } from 'lucide-react';
 import { pinService } from '@/services/security/pinService';
 import { backupService, type BackupPayload } from '@/services/backup/backupService';
@@ -64,6 +65,40 @@ export function SettingsPage() {
 
   const [isDeduplicating, setIsDeduplicating] = useState(false);
   const [dedupMessage, setDedupMessage] = useState<string | null>(null);
+
+  // Manual Combine Duplicates
+  const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
+  const [customerList, setCustomerList] = useState<any[]>([]);
+  const [sourceCustomerId, setSourceCustomerId] = useState('');
+  const [targetCustomerId, setTargetCustomerId] = useState('');
+  const [isMerging, setIsMerging] = useState(false);
+
+  const handleOpenMerge = async () => {
+    try {
+      const list = await customerRepository.getAllWithSummary();
+      setCustomerList(list);
+      setIsMergeModalOpen(true);
+    } catch (err: any) {
+      alert('Failed to load customers: ' + (err.message || String(err)));
+    }
+  };
+
+  const handleExecuteMerge = async () => {
+    if (!sourceCustomerId || !targetCustomerId || sourceCustomerId === targetCustomerId) return;
+    setIsMerging(true);
+    try {
+      await customerRepository.mergeCustomers(sourceCustomerId, targetCustomerId);
+      setIsMergeModalOpen(false);
+      setSourceCustomerId('');
+      setTargetCustomerId('');
+      setDedupMessage('Customers successfully combined into one profile.');
+      setTimeout(() => setDedupMessage(null), 6000);
+    } catch (err: any) {
+      alert('Combine failed: ' + (err.message || String(err)));
+    } finally {
+      setIsMerging(false);
+    }
+  };
 
   const handleCleanDuplicates = async () => {
     setIsDeduplicating(true);
@@ -527,12 +562,21 @@ export function SettingsPage() {
           <Button
             variant="outline"
             size="sm"
+            onClick={handleOpenMerge}
+            leftIcon={<GitMerge className="w-4 h-4 text-amber-600 dark:text-amber-400" />}
+            className="text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800 hover:bg-amber-100/50 dark:hover:bg-amber-950/40 font-semibold"
+          >
+            Combine Duplicates
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleCleanDuplicates}
             disabled={isDeduplicating}
             leftIcon={<Sparkles className="w-4 h-4 text-amber-500" />}
             className="text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/30 font-semibold"
           >
-            {isDeduplicating ? 'Cleaning...' : 'Clean Duplicates'}
+            {isDeduplicating ? 'Cleaning...' : 'Auto-Clean Duplicates'}
           </Button>
         </div>
       </div>
@@ -727,6 +771,84 @@ export function SettingsPage() {
         isLoading={isResetting}
         variant="danger"
       />
+
+      {/* Combine Duplicate Customers Modal */}
+      <Modal
+        isOpen={isMergeModalOpen}
+        onClose={() => setIsMergeModalOpen(false)}
+        title="Combine Duplicate Customers"
+        description="Combine duplicate records if a customer is listed more than once. All policies and reminders will be moved to the main profile."
+        maxWidth="md"
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setIsMergeModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={!sourceCustomerId || !targetCustomerId || sourceCustomerId === targetCustomerId || isMerging}
+              isLoading={isMerging}
+              onClick={handleExecuteMerge}
+            >
+              Combine Profiles
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-900/60 text-xs text-amber-800 dark:text-amber-300">
+            <strong>Please check carefully:</strong> Only combine profiles if they belong to the exact same customer.
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              Duplicate Profile (will be removed)
+            </label>
+            <select
+              value={sourceCustomerId}
+              onChange={(e) => setSourceCustomerId(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select duplicate profile to remove...</option>
+              {customerList.map((c) => (
+                <option key={c.id} value={c.id} disabled={c.id === targetCustomerId}>
+                  {c.displayName} ({c.policyCount} policies{c.mobileNumber ? ` • ${c.mobileNumber}` : ''})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              Main Profile (to keep and receive all policies)
+            </label>
+            <select
+              value={targetCustomerId}
+              onChange={(e) => setTargetCustomerId(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select main profile to keep...</option>
+              {customerList.map((c) => (
+                <option key={c.id} value={c.id} disabled={c.id === sourceCustomerId}>
+                  {c.displayName} ({c.policyCount} policies{c.mobileNumber ? ` • ${c.mobileNumber}` : ''})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {sourceCustomerId && targetCustomerId && (
+            <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 space-y-1">
+              <p>
+                <strong>Summary:</strong> Policies from duplicate profile will be transferred to the main profile. The main profile will then have{' '}
+                {(customerList.find((c) => c.id === sourceCustomerId)?.policyCount || 0) +
+                  (customerList.find((c) => c.id === targetCustomerId)?.policyCount || 0)}{' '}
+                total policies.
+              </p>
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

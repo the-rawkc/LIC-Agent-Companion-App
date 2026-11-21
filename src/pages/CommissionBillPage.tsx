@@ -9,7 +9,7 @@ import {
   Sparkles,
   ArrowRight,
   TrendingUp,
-  Receipt,
+  ArrowUpRight,
   Search,
   Check,
   Calendar,
@@ -222,7 +222,7 @@ export function CommissionBillPage() {
         <div>
           <div className="flex items-center gap-2">
             <div className="p-2 bg-emerald-50 dark:bg-emerald-950/60 rounded-xl text-emerald-600 dark:text-emerald-400">
-              <Receipt className="w-6 h-6" />
+              <ArrowUpRight className="w-6 h-6" />
             </div>
             <div>
               <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">

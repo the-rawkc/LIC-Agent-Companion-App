@@ -9,7 +9,6 @@ import {
   FileText,
   Filter,
   ArrowUpDown,
-  GitMerge,
   ChevronRight,
   ExternalLink,
   Download,
@@ -18,8 +17,7 @@ import {
   Sun,
   Moon,
   X,
-  Sparkles,
-  RotateCw
+  Sparkles
 } from 'lucide-react';
 import { customerRepository, type CustomerWithSummary } from '@/db/repositories/customerRepository';
 import { settingsRepository } from '@/db/repositories/settingsRepository';
@@ -48,12 +46,6 @@ export function CustomersPage() {
   const [newCustomerName, setNewCustomerName] = useState('');
   const [newCustomerMobile, setNewCustomerMobile] = useState('');
   const [newCustomerNotes, setNewCustomerNotes] = useState('');
-
-  // Merge Modal
-  const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
-  const [sourceCustomerId, setSourceCustomerId] = useState('');
-  const [targetCustomerId, setTargetCustomerId] = useState('');
-  const [isMerging, setIsMerging] = useState(false);
 
   // Theme State
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -144,23 +136,6 @@ export function CustomersPage() {
       navigate(`/customers/${created.id}`);
     } catch (err) {
       console.error('Failed to create customer', err);
-    }
-  };
-
-  const handleExecuteMerge = async () => {
-    if (!sourceCustomerId || !targetCustomerId || sourceCustomerId === targetCustomerId) return;
-    setIsMerging(true);
-    try {
-      await customerRepository.mergeCustomers(sourceCustomerId, targetCustomerId);
-      setIsMergeModalOpen(false);
-      setSourceCustomerId('');
-      setTargetCustomerId('');
-      await loadCustomers();
-    } catch (err) {
-      console.error('Merge failed', err);
-      alert('Failed to merge customers: ' + (err instanceof Error ? err.message : String(err)));
-    } finally {
-      setIsMerging(false);
     }
   };
 
@@ -278,39 +253,20 @@ export function CustomersPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => loadCustomers()}
-              leftIcon={<RotateCw className="w-3.5 h-3.5" />}
-              title="Refresh customer profiles"
-            >
-              Refresh
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
               onClick={handleExportAllCsv}
               disabled={customers.length === 0 || isExporting}
               leftIcon={<Download className="w-4 h-4" />}
               title="Export All"
               aria-label="Export All"
             />
-            {customers.length >= 2 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsMergeModalOpen(true)}
-                leftIcon={<GitMerge className="w-4 h-4" />}
-              >
-                Combine Duplicates
-              </Button>
-            )}
             <Button
               variant="primary"
               size="sm"
               onClick={() => setIsAddModalOpen(true)}
               leftIcon={<Plus className="w-4 h-4" />}
-            >
-              Add Customer
-            </Button>
+              title="Add Customer"
+              aria-label="Add Customer"
+            />
           </div>
         </div>
 
@@ -474,7 +430,7 @@ export function CustomersPage() {
                       target="_blank"
                       rel="noopener noreferrer"
                       className="p-1 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition"
-                      title="Open WhatsApp chat"
+                      title="Share / Message"
                     >
                       <MessageSquare className="w-3.5 h-3.5" />
                     </a>
@@ -554,84 +510,6 @@ export function CustomersPage() {
               placeholder="Address, family references, preferred contact time..."
             />
           </div>
-        </div>
-      </Modal>
-
-      {/* Merge Customers Modal */}
-      <Modal
-        isOpen={isMergeModalOpen}
-        onClose={() => setIsMergeModalOpen(false)}
-        title="Combine Duplicate Customers"
-        description="Combine duplicate records if a customer is listed more than once. All policies and reminders will be moved to the main profile."
-        maxWidth="md"
-        footer={
-          <>
-            <Button variant="outline" size="sm" onClick={() => setIsMergeModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              disabled={!sourceCustomerId || !targetCustomerId || sourceCustomerId === targetCustomerId || isMerging}
-              isLoading={isMerging}
-              onClick={handleExecuteMerge}
-            >
-              Combine Profiles
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-900/60 text-xs text-amber-800 dark:text-amber-300">
-            <strong>Please check carefully:</strong> Only combine profiles if they belong to the exact same customer.
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Duplicate Profile (will be removed)
-            </label>
-            <select
-              value={sourceCustomerId}
-              onChange={(e) => setSourceCustomerId(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Select duplicate profile to remove...</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id} disabled={c.id === targetCustomerId}>
-                  {c.displayName} ({c.policyCount} policies{c.mobileNumber ? ` • ${c.mobileNumber}` : ''})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Main Profile (to keep and receive all policies)
-            </label>
-            <select
-              value={targetCustomerId}
-              onChange={(e) => setTargetCustomerId(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Select main profile to keep...</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id} disabled={c.id === sourceCustomerId}>
-                  {c.displayName} ({c.policyCount} policies{c.mobileNumber ? ` • ${c.mobileNumber}` : ''})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {sourceCustomerId && targetCustomerId && (
-            <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 space-y-1">
-              <p>
-                <strong>Summary:</strong> Policies from duplicate profile will be transferred to the main profile. The main profile will then have{' '}
-                {(customers.find((c) => c.id === sourceCustomerId)?.policyCount || 0) +
-                  (customers.find((c) => c.id === targetCustomerId)?.policyCount || 0)}{' '}
-                total policies.
-              </p>
-            </div>
-          )}
         </div>
       </Modal>
     </div>

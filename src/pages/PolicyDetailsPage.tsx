@@ -272,9 +272,9 @@ export function PolicyDetailsPage() {
             onClick={() => openPolicyWhatsAppShare(policy, customer?.mobileNumber)}
             leftIcon={<MessageSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />}
             className="border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-semibold"
-            title="Share policy details via WhatsApp"
+            title="Share policy details"
           >
-            WhatsApp
+            Share
           </Button>
           <Button
             variant="outline"
@@ -456,9 +456,10 @@ export function PolicyDetailsPage() {
                     href={`https://wa.me/91${customer.mobileNumber.replace(/\D/g, '')}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-emerald-600"
+                    className="text-emerald-600 font-medium"
+                    title="Share via WhatsApp"
                   >
-                    WhatsApp
+                    Share
                   </a>
                 </div>
               ) : (

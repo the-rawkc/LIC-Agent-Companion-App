@@ -180,15 +180,15 @@ export function CustomerDetailsPage() {
       </button>
 
       {/* Profile Header Card */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-          <div className="flex items-start gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-              <User className="w-7 h-7" />
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="w-11 h-11 rounded-xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+              <User className="w-6 h-6" />
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">
+                <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">
                   {customer.displayName}
                 </h1>
                 <Badge variant={customer.policyCount > 1 ? 'purple' : 'info'}>
@@ -197,12 +197,12 @@ export function CustomerDetailsPage() {
               </div>
 
               {/* Contact Information Quick Bar */}
-              <div className="flex flex-wrap items-center gap-2.5 mt-3">
+              <div className="flex flex-wrap items-center gap-2 mt-2">
                 {customer.mobileNumber ? (
                   <>
                     <a
                       href={`tel:${customer.mobileNumber}`}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold hover:bg-emerald-100 transition"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold hover:bg-emerald-100 transition"
                     >
                       <Phone className="w-3.5 h-3.5" />
                       <span>{customer.mobileNumber}</span>
@@ -211,10 +211,11 @@ export function CustomerDetailsPage() {
                       href={`https://wa.me/91${customer.mobileNumber.replace(/\D/g, '')}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold hover:bg-emerald-100 transition"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold hover:bg-emerald-100 transition"
+                      title="Share policy details via WhatsApp"
                     >
                       <MessageSquare className="w-3.5 h-3.5" />
-                      <span>WhatsApp</span>
+                      <span>Share</span>
                     </a>
                   </>
                 ) : (
@@ -271,24 +272,23 @@ export function CustomerDetailsPage() {
           </div>
         )}
 
-        {/* Financial Portfolio Summary */}
-        <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
-            <span className="text-[11px] text-slate-400 block uppercase font-medium">Total Sum Assured</span>
-            <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mt-0.5 block">
+        {/* Financial Portfolio Summary (Compact) */}
+        <div className="mt-3.5 pt-3 border-t border-slate-100 dark:border-slate-800 grid grid-cols-3 gap-2">
+          <div className="p-2 sm:p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+            <span className="text-[10px] text-slate-400 block uppercase font-medium">Cover (Sum Assured)</span>
+            <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white mt-0.5 block truncate">
               {formatCurrency(customer.totalSumAssured)}
             </span>
           </div>
-          <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
-            <span className="text-[11px] text-slate-400 block uppercase font-medium">Recorded Premium Sum</span>
-            <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mt-0.5 block">
+          <div className="p-2 sm:p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+            <span className="text-[10px] text-slate-400 block uppercase font-medium">Total Premium</span>
+            <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white mt-0.5 block truncate">
               {formatCurrency(customer.totalRecordedPremium)}
             </span>
-            <span className="text-[10px] text-slate-400 block">installment total</span>
           </div>
-          <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 col-span-2 sm:col-span-1">
-            <span className="text-[11px] text-slate-400 block uppercase font-medium">Active Policies</span>
-            <span className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mt-0.5 block">
+          <div className="p-2 sm:p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+            <span className="text-[10px] text-slate-400 block uppercase font-medium">Active Policies</span>
+            <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white mt-0.5 block">
               {customer.policyCount}
             </span>
           </div>

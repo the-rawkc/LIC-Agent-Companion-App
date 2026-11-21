@@ -17,10 +17,9 @@ import {
   Trash2,
   Sun,
   Moon,
-  Receipt,
   Sparkles,
   ArrowUpDown,
-  RotateCw,
+  ArrowUpRight,
   MessageSquare
 } from 'lucide-react';
 import { policyRepository, type PolicyFilterOptions } from '@/db/repositories/policyRepository';
@@ -620,19 +619,6 @@ export function PoliciesPage() {
               )}
             </div>
 
-            {/* Manual Refresh Button */}
-            <button
-              type="button"
-              onClick={() => {
-                loadPolicies(true);
-                loadLastAddedBatch();
-              }}
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-100 dark:bg-slate-800 shrink-0 transition"
-              title="Refresh policies list"
-            >
-              <RotateCw className="w-4 h-4" />
-            </button>
-
             {/* Theme Toggle Button */}
             <button
               type="button"
@@ -662,83 +648,38 @@ export function PoliciesPage() {
               All ({policies.length})
             </button>
 
-            {/* Due Filter */}
+            {/* Due This Month */}
             <button
               onClick={() => {
-                setSelectedStatus(selectedStatus === 'due' ? '' : 'due');
                 setOnlyRecentlyAdded(false);
+                setSelectedStatus('');
+                setSelectedFupMonth(selectedFupMonth === currentMonthIso ? '' : currentMonthIso);
               }}
               className={`px-2.5 py-1 rounded-lg font-medium transition shrink-0 text-xs flex items-center gap-1 ${
-                selectedStatus === 'due'
-                  ? 'bg-amber-500 text-white shadow-xs font-bold'
-                  : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+                !onlyRecentlyAdded && !selectedStatus && selectedFupMonth === currentMonthIso
+                  ? 'bg-amber-600 text-white shadow-xs font-bold'
+                  : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/30'
               }`}
             >
-              <Clock className="w-3 h-3 text-amber-500" />
-              <span>Due ({statusCounts.due})</span>
+              <Calendar className="w-3 h-3 text-amber-500" />
+              <span>Due This Month</span>
             </button>
 
-            {/* Matured Filter */}
+            {/* Due Next Month */}
             <button
               onClick={() => {
-                setSelectedStatus(selectedStatus === 'matured' ? '' : 'matured');
                 setOnlyRecentlyAdded(false);
+                setSelectedStatus('');
+                setSelectedFupMonth(selectedFupMonth === nextMonthIso ? '' : nextMonthIso);
               }}
               className={`px-2.5 py-1 rounded-lg font-medium transition shrink-0 text-xs flex items-center gap-1 ${
-                selectedStatus === 'matured'
-                  ? 'bg-purple-600 text-white shadow-xs font-bold'
-                  : 'bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/30'
+                !onlyRecentlyAdded && !selectedStatus && selectedFupMonth === nextMonthIso
+                  ? 'bg-indigo-600 text-white shadow-xs font-bold'
+                  : 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/30'
               }`}
             >
-              <Calendar className="w-3 h-3 text-purple-500" />
-              <span>Matured ({statusCounts.matured})</span>
-            </button>
-
-            {/* Claimed Filter */}
-            <button
-              onClick={() => {
-                setSelectedStatus(selectedStatus === 'claimed' ? '' : 'claimed');
-                setOnlyRecentlyAdded(false);
-              }}
-              className={`px-2.5 py-1 rounded-lg font-medium transition shrink-0 text-xs flex items-center gap-1 ${
-                selectedStatus === 'claimed'
-                  ? 'bg-sky-600 text-white shadow-xs font-bold'
-                  : 'bg-white dark:bg-slate-800 text-sky-700 dark:text-sky-300 border border-sky-300 dark:border-sky-700 hover:bg-sky-50 dark:hover:bg-sky-950/30'
-              }`}
-            >
-              <FileText className="w-3 h-3 text-sky-500" />
-              <span>Claimed ({statusCounts.claimed})</span>
-            </button>
-
-            {/* Surrendered Filter */}
-            <button
-              onClick={() => {
-                setSelectedStatus(selectedStatus === 'surrendered' ? '' : 'surrendered');
-                setOnlyRecentlyAdded(false);
-              }}
-              className={`px-2.5 py-1 rounded-lg font-medium transition shrink-0 text-xs flex items-center gap-1 ${
-                selectedStatus === 'surrendered'
-                  ? 'bg-slate-700 text-white shadow-xs font-bold'
-                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
-              }`}
-            >
-              <span>Surrendered ({statusCounts.surrendered})</span>
-            </button>
-
-            {/* Active Filter */}
-            <button
-              onClick={() => {
-                setSelectedStatus(selectedStatus === 'active' ? '' : 'active');
-                setOnlyRecentlyAdded(false);
-              }}
-              className={`px-2.5 py-1 rounded-lg font-medium transition shrink-0 text-xs flex items-center gap-1 ${
-                selectedStatus === 'active'
-                  ? 'bg-emerald-600 text-white shadow-xs font-bold'
-                  : 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
-              }`}
-            >
-              <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-              <span>Active ({statusCounts.active})</span>
+              <Calendar className="w-3 h-3 text-indigo-500" />
+              <span>Due Next Month</span>
             </button>
 
             {/* Last Bill New Filter (Shown only when last commission bill added policies) */}
@@ -769,47 +710,6 @@ export function PoliciesPage() {
                 </button>
               </div>
             )}
-
-            <button
-              onClick={() => {
-                setOnlyRecentlyAdded(false);
-                setSelectedStatus('');
-                setSelectedFupMonth(selectedFupMonth === currentMonthIso ? '' : currentMonthIso);
-              }}
-              className={`px-2.5 py-1 rounded-lg font-medium transition shrink-0 text-xs flex items-center gap-1 ${
-                !onlyRecentlyAdded && !selectedStatus && selectedFupMonth === currentMonthIso
-                  ? 'bg-amber-600 text-white shadow-xs'
-                  : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/30'
-              }`}
-            >
-              <Calendar className="w-3 h-3" />
-              <span>Due This Month</span>
-            </button>
-            <button
-              onClick={() => {
-                setOnlyRecentlyAdded(false);
-                setSelectedStatus('');
-                setSelectedFupMonth(selectedFupMonth === nextMonthIso ? '' : nextMonthIso);
-              }}
-              className={`px-2.5 py-1 rounded-lg font-medium transition shrink-0 text-xs flex items-center gap-1 ${
-                !onlyRecentlyAdded && !selectedStatus && selectedFupMonth === nextMonthIso
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/30'
-              }`}
-            >
-              <Calendar className="w-3 h-3" />
-              <span>Due Next Month</span>
-            </button>
-            <button
-              onClick={() => setSelectedMode(selectedMode === 'Monthly' ? '' : 'Monthly')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition shrink-0 text-xs ${
-                selectedMode === 'Monthly'
-                  ? 'bg-purple-600 text-white shadow-xs'
-                  : 'bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-950/30'
-              }`}
-            >
-              Monthly Mode
-            </button>
 
             {/* Custom F.U.P. Month Picker */}
             <div className="flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-0.5 shrink-0">
@@ -876,6 +776,7 @@ export function PoliciesPage() {
               variant="outline"
               size="sm"
               onClick={() => navigate('/fup-update')}
+              leftIcon={<ArrowUpRight className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />}
               className="text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 font-semibold"
             >
               FUP Update
@@ -1029,7 +930,7 @@ export function PoliciesPage() {
 
             <div>
               <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                Record Status
+                Policy Status
               </label>
               <select
                 value={selectedStatus}
@@ -1037,9 +938,11 @@ export function PoliciesPage() {
                 className="w-full text-xs bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-xl px-2.5 py-2 border border-slate-200 dark:border-slate-700 focus:outline-none"
               >
                 <option value="">All Statuses</option>
-                <option value="active">Active</option>
-                <option value="needs_verification">Needs Verification</option>
-                <option value="manual">Manual Entry</option>
+                <option value="due">Due ({statusCounts.due})</option>
+                <option value="matured">Matured ({statusCounts.matured})</option>
+                <option value="claimed">Claimed ({statusCounts.claimed})</option>
+                <option value="surrendered">Surrendered ({statusCounts.surrendered})</option>
+                <option value="active">Active ({statusCounts.active})</option>
               </select>
             </div>
 
@@ -1276,10 +1179,10 @@ export function PoliciesPage() {
                         openPolicyWhatsAppShare(p);
                       }}
                       className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition shadow-2xs"
-                      title="Share policy details via WhatsApp"
+                      title="Share policy details"
                     >
                       <MessageSquare className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                      <span className="hidden sm:inline">WhatsApp</span>
+                      <span className="hidden sm:inline">Share</span>
                     </button>
 
                     <div>

@@ -21,7 +21,7 @@ import {
   LayoutDashboard,
   LogOut,
   Sparkles,
-  Receipt
+  ArrowUpRight
 } from 'lucide-react';
 import { AppLogo } from '../shared/AppLogo';
 import { GlobalSearchModal } from '../shared/GlobalSearchModal';
@@ -161,12 +161,12 @@ export function AppLayout({ children }: AppLayoutProps) {
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/customers', label: 'Customers', icon: Users },
     { to: '/policies', label: 'Policies', icon: FileText },
-    { to: '/fup-update', label: 'FUP Update', icon: Receipt, isHighlight: true },
+    { to: '/fup-update', label: 'FUP Update', icon: ArrowUpRight, isHighlight: true },
     { to: '/reminders', label: 'Reminders', icon: Bell },
   ];
 
   const moreItems = [
-    { to: '/fup-update', label: 'FUP Update', icon: Receipt, desc: 'Upload commission bill to advance FUP for paid policies', isNew: true },
+    { to: '/fup-update', label: 'FUP Update', icon: ArrowUpRight, desc: 'Upload commission bill to advance FUP for paid policies', isNew: true },
     { to: '/greetings', label: 'Festival Greeting Cards', icon: Sparkles, desc: 'Create festive cards with your photo to send clients' },
     { to: '/profile', label: 'Agent Profile', icon: User, desc: 'Your name, agency code, branch & visiting card' },
     { to: '/analytics', label: 'Business Summary', icon: BarChart3, desc: 'Total business, plans & earnings chart' },

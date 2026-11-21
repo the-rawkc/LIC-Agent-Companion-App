@@ -17,8 +17,7 @@ import {
   Phone,
   Cloud,
   ArrowDownCircle,
-  Receipt,
-  RotateCw
+  ArrowUpRight
 } from 'lucide-react';
 import { StatCard } from '@/components/shared/StatCard';
 import { Badge } from '@/components/shared/Badge';
@@ -122,18 +121,9 @@ export function DashboardPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => loadDashboardData()}
-              className="border-white/20 text-white hover:bg-white/10 dark:border-white/20"
-              leftIcon={<RotateCw className="w-4 h-4" />}
-              title="Refresh dashboard records"
-            >
-              Refresh
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
               onClick={() => navigate('/fup-update')}
               className="border-emerald-400/50 text-emerald-300 hover:bg-emerald-400/10 font-bold bg-emerald-950/20"
+              leftIcon={<ArrowUpRight className="w-4 h-4 text-emerald-300" />}
             >
               FUP Update
             </Button>
@@ -247,7 +237,7 @@ export function DashboardPage() {
           <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-emerald-950/70 via-slate-900 to-slate-900 border border-emerald-500/40 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
             <div className="flex items-center gap-3.5">
               <div className="w-11 h-11 rounded-2xl bg-emerald-500 text-slate-950 flex items-center justify-center shrink-0 font-bold shadow-md">
-                <Receipt className="w-6 h-6" />
+                <ArrowUpRight className="w-6 h-6" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -266,7 +256,7 @@ export function DashboardPage() {
               size="sm"
               onClick={() => navigate('/fup-update')}
               className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold border-none shrink-0"
-              leftIcon={<Receipt className="w-4 h-4 text-slate-950" />}
+              leftIcon={<ArrowUpRight className="w-4 h-4 text-slate-950" />}
             >
               Open FUP Update ➔
             </Button>
@@ -479,9 +469,9 @@ export function DashboardPage() {
             </button>
             <button
               onClick={() => navigate('/fup-update')}
-              className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-400 dark:hover:border-amber-600 transition flex items-center gap-3 text-left shadow-xs"
+              className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-400 dark:hover:border-emerald-600 transition flex items-center gap-3 text-left shadow-xs"
             >
-              <Receipt className="w-5 h-5 text-amber-500 shrink-0" />
+              <ArrowUpRight className="w-5 h-5 text-emerald-500 shrink-0" />
               <div>
                 <p className="text-xs font-bold text-slate-900 dark:text-white">FUP Update</p>
                 <p className="text-[11px] text-slate-400">Update policy FUP</p>
