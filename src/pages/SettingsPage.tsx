@@ -15,14 +15,14 @@ import {
   AlertTriangle,
   Info,
   Calendar,
-  Sparkles,
-  Smartphone
+  Sparkles
 } from 'lucide-react';
 import { pinService } from '@/services/security/pinService';
 import { backupService, type BackupPayload } from '@/services/backup/backupService';
 import { importService } from '@/services/import/importService';
 import { d1SyncService } from '@/services/cloud/d1SyncService';
 import { settingsRepository } from '@/db/repositories/settingsRepository';
+import { customerRepository } from '@/db/repositories/customerRepository';
 import { db, getActiveAgencyCode, wipeAllDataFromEveryTable } from '@/db/database';
 import { Button } from '@/components/shared/Button';
 import { Badge } from '@/components/shared/Badge';
@@ -62,22 +62,21 @@ export function SettingsPage() {
   // Reset database state
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
 
-  // Clean & Repair state
-  const [isCleaning, setIsCleaning] = useState(false);
-  const [cleanMessage, setCleanMessage] = useState<string | null>(null);
+  const [isDeduplicating, setIsDeduplicating] = useState(false);
+  const [dedupMessage, setDedupMessage] = useState<string | null>(null);
 
-  const handleCleanAndRepair = async () => {
-    setIsCleaning(true);
+  const handleCleanDuplicates = async () => {
+    setIsDeduplicating(true);
     try {
-      const res = await importService.cleanAndRepairDatabase();
-      setCleanMessage(
-        `Database repaired & re-aligned: ${res.fixedPolicies} policies verified, ${res.cleanedCustomers} customers updated, ${res.removedOrphans} orphaned records removed.`
+      const res = await customerRepository.deduplicateAndPurgeOrphans();
+      setDedupMessage(
+        `Customer records cleaned: merged duplicate profiles and removed ${res.purgedOrphans} empty profiles.`
       );
-      setTimeout(() => setCleanMessage(null), 6000);
+      setTimeout(() => setDedupMessage(null), 6000);
     } catch (err: any) {
-      alert('Repair failed: ' + (err.message || String(err)));
+      alert('Cleaning failed: ' + (err.message || String(err)));
     } finally {
-      setIsCleaning(false);
+      setIsDeduplicating(false);
     }
   };
 
@@ -260,8 +259,8 @@ export function SettingsPage() {
           <Settings className="w-6 h-6 text-blue-600" />
           <span>Settings & Data Management</span>
         </h1>
-        <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-          Security PIN, local-first backups, CSV exports, and app preferences
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          Security PIN, backups, export, and app preferences
         </p>
       </div>
 
@@ -380,7 +379,7 @@ export function SettingsPage() {
             <div>
               <span className="text-xs font-bold text-slate-900 dark:text-white block flex items-center gap-1.5">
                 <FileSpreadsheet className="w-4 h-4 text-blue-600" />
-                Excel Spreadsheet (CSV)
+                Excel Spreadsheet
               </span>
               <p className="text-[11px] text-slate-500 mt-1">
                 Save your policies as an Excel file to open and print in Microsoft Excel or Google Sheets.
@@ -506,34 +505,21 @@ export function SettingsPage() {
               </span>
             </div>
           )}
-
-          {/* Android PWA info */}
-          <div className="py-3 flex items-center justify-between">
-            <div>
-              <span className="font-semibold text-slate-800 dark:text-slate-200 block flex items-center gap-1.5">
-                <Smartphone className="w-4 h-4 text-blue-600" />
-                Install on Android Phone
-              </span>
-              <span className="text-slate-400">
-                Open in Chrome or Brave, tap the three dots menu (⋮), and choose "Add to Home Screen" or "Install App".
-              </span>
-            </div>
-          </div>
         </div>
       </div>
 
-      {/* Maintenance Zone: Clean & Repair Data */}
-      <div className="bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/40 rounded-3xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* Customer Duplicate Cleanup */}
+      <div className="bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-3xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-blue-800 dark:text-blue-400">
-            Database Maintenance
+          <h3 className="text-xs font-bold uppercase tracking-wider text-amber-800 dark:text-amber-400">
+            Clean Duplicate Customers
           </h3>
-          <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
-            Optimize database indexes, fix whitespace and align customer associations.
+          <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+            Automatically merge duplicate customer records and remove empty profiles.
           </p>
-          {cleanMessage && (
+          {dedupMessage && (
             <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-1">
-              ✓ {cleanMessage}
+              ✓ {dedupMessage}
             </p>
           )}
         </div>
@@ -541,10 +527,12 @@ export function SettingsPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={handleCleanAndRepair}
-            disabled={isCleaning}
+            onClick={handleCleanDuplicates}
+            disabled={isDeduplicating}
+            leftIcon={<Sparkles className="w-4 h-4 text-amber-500" />}
+            className="text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/30 font-semibold"
           >
-            {isCleaning ? 'Cleaning...' : 'Optimize & Re-align'}
+            {isDeduplicating ? 'Cleaning...' : 'Clean Duplicates'}
           </Button>
         </div>
       </div>
@@ -638,7 +626,7 @@ export function SettingsPage() {
           setRestoreFileContent(null);
         }}
         title="Enter Backup Password"
-        description="This backup file is encrypted"
+        description="This backup file is password protected"
         maxWidth="sm"
         onSubmit={handleDecryptAndPreview}
         footer={
@@ -655,7 +643,7 @@ export function SettingsPage() {
               Cancel
             </Button>
             <Button type="submit" variant="primary" size="sm">
-              Decrypt Backup
+              Unlock & Open Backup
             </Button>
           </>
         }

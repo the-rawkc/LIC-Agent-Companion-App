@@ -309,7 +309,6 @@ export async function handleSyncRequest(request: Request, env: Env): Promise<Res
 
         // Store summary & other tables in cloud_agent_data
         const summaryJson = JSON.stringify({
-          policies: policies.length <= 200 ? policies : [],
           customers,
           reminders,
           profile,
@@ -331,6 +330,11 @@ export async function handleSyncRequest(request: Request, env: Env): Promise<Res
         );
 
         if (profile) {
+          if (profile.fullName && profile.fullName !== 'LIC Financial Advisor') {
+            statements.push(
+              env.DB.prepare('UPDATE agents SET agent_name = ? WHERE agency_code = ?').bind(profile.fullName, agencyCode)
+            );
+          }
           statements.push(
             env.DB.prepare(
               `INSERT INTO cloud_settings (key, agency_code, data_json, updated_at)
@@ -432,6 +436,21 @@ export async function handleSyncRequest(request: Request, env: Env): Promise<Res
             if (parsed.lastAddedBatch) lastAddedBatch = parsed.lastAddedBatch;
           } catch {}
         }
+
+        // 3. Authoritative agent_profile from cloud_settings
+        try {
+          const profileSetting = await env.DB.prepare(
+            'SELECT data_json FROM cloud_settings WHERE key = ? AND agency_code = ?'
+          )
+            .bind('agent_profile', agencyCode)
+            .first<{ data_json: string }>();
+          if (profileSetting?.data_json) {
+            const parsedProfile = JSON.parse(profileSetting.data_json);
+            if (parsedProfile) {
+              profile = { ...(profile || {}), ...parsedProfile };
+            }
+          }
+        } catch {}
 
         return jsonResponse({
           success: true,

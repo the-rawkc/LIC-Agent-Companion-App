@@ -1,7 +1,7 @@
 import { db, ensureDataSynchronized } from '@/db/database';
 import { policyRepository } from '@/db/repositories/policyRepository';
 import { customerRepository } from '@/db/repositories/customerRepository';
-import { advanceFupDate, parseDateToISO, generateUUID, parseCleanNumber, normalizeSearchString } from '@/utils/formatters';
+import { advanceFupDate, parseDateToISO, generateUUID, parseCleanNumber, normalizeSearchString, parsePlanTermPpt, calculateMaturityDate } from '@/utils/formatters';
 import { d1SyncService } from '@/services/cloud/d1SyncService';
 import userUploadedPoliciesData from '@/services/sampleData/userUploadedPolicies.json';
 import type {
@@ -323,7 +323,13 @@ export const commissionBillService = {
               await db.customers.add(customer);
             }
 
-            const planCode = item.planTerm ? item.planTerm.split(/[-/]/)[0] : '815';
+            const parsedPlan = parsePlanTermPpt(item.planTerm);
+            const planCode = parsedPlan.planCode || (item.planTerm ? item.planTerm.split(/[-/]/)[0] : '');
+            const term = parsedPlan.term;
+            const ppt = parsedPlan.ppt;
+            const commencementDate = item.riskDate || item.paidDueDate;
+            const maturityDate = term && commencementDate ? (calculateMaturityDate(commencementDate, term) || '') : '';
+
             const newPolicyId = generateUUID();
             const newPolicy: Policy = {
               id: newPolicyId,
@@ -331,20 +337,23 @@ export const commissionBillService = {
               customerId: customer.id,
               customerName: item.customerName,
               planCode,
-              term: 20,
-              premiumPayingTerm: 20,
+              term,
+              premiumPayingTerm: ppt,
               originalPlanString: item.planTerm || planCode,
-              sumAssured: (item.premiumAmount || 10000) * 10,
-              commencementDate: item.riskDate || item.paidDueDate,
+              sumAssured: 0, // Sum Assured is not present in commission bill; only fill true present values, no random numbers
+              commencementDate,
               premiumMode: item.mode,
               firstUnpaidPremiumDate: item.calculatedNewFup,
               premiumAmount: item.premiumAmount || 0,
-              maturityDate: advanceFupDate(item.paidDueDate, 'Yearly'),
+              maturityDate,
               dateOfBirth: null,
               sourceSerialNumber: item.sNo ?? null,
               sourceReportDate: now.split('T')[0],
               sourceImportId: null,
-              rawExtractedValues: {},
+              rawExtractedValues: {
+                ...(item.cbo ? { cbo: item.cbo } : {}),
+                ...(item.adjDate ? { adjDate: item.adjDate } : {}),
+              },
               extractionWarnings: [],
               recordStatus: 'active',
               createdAt: now,
@@ -377,27 +386,29 @@ export const commissionBillService = {
         }
       }
 
-      // Persist the batch history of newly added policies for auditing & viewing
-      if (createdPolicies.length > 0) {
-        await db.appSettings.put({
-          key: 'last_added_batch',
-          value: {
-            timestamp: now,
-            count: createdPolicies.length,
-            policyNumbers: createdPolicies.map((p) => p.policyNumber),
-            policies: createdPolicies.map((p) => ({
-              id: p.id,
-              policyNumber: p.policyNumber,
-              customerName: p.customerName,
-              premiumMode: p.premiumMode,
-              firstUnpaidPremiumDate: p.firstUnpaidPremiumDate,
-              commencementDate: p.commencementDate,
-              createdAt: p.createdAt,
-            })),
-          },
-          updatedAt: now,
-        });
-      }
+      // Persist the batch history of newly added policies for auditing & viewing.
+      // Crucial: The user explicitly wants "NEW" label ONLY on policies loaded with the LAST commission bill only,
+      // and old NEW labels removed!
+      // If this bill created new policies, save ONLY them.
+      // If this bill created 0 new policies, reset last_added_batch to empty so old "new" labels are removed!
+      await db.appSettings.put({
+        key: 'last_added_batch',
+        value: {
+          timestamp: now,
+          count: createdPolicies.length,
+          policyNumbers: createdPolicies.map((p) => p.policyNumber),
+          policies: createdPolicies.map((p) => ({
+            id: p.id,
+            policyNumber: p.policyNumber,
+            customerName: p.customerName,
+            premiumMode: p.premiumMode,
+            firstUnpaidPremiumDate: p.firstUnpaidPremiumDate,
+            commencementDate: p.commencementDate,
+            createdAt: p.createdAt,
+          })),
+        },
+        updatedAt: now,
+      });
     });
 
     if (updatedCount > 0 || createdCount > 0) {

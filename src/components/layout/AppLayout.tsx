@@ -55,11 +55,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     ensureDataSynchronized().catch(() => {});
   }, []);
 
-  // Load auth state & profile details on route change
-  useEffect(() => {
-    const authed = authService.isAuthenticated();
-    setIsAuthenticated(authed);
-
+  // Load auth state & profile details
+  const refreshProfile = () => {
     profileRepository.getProfile().then((p) => {
       if (p.agencyCode) setAgencyCode(p.agencyCode);
       if (p.avatarUrl) setAgentAvatar(p.avatarUrl);
@@ -76,7 +73,19 @@ export function AppLayout({ children }: AppLayoutProps) {
         setAgentInitials(inits || 'AG');
       }
     });
+  };
+
+  useEffect(() => {
+    const authed = authService.isAuthenticated();
+    setIsAuthenticated(authed);
+    refreshProfile();
   }, [location.pathname]);
+
+  useEffect(() => {
+    const handleSync = () => refreshProfile();
+    window.addEventListener('lic_cloud_synced', handleSync);
+    return () => window.removeEventListener('lic_cloud_synced', handleSync);
+  }, []);
 
   // Initialize theme from settings
   useEffect(() => {
@@ -137,36 +146,8 @@ export function AppLayout({ children }: AppLayoutProps) {
       }
     };
 
-    // Sync on initial app load
+    // Silent initial sync only on startup if online, without recurring polling or visibility interruption
     syncFromCloud();
-
-    // Periodic live sync every 25 seconds while tab is active
-    const intervalTimer = setInterval(() => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        syncFromCloud();
-      }
-    }, 25000);
-
-    // Sync whenever tab becomes visible (e.g. user opens device or switches back to tab)
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        syncFromCloud();
-      }
-    };
-
-    // Sync when device reconnects to internet
-    const handleOnline = () => {
-      syncFromCloud();
-    };
-
-    document.addEventListener('visibilitychange', handleVisibility);
-    window.addEventListener('online', handleOnline);
-
-    return () => {
-      clearInterval(intervalTimer);
-      document.removeEventListener('visibilitychange', handleVisibility);
-      window.removeEventListener('online', handleOnline);
-    };
   }, []);
 
   const navItems = [
@@ -205,19 +186,21 @@ export function AppLayout({ children }: AppLayoutProps) {
           <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-3">
             {/* Left: Profile Avatar & Brand Title */}
             <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => navigate('/profile')}
-                title={`View Agent Profile (${agentName})`}
-                className="flex items-center gap-1.5 p-0.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition tap-effect focus:outline-none"
-              >
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-xs flex items-center justify-center shrink-0 shadow-xs ring-2 ring-amber-400/40 hover:scale-105 transition overflow-hidden">
-                  {agentAvatar ? (
-                    <img src={agentAvatar} alt={agentName} className="w-full h-full object-cover" />
-                  ) : (
-                    agentInitials
-                  )}
-                </div>
-              </button>
+              {location.pathname !== '/reminders' && (
+                <button
+                  onClick={() => navigate('/profile')}
+                  title={`View Agent Profile (${agentName})`}
+                  className="flex items-center gap-1.5 p-0.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition tap-effect focus:outline-none"
+                >
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-xs flex items-center justify-center shrink-0 shadow-xs ring-2 ring-amber-400/40 hover:scale-105 transition overflow-hidden">
+                    {agentAvatar ? (
+                      <img src={agentAvatar} alt={agentName} className="w-full h-full object-cover" />
+                    ) : (
+                      agentInitials
+                    )}
+                  </div>
+                </button>
+              )}
 
               <div
                 className="flex items-center gap-1.5 cursor-pointer group tap-effect"

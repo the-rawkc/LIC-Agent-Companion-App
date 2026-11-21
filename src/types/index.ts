@@ -1,6 +1,6 @@
 export type PremiumMode = 'Yearly' | 'Half-Yearly' | 'Quarterly' | 'Monthly' | 'Single' | 'N/F' | 'NF' | 'NA' | string;
 
-export type PolicyRecordStatus = 'active' | 'lapsed' | 'matured' | 'needs_verification' | 'manual';
+export type PolicyRecordStatus = 'active' | 'due' | 'matured' | 'claimed' | 'surrendered' | 'lapsed' | 'needs_verification' | 'manual';
 
 export interface RawExtractedRow {
   sNo?: string;

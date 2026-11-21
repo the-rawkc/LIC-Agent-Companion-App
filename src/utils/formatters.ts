@@ -242,3 +242,242 @@ export function advanceFupDate(currentFupIso: string, mode: string): string {
   const dd = String(targetDay).padStart(2, '0');
   return `${targetYear}-${mm}-${dd}`;
 }
+
+/**
+ * Robust parser for Plan / Term / PPT strings (e.g., '833-22', '815-21', '736/16/10', '149/20/20')
+ */
+export function parsePlanTermPpt(rawPlan: string | undefined | null): {
+  planCode: string;
+  term: number | null;
+  ppt: number | null;
+} {
+  if (!rawPlan) return { planCode: '', term: null, ppt: null };
+  const trimmed = rawPlan.trim();
+  const parts = trimmed.split(/[-/]/).map((p) => p.trim()).filter(Boolean);
+  const planCode = parts[0] || trimmed;
+  let term: number | null = null;
+  let ppt: number | null = null;
+
+  if (parts.length >= 2) {
+    const t = parseInt(parts[1], 10);
+    if (!isNaN(t) && t > 0) term = t;
+  }
+  if (parts.length >= 3) {
+    const p = parseInt(parts[2], 10);
+    if (!isNaN(p) && p > 0) ppt = p;
+  } else if (term !== null) {
+    ppt = term;
+  }
+
+  return { planCode, term, ppt };
+}
+
+/**
+ * Calculates Date of Maturity (DOM) accurately from Commencement Date (DOC) and policy Term years.
+ * Preserves day and month, handling leap years safely (e.g. Feb 29 on non-leap year resolves to Feb 28).
+ */
+export function calculateMaturityDate(
+  commencementDateIso: string | null | undefined,
+  termYears: number | null | undefined
+): string | null {
+  if (!commencementDateIso || termYears === null || termYears === undefined || isNaN(termYears) || termYears <= 0) {
+    return null;
+  }
+  const iso = parseDateToISO(commencementDateIso);
+  if (!iso) return null;
+
+  const [yStr, mStr, dStr] = iso.split('-');
+  const year = parseInt(yStr, 10);
+  const month = parseInt(mStr, 10);
+  const day = parseInt(dStr, 10);
+
+  const targetYear = year + Math.round(termYears);
+  const daysInTargetMonth = new Date(targetYear, month, 0).getDate();
+  const targetDay = Math.min(day, daysInTargetMonth);
+
+  const mm = String(month).padStart(2, '0');
+  const dd = String(targetDay).padStart(2, '0');
+  return `${targetYear}-${mm}-${dd}`;
+}
+
+/**
+ * Returns the true Date of Maturity for a policy, recalculating from Term + DOC
+ * if the stored maturity date is missing or inconsistent.
+ */
+export function getPolicyMaturityDate(policy: {
+  maturityDate?: string | null;
+  commencementDate?: string | null;
+  term?: number | null;
+  originalPlanString?: string | null;
+  planCode?: string | null;
+}): string {
+  const parsed = parsePlanTermPpt(policy.originalPlanString || policy.planCode);
+  const term = policy.term && !isNaN(policy.term) && policy.term > 0 ? policy.term : parsed.term;
+
+  if (policy.commencementDate && term && term > 0) {
+    const calculated = calculateMaturityDate(policy.commencementDate, term);
+    if (calculated) {
+      // If no stored date or stored date was artificially set to ~1 year ahead (buggy FUP advancement), use calculated
+      if (!policy.maturityDate) return calculated;
+      const storedIso = parseDateToISO(policy.maturityDate);
+      const docIso = parseDateToISO(policy.commencementDate);
+      if (!storedIso) return calculated;
+
+      // If term is >= 3 years and stored DOM is within 2 years of DOC, it's corrupt/wrong -> fix with calculated
+      if (docIso && term >= 3) {
+        const docYear = parseInt(docIso.split('-')[0], 10);
+        const domYear = parseInt(storedIso.split('-')[0], 10);
+        if (domYear - docYear <= 2) {
+          return calculated;
+        }
+      }
+      return storedIso;
+    }
+  }
+
+  if (policy.maturityDate) {
+    const iso = parseDateToISO(policy.maturityDate);
+    if (iso) return iso;
+  }
+
+  return policy.maturityDate || '';
+}
+
+export type PolicyLifecycleStatus = 'matured' | 'claimed' | 'due' | 'surrendered' | 'active' | 'lapsed';
+
+/**
+ * Categorizes a policy into its exact lifecycle status:
+ * 'matured' | 'claimed' | 'due' | 'surrendered' | 'active' | 'lapsed'
+ */
+export function getPolicyLifecycleStatus(policy: {
+  recordStatus?: string;
+  maturityDate?: string | null;
+  firstUnpaidPremiumDate?: string | null;
+  commencementDate?: string | null;
+  term?: number | null;
+  originalPlanString?: string | null;
+  planCode?: string | null;
+}): PolicyLifecycleStatus {
+  const rs = (policy.recordStatus || '').toLowerCase();
+  if (rs === 'claimed') return 'claimed';
+  if (rs === 'surrendered' || rs === 'surendered') return 'surrendered';
+  if (rs === 'matured') return 'matured';
+
+  const todayIso = new Date().toISOString().split('T')[0];
+
+  // Check if maturity date has arrived/passed
+  const trueDom = getPolicyMaturityDate(policy);
+  const domIso = parseDateToISO(trueDom);
+  if (domIso && domIso <= todayIso) {
+    return 'matured';
+  }
+
+  if (rs === 'due') return 'due';
+
+  // Check if premium payment is due (FUP <= today)
+  if (policy.firstUnpaidPremiumDate) {
+    const fupIso = parseDateToISO(policy.firstUnpaidPremiumDate);
+    if (fupIso && fupIso <= todayIso) {
+      return 'due';
+    }
+  }
+
+  if (rs === 'lapsed') return 'lapsed';
+  return 'active';
+}
+
+/**
+ * Generate a clean WhatsApp text representation of available policy details
+ * Clearly labels the status as DUE if premium is due
+ */
+export function generatePolicyWhatsAppMessage(policy: {
+  policyNumber: string;
+  customerName?: string;
+  planCode?: string;
+  policyTerm?: number | null;
+  premiumPayingTerm?: number | null;
+  sumAssured?: number;
+  premiumAmount?: number;
+  premiumMode?: string;
+  commencementDate?: string;
+  maturityDate?: string;
+  firstUnpaidPremiumDate?: string;
+  recordStatus?: string;
+  originalPlanString?: string;
+}): string {
+  const status = getPolicyLifecycleStatus(policy);
+  const isDue = status === 'due';
+
+  const lines: string[] = [];
+  lines.push(`*LIC Policy Details*`);
+  lines.push(`────────────────────────────`);
+  lines.push(`📋 *Policy No:* ${policy.policyNumber}`);
+  if (policy.customerName) {
+    lines.push(`👤 *Policyholder:* ${policy.customerName}`);
+  }
+
+  const planParts: string[] = [];
+  if (policy.planCode) planParts.push(`Plan: ${policy.planCode}`);
+  if (policy.policyTerm) planParts.push(`Term: ${policy.policyTerm} yrs`);
+  if (policy.premiumPayingTerm) planParts.push(`PPT: ${policy.premiumPayingTerm} yrs`);
+  if (planParts.length > 0) {
+    lines.push(`📄 *Plan / Term:* ${planParts.join(' | ')}`);
+  }
+
+  if (policy.sumAssured && policy.sumAssured > 0) {
+    lines.push(`💰 *Sum Assured:* ${formatCurrency(policy.sumAssured)}`);
+  }
+
+  if (policy.premiumAmount && policy.premiumAmount > 0) {
+    lines.push(`💳 *Premium:* ${formatCurrency(policy.premiumAmount)} (${policy.premiumMode || 'Yearly'})`);
+  }
+
+  if (policy.commencementDate) {
+    lines.push(`📅 *D.O.C. (Commencement):* ${formatDate(policy.commencementDate)}`);
+  }
+
+  const dom = getPolicyMaturityDate(policy);
+  if (dom) {
+    lines.push(`🎯 *D.O.M. (Maturity):* ${formatDate(dom)}`);
+  }
+
+  if (policy.firstUnpaidPremiumDate) {
+    lines.push(`⏳ *F.U.P. Date:* ${formatDate(policy.firstUnpaidPremiumDate)}`);
+  }
+
+  lines.push(`────────────────────────────`);
+  if (isDue) {
+    lines.push(`⚠️ *STATUS: PREMIUM DUE*`);
+    lines.push(`_Kindly pay the premium at the earliest to ensure uninterrupted life cover and benefits._`);
+  } else if (status === 'matured') {
+    lines.push(`🎓 *STATUS: MATURED*`);
+  } else if (status === 'claimed') {
+    lines.push(`🛡️ *STATUS: CLAIMED*`);
+  } else if (status === 'surrendered') {
+    lines.push(`📋 *STATUS: SURRENDERED*`);
+  } else {
+    lines.push(`✅ *STATUS: ACTIVE*`);
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Open WhatsApp with pre-filled policy details
+ */
+export function openPolicyWhatsAppShare(
+  policy: Parameters<typeof generatePolicyWhatsAppMessage>[0],
+  mobileNumber?: string | null
+): void {
+  const text = generatePolicyWhatsAppMessage(policy);
+  const encodedText = encodeURIComponent(text);
+  let url = `https://wa.me/?text=${encodedText}`;
+  if (mobileNumber) {
+    const cleanDigits = mobileNumber.replace(/\D/g, '');
+    if (cleanDigits.length >= 10) {
+      const formattedNumber = cleanDigits.length === 10 ? `91${cleanDigits}` : cleanDigits;
+      url = `https://wa.me/${formattedNumber}?text=${encodedText}`;
+    }
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}

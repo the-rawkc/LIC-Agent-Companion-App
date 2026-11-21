@@ -10,7 +10,8 @@ import {
   Filter,
   Trash2,
   User,
-  FileText
+  FileText,
+  RotateCw
 } from 'lucide-react';
 import { reminderRepository, type ReminderWithDetails } from '@/db/repositories/reminderRepository';
 import { customerRepository } from '@/db/repositories/customerRepository';
@@ -137,19 +138,30 @@ export function RemindersPage() {
             <Bell className="w-6 h-6 text-blue-600" />
             <span>Reminders & Follow-ups</span>
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Keep track of customer interactions, premium due checks, and maturities
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            {filteredReminders.length} tasks
           </p>
         </div>
 
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => setIsAddModalOpen(true)}
-          leftIcon={<Plus className="w-4 h-4" />}
-        >
-          Add Reminder
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => loadData()}
+            leftIcon={<RotateCw className="w-4 h-4" />}
+            title="Refresh reminders"
+          >
+            Refresh
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setIsAddModalOpen(true)}
+            leftIcon={<Plus className="w-4 h-4" />}
+          >
+            Add Reminder
+          </Button>
+        </div>
       </div>
 
       {/* Filter Tabs */}

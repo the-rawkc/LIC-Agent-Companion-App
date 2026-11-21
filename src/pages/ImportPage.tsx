@@ -484,15 +484,15 @@ export function ImportPage() {
                           </span>
                           <span>•</span>
                           <span>
-                            D.O.C.: <strong>{formatDate(r.doc)}</strong>
+                            Start Date: <strong>{formatDate(r.doc)}</strong>
                           </span>
                           <span>•</span>
                           <span>
-                            F.U.P.: <strong className="text-amber-600 dark:text-amber-400">{formatDate(r.fup)}</strong>
+                            Next Due Date: <strong className="text-amber-600 dark:text-amber-400">{formatDate(r.fup)}</strong>
                           </span>
                           <span>•</span>
                           <span>
-                            D.O.M.: <strong>{formatDate(r.dom)}</strong>
+                            Maturity: <strong>{formatDate(r.dom)}</strong>
                           </span>
                           {r.dob && (
                             <>
@@ -647,7 +647,7 @@ export function ImportPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      D.O.C. (Commencement)
+                      Start Date (DOC)
                     </label>
                     <input
                       type="text"
@@ -660,7 +660,7 @@ export function ImportPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      F.U.P. (Due Date)
+                      Next Due Date (FUP)
                     </label>
                     <input
                       type="text"
@@ -676,7 +676,7 @@ export function ImportPage() {
                 <div className="grid grid-cols-2 gap-2.5">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      D.O.M. (Maturity Date)
+                      Maturity Date (DOM)
                     </label>
                     <input
                       type="text"

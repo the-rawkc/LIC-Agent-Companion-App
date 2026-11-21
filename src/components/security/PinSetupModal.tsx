@@ -92,7 +92,7 @@ export function PinSetupModal({
         <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl flex items-start gap-3 border border-blue-100 dark:border-blue-900/50">
           <ShieldCheck className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
           <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
-            Your PIN is salted and hashed using PBKDF2 with 100,000 iterations on your device. Never shared or sent online.
+            Your PIN is securely protected on your device. It is never shared or sent to anyone.
           </p>
         </div>
 

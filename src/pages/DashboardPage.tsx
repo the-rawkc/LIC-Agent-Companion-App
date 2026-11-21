@@ -17,7 +17,8 @@ import {
   Phone,
   Cloud,
   ArrowDownCircle,
-  Receipt
+  Receipt,
+  RotateCw
 } from 'lucide-react';
 import { StatCard } from '@/components/shared/StatCard';
 import { Badge } from '@/components/shared/Badge';
@@ -30,7 +31,7 @@ import { reminderRepository } from '@/db/repositories/reminderRepository';
 import { authService } from '@/services/auth/authService';
 import { d1SyncService } from '@/services/cloud/d1SyncService';
 import { getActiveAgencyCode, ensureDataSynchronized } from '@/db/database';
-import { formatCurrency, formatDate } from '@/utils/formatters';
+import { formatCurrency, formatDate, getPolicyMaturityDate } from '@/utils/formatters';
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -68,13 +69,6 @@ export function DashboardPage() {
           if (res.restored) {
             data = await analyticsService.getDashboardStats();
           }
-        } else {
-          // Keep all devices uniform in background by merging latest cloud changes
-          d1SyncService.pullFromCloud(agencyCode, pin || '').then((res) => {
-            if (res.policiesCount > 0) {
-              analyticsService.getDashboardStats().then(setStats).catch(() => {});
-            }
-          }).catch((err) => console.warn('Background dashboard sync:', err));
         }
       }
 
@@ -119,25 +113,27 @@ export function DashboardPage() {
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-blue-500/10 blur-3xl rounded-full pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-medium mb-2.5 border border-blue-400/20">
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>Your Personal Insurance Companion</span>
-            </div>
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
               LIC Agent Companion
             </h1>
-            <p className="mt-1 text-xs sm:text-sm text-slate-300 max-w-xl">
-              All policy records and client details stay private and safe on your device.
-            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => loadDashboardData()}
+              className="border-white/20 text-white hover:bg-white/10 dark:border-white/20"
+              leftIcon={<RotateCw className="w-4 h-4" />}
+              title="Refresh dashboard records"
+            >
+              Refresh
+            </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={() => navigate('/fup-update')}
               className="border-emerald-400/50 text-emerald-300 hover:bg-emerald-400/10 font-bold bg-emerald-950/20"
-              leftIcon={<Receipt className="w-4 h-4 text-emerald-400" />}
             >
               FUP Update
             </Button>
@@ -284,7 +280,7 @@ export function DashboardPage() {
                   Follow-up & Due Dates
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Targeted tracking based on recorded F.U.P. and maturity schedules
+                  Targeted tracking based on premium due dates and maturity schedules
                 </p>
               </div>
 
@@ -298,7 +294,7 @@ export function DashboardPage() {
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
                   }`}
                 >
-                  F.U.P. Attention ({stats.fupRequiringAttentionCount})
+                  Due Dates Attention ({stats.fupRequiringAttentionCount})
                 </button>
                 <button
                   onClick={() => setActiveTab('maturities')}
@@ -328,7 +324,7 @@ export function DashboardPage() {
               <div className="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
                 {stats.attentionFupList.length === 0 ? (
                   <p className="py-6 text-center text-sm text-slate-500">
-                    No overdue or urgent F.U.P. dates requiring immediate attention.
+                    No overdue or urgent due dates requiring immediate attention.
                   </p>
                 ) : (
                   stats.attentionFupList.map((p) => (
@@ -343,7 +339,7 @@ export function DashboardPage() {
                             {p.policyNumber}
                           </span>
                           <Badge variant="warning" size="sm">
-                            F.U.P. {formatDate(p.firstUnpaidPremiumDate)}
+                            Due {formatDate(p.firstUnpaidPremiumDate)}
                           </Badge>
                           <span className="text-xs text-slate-500 font-mono hidden sm:inline">
                             Plan {p.originalPlanString}
@@ -380,7 +376,7 @@ export function DashboardPage() {
                             {p.policyNumber}
                           </span>
                           <Badge variant="info" size="sm">
-                            Matures {formatDate(p.maturityDate)}
+                            Matures {formatDate(getPolicyMaturityDate(p))}
                           </Badge>
                           <span className="text-xs text-slate-500 font-mono hidden sm:inline">
                             Plan {p.originalPlanString}

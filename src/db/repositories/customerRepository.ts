@@ -368,9 +368,11 @@ export const customerRepository = {
     if (!query.trim()) return all;
 
     const q = normalizeSearchString(query);
+    const qNoSpace = q.replace(/\s+/g, '');
     return all.filter((c) => {
-      const nameMatch = c.normalizedName.includes(q);
-      const mobileMatch = c.mobileNumber?.includes(q) ?? false;
+      const cNorm = c.normalizedName || '';
+      const nameMatch = cNorm.includes(q) || cNorm.replace(/\s+/g, '').includes(qNoSpace);
+      const mobileMatch = c.mobileNumber ? c.mobileNumber.replace(/\D/g, '').includes(q.replace(/\D/g, '')) : false;
       const policyMatch = c.policies.some((p) => p.policyNumber.toLowerCase().includes(q));
       return nameMatch || mobileMatch || policyMatch;
     });

@@ -9,25 +9,39 @@ import {
   IndianRupee,
   ShieldCheck,
   TrendingUp,
-  Info
+  Info,
+  ChevronRight,
+  RotateCw,
+  Edit2,
+  Check,
+  X
 } from 'lucide-react';
 import { analyticsService, type AnalyticsData } from '@/features/analytics/analyticsService';
-import { formatCurrency } from '@/utils/formatters';
+import { policyRepository } from '@/db/repositories/policyRepository';
+import { customerRepository } from '@/db/repositories/customerRepository';
+import { db } from '@/db/database';
+import { formatCurrency, formatDate, parseCleanNumber } from '@/utils/formatters';
 import { StatCard } from '@/components/shared/StatCard';
 import { Badge } from '@/components/shared/Badge';
+import { Button } from '@/components/shared/Button';
+import { Modal } from '@/components/shared/Modal';
+import type { Policy } from '@/types';
 
 export function AnalyticsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Data Quality Audit Modal State
+  const [activeAuditModal, setActiveAuditModal] = useState<'zero_sum' | 'missing_dob' | null>(null);
+  const [auditPolicies, setAuditPolicies] = useState<Policy[]>([]);
+  const [isLoadingAuditList, setIsLoadingAuditList] = useState(false);
+  const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<string>('');
+  const [editSuccessMsg, setEditSuccessMsg] = useState<string | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
   useEffect(() => {
     loadAnalytics();
-
-    const handleSync = () => {
-      loadAnalytics();
-    };
-    window.addEventListener('lic_cloud_synced', handleSync);
-    return () => window.removeEventListener('lic_cloud_synced', handleSync);
   }, []);
 
   async function loadAnalytics() {
@@ -41,6 +55,97 @@ export function AnalyticsPage() {
       setIsLoading(false);
     }
   }
+
+  const handleOpenAuditModal = async (type: 'zero_sum' | 'missing_dob') => {
+    setActiveAuditModal(type);
+    setIsLoadingAuditList(true);
+    setEditingPolicyId(null);
+    setEditSuccessMsg(null);
+    try {
+      const allPolicies = await db.policies.toArray();
+      if (type === 'zero_sum') {
+        setAuditPolicies(allPolicies.filter((p) => (p.sumAssured || 0) === 0));
+      } else {
+        setAuditPolicies(
+          allPolicies.filter(
+            (p) => !p.dateOfBirth || p.dateOfBirth.trim() === '' || p.dateOfBirth.includes('00/00/0000')
+          )
+        );
+      }
+    } catch (err) {
+      console.error('Failed to load audit records', err);
+    } finally {
+      setIsLoadingAuditList(false);
+    }
+  };
+
+  const handleStartEdit = (policy: Policy) => {
+    setEditingPolicyId(policy.id);
+    if (activeAuditModal === 'zero_sum') {
+      setEditValue(policy.sumAssured > 0 ? String(policy.sumAssured) : '');
+    } else {
+      setEditValue(policy.dateOfBirth || '');
+    }
+  };
+
+  const handleSaveAuditEdit = async (policy: Policy) => {
+    if (!editValue.trim()) return;
+    setIsSavingEdit(true);
+    try {
+      if (activeAuditModal === 'zero_sum') {
+        const val = parseCleanNumber(editValue);
+        if (val <= 0) {
+          alert('Please enter a valid Sum Assured greater than 0.');
+          setIsSavingEdit(false);
+          return;
+        }
+        const updatedWarnings = (policy.extractionWarnings || []).filter(
+          (w) => !w.toLowerCase().includes('sum assured')
+        );
+        await policyRepository.update(policy.id, {
+          sumAssured: val,
+          extractionWarnings: updatedWarnings,
+        });
+        setAuditPolicies((prev) =>
+          prev.map((p) =>
+            p.id === policy.id ? { ...p, sumAssured: val, extractionWarnings: updatedWarnings } : p
+          )
+        );
+        setEditSuccessMsg(`Updated Sum Assured for Policy ${policy.policyNumber} to ${formatCurrency(val)}. Warning removed!`);
+      } else if (activeAuditModal === 'missing_dob') {
+        const val = editValue.trim();
+        const updatedWarnings = (policy.extractionWarnings || []).filter(
+          (w) => !w.toLowerCase().includes('dob') && !w.toLowerCase().includes('date of birth')
+        );
+        await policyRepository.update(policy.id, {
+          dateOfBirth: val,
+          extractionWarnings: updatedWarnings,
+        });
+        if (policy.customerId) {
+          const cust = await customerRepository.getById(policy.customerId);
+          if (cust && !cust.dateOfBirth) {
+            await customerRepository.update(cust.id, { dateOfBirth: val });
+          }
+        }
+        setAuditPolicies((prev) =>
+          prev.map((p) =>
+            p.id === policy.id ? { ...p, dateOfBirth: val, extractionWarnings: updatedWarnings } : p
+          )
+        );
+        setEditSuccessMsg(`Updated Date of Birth for Policy ${policy.policyNumber} to ${formatDate(val)}. Warning removed!`);
+      }
+
+      setEditingPolicyId(null);
+      setEditValue('');
+      const refreshed = await analyticsService.getAnalyticsData();
+      setData(refreshed);
+      setTimeout(() => setEditSuccessMsg(null), 5000);
+    } catch (err: any) {
+      alert('Failed to save update: ' + (err.message || String(err)));
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
 
   if (isLoading || !data) {
     return (
@@ -60,14 +165,23 @@ export function AnalyticsPage() {
   return (
     <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-6xl mx-auto w-full">
       {/* Page Header */}
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
-          <BarChart3 className="w-6 h-6 text-blue-600" />
-          <span>Portfolio Analytics & Insights</span>
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-          Breakdowns derived exclusively from actual policy records in your local database
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
+            <BarChart3 className="w-6 h-6 text-blue-600" />
+            <span>Portfolio Analytics & Insights</span>
+          </h1>
+        </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => loadAnalytics()}
+          leftIcon={<RotateCw className="w-4 h-4" />}
+          title="Refresh analytics data"
+        >
+          Refresh
+        </Button>
       </div>
 
       {/* Overview Stat Cards */}
@@ -96,16 +210,6 @@ export function AnalyticsPage() {
           subtitle={`${data.dataQuality.zeroSumAssured} zero sum • ${data.dataQuality.missingDob} no DOB`}
           icon={<AlertTriangle className="w-5 h-5 text-amber-500" />}
         />
-      </div>
-
-      {/* Disclaimers & Metric Explanation */}
-      <div className="p-4 bg-blue-50/60 dark:bg-blue-950/30 rounded-2xl border border-blue-100 dark:border-blue-900/40 flex items-start gap-3 text-xs text-blue-900 dark:text-blue-300">
-        <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-        <p className="leading-relaxed">
-          <strong>Important clarification:</strong> Financial metrics indicate the recorded installment premiums
-          and sum assured as extracted from the agent's report. They do not represent annual recurring income,
-          official commissions, or guaranteed surrender payouts.
-        </p>
       </div>
 
       {/* Grid: Plan Breakdown & Mode Breakdown */}
@@ -274,36 +378,60 @@ export function AnalyticsPage() {
           </div>
         </div>
 
-        {/* Data Quality & Integrity Audit */}
+        {/* Data Review & Fixes */}
         <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-3">
           <h2 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-500" />
-            <span>Data Quality & Integrity Audit</span>
+            <span>Data Review & Fixes</span>
           </h2>
 
           <div className="space-y-2 pt-2 text-xs">
-            <div className="flex items-center justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => handleOpenAuditModal('zero_sum')}
+              className="w-full flex items-center justify-between p-2 rounded-xl text-left border border-slate-100 dark:border-slate-800 hover:border-amber-300 dark:hover:border-amber-800 hover:bg-amber-50/40 dark:hover:bg-amber-950/20 transition group cursor-pointer"
+            >
               <div>
-                <span className="font-medium text-slate-700 dark:text-slate-300 block">Sum Assured = 0</span>
-                <span className="text-[11px] text-slate-400">Reported as 0 in source PDF</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200 block group-hover:text-amber-600 dark:group-hover:text-amber-400">
+                  Missing Cover Amount
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  Click to review and fill in cover amount
+                </span>
               </div>
-              <Badge variant={data.dataQuality.zeroSumAssured > 0 ? 'warning' : 'success'}>
-                {data.dataQuality.zeroSumAssured} records
-              </Badge>
-            </div>
-
-            <div className="flex items-center justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
-              <div>
-                <span className="font-medium text-slate-700 dark:text-slate-300 block">Missing DOB</span>
-                <span className="text-[11px] text-slate-400">Recorded as 00/00/0000 or blank</span>
+              <div className="flex items-center gap-2 shrink-0">
+                <Badge variant={data.dataQuality.zeroSumAssured > 0 ? 'warning' : 'success'}>
+                  {data.dataQuality.zeroSumAssured} records
+                </Badge>
+                <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-amber-500 transition" />
               </div>
-              <Badge variant="default">{data.dataQuality.missingDob} records</Badge>
-            </div>
+            </button>
 
-            <div className="flex items-center justify-between py-1.5">
+            <button
+              type="button"
+              onClick={() => handleOpenAuditModal('missing_dob')}
+              className="w-full flex items-center justify-between p-2 rounded-xl text-left border border-slate-100 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-800 hover:bg-blue-50/40 dark:hover:bg-blue-950/20 transition group cursor-pointer"
+            >
               <div>
-                <span className="font-medium text-slate-700 dark:text-slate-300 block">Extraction Warnings</span>
-                <span className="text-[11px] text-slate-400">Flagged for manual agent review</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200 block group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                  Missing Birthday
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  Click to review and fill in birthday
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Badge variant={data.dataQuality.missingDob > 0 ? 'warning' : 'success'}>
+                  {data.dataQuality.missingDob} records
+                </Badge>
+                <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition" />
+              </div>
+            </button>
+
+            <div className="flex items-center justify-between p-2">
+              <div>
+                <span className="font-medium text-slate-700 dark:text-slate-300 block">Review Alerts</span>
+                <span className="text-[11px] text-slate-400">Records that may need your attention</span>
               </div>
               <Badge variant={data.dataQuality.hasWarnings > 0 ? 'warning' : 'success'}>
                 {data.dataQuality.hasWarnings} records
@@ -312,6 +440,168 @@ export function AnalyticsPage() {
           </div>
         </div>
       </div>
+
+      {/* Interactive Audit Records Modal with Inline Edit */}
+      {activeAuditModal && (
+        <Modal
+          isOpen={!!activeAuditModal}
+          onClose={() => {
+            setActiveAuditModal(null);
+            setEditingPolicyId(null);
+          }}
+          title={
+            activeAuditModal === 'zero_sum'
+              ? 'Policies with Missing Cover Amount'
+              : 'Policies with Missing Birthday'
+          }
+          description={
+            activeAuditModal === 'zero_sum'
+              ? 'These policies have Cover Amount recorded as ₹0. Enter the correct cover amount to update the policy.'
+              : 'These policies have a blank birthday. Enter the correct birthday to update the policy.'
+          }
+          maxWidth="2xl"
+          footer={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setActiveAuditModal(null);
+                setEditingPolicyId(null);
+              }}
+            >
+              Close
+            </Button>
+          }
+        >
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+            {editSuccessMsg && (
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-xl text-xs font-semibold text-emerald-800 dark:text-emerald-200 flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>{editSuccessMsg}</span>
+              </div>
+            )}
+
+            {isLoadingAuditList ? (
+              <div className="py-8 text-center text-xs text-slate-500">
+                <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                Loading matching records...
+              </div>
+            ) : auditPolicies.length === 0 ? (
+              <div className="py-8 text-center text-xs text-slate-500">
+                <Check className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                No records found matching this audit filter. All records are valid!
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {auditPolicies.map((p) => {
+                  const isEditing = editingPolicyId === p.id;
+                  return (
+                    <div
+                      key={p.id}
+                      className="p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs space-y-2"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold font-mono text-sm text-slate-900 dark:text-white">
+                              {p.policyNumber}
+                            </span>
+                            <Badge variant="info" size="sm" className="text-[10px]">
+                              Plan {p.planCode}
+                            </Badge>
+                          </div>
+                          <p className="text-xs font-medium text-slate-700 dark:text-slate-300 mt-0.5">
+                            {p.customerName}
+                          </p>
+                        </div>
+
+                        <div className="text-left sm:text-right">
+                          <span className="text-[10px] text-slate-400 block uppercase">
+                            {activeAuditModal === 'zero_sum' ? 'Cover Amount' : 'Birthday'}
+                          </span>
+                          <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
+                            {activeAuditModal === 'zero_sum'
+                              ? formatCurrency(p.sumAssured)
+                              : p.dateOfBirth
+                              ? formatDate(p.dateOfBirth)
+                              : 'Not recorded / blank'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Warnings if present */}
+                      {p.extractionWarnings && p.extractionWarnings.length > 0 && (
+                        <div className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-900/60 flex items-center gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                          <span>{p.extractionWarnings.join(' • ')}</span>
+                        </div>
+                      )}
+
+                      {/* Edit controls */}
+                      {isEditing ? (
+                        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                          <div className="flex-1 min-w-[180px]">
+                            {activeAuditModal === 'zero_sum' ? (
+                              <input
+                                type="number"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                placeholder="Enter cover amount (₹)"
+                                className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                autoFocus
+                              />
+                            ) : (
+                              <input
+                                type="text"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                placeholder="Enter birthday (DD/MM/YYYY)"
+                                className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                autoFocus
+                              />
+                            )}
+                          </div>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            disabled={isSavingEdit || !editValue.trim()}
+                            onClick={() => handleSaveAuditEdit(p)}
+                            leftIcon={<Check className="w-3.5 h-3.5" />}
+                          >
+                            {isSavingEdit ? 'Saving...' : 'Save & Remove Warning'}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setEditingPolicyId(null);
+                              setEditValue('');
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="pt-1 flex justify-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleStartEdit(p)}
+                            leftIcon={<Edit2 className="w-3 h-3 text-blue-600" />}
+                            className="text-xs"
+                          >
+                            Edit Value
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

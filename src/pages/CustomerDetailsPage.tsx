@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { customerRepository, type CustomerWithSummary } from '@/db/repositories/customerRepository';
 import { reminderRepository, type ReminderWithDetails } from '@/db/repositories/reminderRepository';
-import { formatCurrency, formatDate } from '@/utils/formatters';
+import { formatCurrency, formatDate, getPolicyMaturityDate, getPolicyLifecycleStatus } from '@/utils/formatters';
 import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
 import { Modal } from '@/components/shared/Modal';
@@ -195,9 +195,6 @@ export function CustomerDetailsPage() {
                   {customer.policyCount} {customer.policyCount === 1 ? 'Policy' : 'Policies'}
                 </Badge>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Internal Customer ID: <span className="font-mono">{customer.id}</span>
-              </p>
 
               {/* Contact Information Quick Bar */}
               <div className="flex flex-wrap items-center gap-2.5 mt-3">
@@ -337,9 +334,23 @@ export function CustomerDetailsPage() {
                         Plan/Term/PPT: <strong className="text-slate-700 dark:text-slate-300 font-mono">{p.originalPlanString}</strong>
                       </span>
                     </div>
-                    <Badge variant={p.recordStatus === 'active' ? 'success' : 'warning'} size="sm">
-                      {p.recordStatus}
-                    </Badge>
+                    {(() => {
+                      const ls = getPolicyLifecycleStatus(p);
+                      const badgeConfig: Record<string, { label: string; cls: string }> = {
+                        matured: { label: 'Matured', cls: 'bg-purple-100 text-purple-800 dark:bg-purple-900/60 dark:text-purple-200 border-purple-300 dark:border-purple-700' },
+                        claimed: { label: 'Claimed', cls: 'bg-sky-100 text-sky-800 dark:bg-sky-900/60 dark:text-sky-200 border-sky-300 dark:border-sky-700' },
+                        due: { label: 'Premium Due', cls: 'bg-amber-100 text-amber-900 dark:bg-amber-900/60 dark:text-amber-200 border-amber-300 dark:border-amber-700' },
+                        surrendered: { label: 'Surrendered', cls: 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700' },
+                        lapsed: { label: 'Lapsed', cls: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300 dark:border-rose-800' },
+                        active: { label: 'Active', cls: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' },
+                      };
+                      const cfg = badgeConfig[ls] || badgeConfig.active;
+                      return (
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${cfg.cls}`}>
+                          {cfg.label}
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 mt-3 p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl text-xs">
@@ -356,13 +367,13 @@ export function CustomerDetailsPage() {
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-slate-400 block">D.O.C.</span>
+                      <span className="text-[10px] text-slate-400 block">Start Date</span>
                       <span className="font-medium text-slate-700 dark:text-slate-300">
                         {formatDate(p.commencementDate)}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-slate-400 block">F.U.P.</span>
+                      <span className="text-[10px] text-slate-400 block">Next Due Date</span>
                       <span className="font-medium text-amber-600 dark:text-amber-400">
                         {formatDate(p.firstUnpaidPremiumDate)}
                       </span>
@@ -371,7 +382,7 @@ export function CustomerDetailsPage() {
                 </div>
 
                 <div className="mt-3 pt-2 text-[11px] text-slate-400 flex items-center justify-between border-t border-slate-100 dark:border-slate-800">
-                  <span>Maturity: {formatDate(p.maturityDate)}</span>
+                  <span>Maturity: {formatDate(getPolicyMaturityDate(p))}</span>
                   <span className="text-blue-600 dark:text-blue-400 font-medium group-hover:underline">View details →</span>
                 </div>
               </div>

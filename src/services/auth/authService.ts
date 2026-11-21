@@ -301,6 +301,7 @@ export const authService = {
               restoredAgent.mobileNumber = (prof.value as any).mobileNumber;
             }
             this.saveRegisteredAgents(agents);
+            localStorage.setItem('lic_companion_current_agent', JSON.stringify(restoredAgent));
           }
         } catch {}
 
@@ -391,6 +392,7 @@ export const authService = {
           whatsappSignature:
             legacyProfile?.whatsappSignature ||
             'With warm regards,\nLIC Life Insurance Advisor\nLife Insurance Corporation of India',
+          avatarUrl: legacyProfile?.avatarUrl || undefined,
           updatedAt: new Date().toISOString(),
         };
 
@@ -473,11 +475,13 @@ export const authService = {
           console.log(`Successfully restored ${pullResult.policiesCount} policies from Cloudflare D1 for ${sanitized}`);
         }
 
-        // Step B: Push local records to cloud so cloud is always guaranteed up to date!
-        const pushResult = await d1SyncService.pushToCloud(sanitized, pin);
-        console.log(`Successfully synced ${pushResult.counts.policies} policies to Cloudflare D1 for ${sanitized}`);
-
         const totalPolicies = await agentDb.policies.count();
+        // Step B: Only push if local database has newer/more records than cloud to avoid wiping or redundant traffic
+        if (totalPolicies > pullResult.policiesCount) {
+          const pushResult = await d1SyncService.pushToCloud(sanitized, pin);
+          console.log(`Successfully synced ${pushResult.counts.policies} policies to Cloudflare D1 for ${sanitized}`);
+        }
+
         if (restoredCount > 0) {
           return { restored: true, count: restoredCount, source: 'cloud' };
         }

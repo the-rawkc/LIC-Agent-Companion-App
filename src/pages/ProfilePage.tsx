@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { profileRepository, type AgentProfile, DEFAULT_PROFILE } from '@/db/repositories/profileRepository';
 import { authService, type AgentAccount } from '@/services/auth/authService';
+import { d1SyncService } from '@/services/cloud/d1SyncService';
 import { Button } from '@/components/shared/Button';
 import { Badge } from '@/components/shared/Badge';
 import { AppLogo } from '@/components/shared/AppLogo';
@@ -73,10 +74,10 @@ export function ProfilePage() {
     const reader = new FileReader();
     reader.onload = (event) => {
       const rawUrl = event.target?.result as string;
-      // Optimize image dimensions using HTML5 Canvas (max 600x600)
+      // Optimize image dimensions using HTML5 Canvas (max 256x256 thumbnail for fast multi-device sync)
       const img = new Image();
       img.onload = () => {
-        const maxDim = 600;
+        const maxDim = 256;
         let w = img.width;
         let h = img.height;
         if (w > maxDim || h > maxDim) {
@@ -94,7 +95,7 @@ export function ProfilePage() {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, w, h);
-          const optimized = canvas.toDataURL('image/jpeg', 0.88);
+          const optimized = canvas.toDataURL('image/jpeg', 0.75);
           setProfile((prev) => ({ ...prev, avatarUrl: optimized }));
         } else {
           setProfile((prev) => ({ ...prev, avatarUrl: rawUrl }));
@@ -115,6 +116,15 @@ export function ProfilePage() {
     setIsSaving(true);
     try {
       await profileRepository.saveProfile(profile);
+      // Immediately push profile to cloud so other devices receive updates immediately
+      const creds = d1SyncService.getCredentials();
+      if (creds.agencyCode && (creds.pin || creds.pinHash)) {
+        try {
+          await d1SyncService.pushToCloud(creds.agencyCode, creds.pin || '');
+        } catch (cloudErr) {
+          console.warn('Immediate cloud sync notice:', cloudErr);
+        }
+      }
       setSavedNotice(true);
       setTimeout(() => setSavedNotice(false), 3000);
     } catch (err) {

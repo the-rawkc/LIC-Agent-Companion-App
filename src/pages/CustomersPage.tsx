@@ -18,7 +18,8 @@ import {
   Sun,
   Moon,
   X,
-  Sparkles
+  Sparkles,
+  RotateCw
 } from 'lucide-react';
 import { customerRepository, type CustomerWithSummary } from '@/db/repositories/customerRepository';
 import { settingsRepository } from '@/db/repositories/settingsRepository';
@@ -97,19 +98,6 @@ export function CustomersPage() {
     }
   }
 
-  const handleCleanDuplicates = async () => {
-    setIsLoading(true);
-    try {
-      const res = await customerRepository.deduplicateAndPurgeOrphans();
-      await loadCustomers();
-      setCleanNotice(`Cleaned up ${res.purgedOrphans} duplicate / empty customer profiles.`);
-      setTimeout(() => setCleanNotice(null), 5000);
-    } catch (err: any) {
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   // Filter and sort
   const filteredCustomers = customers
@@ -119,9 +107,11 @@ export function CustomersPage() {
 
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const matchesName = c.displayName.toLowerCase().includes(q);
-        const matchesPhone = c.mobileNumber?.includes(q) ?? false;
-        const matchesPolicy = c.policies.some((p) => p.policyNumber.includes(q));
+        const qNoSpace = q.replace(/\s+/g, '');
+        const nameNoSpace = (c.displayName || '').toLowerCase().replace(/\s+/g, '');
+        const matchesName = (c.displayName || '').toLowerCase().includes(q) || nameNoSpace.includes(qNoSpace);
+        const matchesPhone = c.mobileNumber ? c.mobileNumber.replace(/\D/g, '').includes(q.replace(/\D/g, '')) : false;
+        const matchesPolicy = c.policies.some((p) => p.policyNumber.toLowerCase().includes(q));
         return matchesName || matchesPhone || matchesPolicy;
       }
       return true;
@@ -279,8 +269,8 @@ export function CustomersPage() {
               <Users className="w-6 h-6 text-blue-600" />
               <span>Customer Directory</span>
             </h1>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              {customers.length} total customer {customers.length === 1 ? 'profile' : 'profiles'} registered
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {customers.length} {customers.length === 1 ? 'profile' : 'profiles'}
             </p>
           </div>
 
@@ -288,22 +278,21 @@ export function CustomersPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={handleCleanDuplicates}
-              leftIcon={<Sparkles className="w-4 h-4 text-amber-500" />}
-              className="text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-              title="Automatically remove 0-policy profiles and merge duplicates"
+              onClick={() => loadCustomers()}
+              leftIcon={<RotateCw className="w-3.5 h-3.5" />}
+              title="Refresh customer profiles"
             >
-              Clean Duplicates
+              Refresh
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={handleExportAllCsv}
               disabled={customers.length === 0 || isExporting}
-              leftIcon={<Download className="w-3.5 h-3.5" />}
-            >
-              Export All (CSV)
-            </Button>
+              leftIcon={<Download className="w-4 h-4" />}
+              title="Export All"
+              aria-label="Export All"
+            />
             {customers.length >= 2 && (
               <Button
                 variant="outline"
@@ -347,9 +336,9 @@ export function CustomersPage() {
           </div>
         </div>
 
-      {/* Multi-Selection & Quick Action Bar */}
-      {filteredCustomers.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+      {/* Multi-Selection & Quick Action Bar (Visible only when at least one box is selected) */}
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -361,35 +350,31 @@ export function CustomersPage() {
               ) : (
                 <Square className="w-4 h-4 text-slate-400" />
               )}
-              <span>Select all visible ({filteredCustomers.length})</span>
+              <span>Select all ({filteredCustomers.length})</span>
             </button>
-            {selectedIds.size > 0 && (
-              <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-full font-semibold">
-                {selectedIds.size} selected
-              </span>
-            )}
+            <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-full font-semibold text-[11px]">
+              {selectedIds.size} selected
+            </span>
           </div>
 
-          {selectedIds.size > 0 && (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleExportSelectedCsv}
-                disabled={isExporting}
-                leftIcon={<Download className="w-3.5 h-3.5" />}
-              >
-                Export CSV ({selectedIds.size})
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectedIds(new Set())}
-              >
-                Clear
-              </Button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleExportSelectedCsv}
+              disabled={isExporting}
+              leftIcon={<Download className="w-3.5 h-3.5" />}
+            >
+              Export ({selectedIds.size})
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedIds(new Set())}
+            >
+              Clear
+            </Button>
+          </div>
         </div>
       )}
 
@@ -422,15 +407,15 @@ export function CustomersPage() {
                   isSelected
                     ? 'border-blue-500 dark:border-blue-500 ring-2 ring-blue-500/20'
                     : 'border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600'
-                } rounded-xl p-3 sm:p-3.5 shadow-xs transition-all duration-150 cursor-pointer flex flex-col justify-between group active:scale-[0.99]`}
+                } rounded-xl p-2.5 sm:p-3 shadow-2xs transition-all duration-150 cursor-pointer flex flex-col justify-between group active:scale-[0.99]`}
               >
                 <div>
-                  <div className="flex items-start justify-between gap-2.5">
+                  <div className="flex items-start justify-between gap-2">
                     <div className="flex items-start gap-2 min-w-0">
                       <button
                         type="button"
                         onClick={(e) => handleToggleSelect(c.id, e)}
-                        className="p-1 -ml-1 text-slate-400 hover:text-blue-600 transition"
+                        className="p-0.5 text-slate-400 hover:text-blue-600 transition"
                         aria-label={isSelected ? 'Deselect customer' : 'Select customer'}
                       >
                         {isSelected ? (
@@ -440,12 +425,9 @@ export function CustomersPage() {
                         )}
                       </button>
                       <div className="min-w-0 flex-1">
-                        <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white break-words group-hover:text-blue-600 dark:group-hover:text-blue-400 transition leading-snug">
+                        <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white break-words group-hover:text-blue-600 dark:group-hover:text-blue-400 transition leading-snug">
                           {c.displayName}
                         </h3>
-                        <p className="text-[11px] text-slate-400 mt-0.5">
-                          ID: <span className="font-mono">{c.id.substring(0, 8)}</span>
-                        </p>
                       </div>
                     </div>
                     <Badge variant={c.policyCount > 1 ? 'purple' : 'info'} size="sm" className="text-[10px] py-0 px-1.5 shrink-0">
@@ -453,32 +435,28 @@ export function CustomersPage() {
                     </Badge>
                   </div>
 
-                {/* Financial Summary */}
-                <div className="grid grid-cols-2 gap-2 mt-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-[11px]">
-                  <div className="min-w-0">
-                    <span className="text-[10px] text-slate-400 block font-medium">Total Sum Assured</span>
-                    <span className="font-bold text-slate-800 dark:text-slate-200 mt-0.5 block break-words">
-                      {formatCurrency(c.totalSumAssured)}
-                    </span>
+                  {/* Financial Summary */}
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 mt-2 p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-[10px]">
+                    <div>
+                      <span className="text-slate-400">Sum Assured: </span>
+                      <strong className="text-slate-800 dark:text-slate-200">{formatCurrency(c.totalSumAssured)}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Premium: </span>
+                      <strong className="text-slate-800 dark:text-slate-200">{formatCurrency(c.totalRecordedPremium)}</strong>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <span className="text-[10px] text-slate-400 block font-medium">Recorded Premium Sum</span>
-                    <span className="font-bold text-slate-800 dark:text-slate-200 mt-0.5 block break-words">
-                      {formatCurrency(c.totalRecordedPremium)}
-                    </span>
-                  </div>
-                </div>
 
-                {/* Next Date requiring attention */}
-                {c.nextUpcomingDate && (
-                  <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                    <span className="text-[10px] text-slate-400">Next Due/Maturity:</span>
-                    <span className="font-medium text-slate-700 dark:text-slate-300">
-                      {formatDate(c.nextUpcomingDate)}
-                    </span>
-                  </div>
-                )}
-              </div>
+                  {/* Next Date requiring attention */}
+                  {c.nextUpcomingDate && (
+                    <div className="mt-1.5 text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      <span className="text-slate-400">Due/Maturity:</span>
+                      <span className="font-medium text-slate-700 dark:text-slate-300">
+                        {formatDate(c.nextUpcomingDate)}
+                      </span>
+                    </div>
+                  )}
+                </div>
 
               {/* Bottom Card Actions */}
               <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">

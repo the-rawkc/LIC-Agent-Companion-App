@@ -394,11 +394,37 @@ export function GreetingsPage() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      setAgentPhoto(result);
-      // Persist to profile
-      profileRepository.saveProfile({ ...profile, avatarUrl: result });
+    reader.onload = (event) => {
+      const rawUrl = event.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 256;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          const optimized = canvas.toDataURL('image/jpeg', 0.75);
+          setAgentPhoto(optimized);
+          profileRepository.saveProfile({ ...profile, avatarUrl: optimized });
+        } else {
+          setAgentPhoto(rawUrl);
+          profileRepository.saveProfile({ ...profile, avatarUrl: rawUrl });
+        }
+      };
+      img.src = rawUrl;
     };
     reader.readAsDataURL(file);
   };

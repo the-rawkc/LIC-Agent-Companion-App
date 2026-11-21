@@ -18,6 +18,44 @@ export interface SyncConfig {
 
 let autoSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
+async function compressAvatarDataUrl(dataUrl: string, maxDim = 256, quality = 0.75): Promise<string> {
+  return new Promise((resolve) => {
+    try {
+      if (typeof Image === 'undefined' || typeof document === 'undefined') {
+        return resolve(dataUrl);
+      }
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        } else {
+          resolve(dataUrl);
+        }
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    } catch {
+      resolve(dataUrl);
+    }
+  });
+}
+
 async function safeJson(res: Response): Promise<any> {
   const contentType = res.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {
@@ -148,7 +186,23 @@ export const d1SyncService = {
     const customers = await targetDb.customers.toArray();
     const reminders = await targetDb.reminders.toArray();
     const profileItem = await targetDb.appSettings.get('agent_profile');
-    const profile = profileItem?.value || null;
+    let profile: any = profileItem?.value || null;
+    if (!profile) {
+      try {
+        const legacyDb = getLegacyDatabase();
+        const legacyItem = await legacyDb.appSettings.get('agent_profile');
+        if (legacyItem?.value) profile = legacyItem.value;
+      } catch {}
+    }
+
+    // Ensure avatar is compact thumbnail (~15-20KB) so it never breaches D1 payload size limits
+    if (profile?.avatarUrl && profile.avatarUrl.length > 40000) {
+      try {
+        const compressed = await compressAvatarDataUrl(profile.avatarUrl);
+        if (compressed) profile.avatarUrl = compressed;
+      } catch {}
+    }
+
     const lastAddedItem = await targetDb.appSettings.get('last_added_batch');
     const lastAddedBatch = lastAddedItem?.value || null;
 
@@ -300,30 +354,59 @@ export const d1SyncService = {
     const cloudReminders: Reminder[] = Array.isArray(data.reminders) ? data.reminders : [];
     const cloudProfile = data.profile || null;
 
-    // 1. If cloud is empty (e.g. wiped/reset or new), mirror 0 state locally across all tables
-    if (cloudPolicies.length === 0) {
-      await targetDb.transaction('rw', [targetDb.policies, targetDb.customers, targetDb.reminders, targetDb.appSettings], async () => {
-        await targetDb.policies.clear();
-        await targetDb.customers.clear();
-        await targetDb.reminders.clear();
-        await targetDb.appSettings.delete('last_added_batch');
-        if (data.lastSyncAt) {
-          await targetDb.appSettings.put({
-            key: 'last_cloud_sync',
-            value: data.lastSyncAt,
-            updatedAt: new Date().toISOString(),
-          });
-        }
+    // Save cloud profile if available
+    if (cloudProfile) {
+      await targetDb.appSettings.put({
+        key: 'agent_profile',
+        value: cloudProfile,
+        updatedAt: new Date().toISOString(),
       });
-
+      if (cloudProfile.fullName) {
+        await targetDb.appSettings.put({
+          key: 'agent_name',
+          value: cloudProfile.fullName,
+          updatedAt: new Date().toISOString(),
+        });
+      }
       try {
         const legacyDb = getLegacyDatabase();
         if (legacyDb.name !== targetDb.name) {
-          await legacyDb.policies.clear();
-          await legacyDb.customers.clear();
-          await legacyDb.reminders.clear();
+          await legacyDb.appSettings.put({
+            key: 'agent_profile',
+            value: cloudProfile,
+            updatedAt: new Date().toISOString(),
+          });
         }
       } catch {}
+    }
+
+    // 1. If cloud is empty and this was an explicit reset from server, mirror 0 state locally
+    const localPolicies = await targetDb.policies.toArray();
+    if (cloudPolicies.length === 0) {
+      if (data.isReset === true || localPolicies.length === 0) {
+        await targetDb.transaction('rw', [targetDb.policies, targetDb.customers, targetDb.reminders, targetDb.appSettings], async () => {
+          await targetDb.policies.clear();
+          await targetDb.customers.clear();
+          await targetDb.reminders.clear();
+          await targetDb.appSettings.delete('last_added_batch');
+          if (data.lastSyncAt) {
+            await targetDb.appSettings.put({
+              key: 'last_cloud_sync',
+              value: data.lastSyncAt,
+              updatedAt: new Date().toISOString(),
+            });
+          }
+        });
+
+        try {
+          const legacyDb = getLegacyDatabase();
+          if (legacyDb.name !== targetDb.name) {
+            await legacyDb.policies.clear();
+            await legacyDb.customers.clear();
+            await legacyDb.reminders.clear();
+          }
+        } catch {}
+      }
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
@@ -331,22 +414,22 @@ export const d1SyncService = {
             detail: {
               agencyCode: sanitized,
               syncedAt: data.lastSyncAt,
-              counts: { policies: 0, customers: 0, reminders: 0 },
+              counts: { policies: localPolicies.length, customers: cloudCustomers.length, reminders: cloudReminders.length },
+              profile: cloudProfile,
             },
           })
         );
       }
 
       return {
-        policiesCount: 0,
-        customersCount: 0,
-        remindersCount: 0,
+        policiesCount: localPolicies.length,
+        customersCount: cloudCustomers.length,
+        remindersCount: cloudReminders.length,
         lastSyncAt: data.lastSyncAt,
       };
     }
 
     // 2. Reconcile existing local policies by policyNumber so FUP updates and new policies merge cleanly across devices
-    const localPolicies = await targetDb.policies.toArray();
     const localPolicyByNumber = new Map<string, Policy>();
     for (const lp of localPolicies) {
       const cleanNum = lp.policyNumber.replace(/[^0-9]/g, '').trim();

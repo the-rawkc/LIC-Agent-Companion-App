@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   FileText,
@@ -19,7 +19,9 @@ import {
   Moon,
   Receipt,
   Sparkles,
-  ArrowUpDown
+  ArrowUpDown,
+  RotateCw,
+  MessageSquare
 } from 'lucide-react';
 import { policyRepository, type PolicyFilterOptions } from '@/db/repositories/policyRepository';
 import { customerRepository } from '@/db/repositories/customerRepository';
@@ -29,7 +31,20 @@ import { d1SyncService } from '@/services/cloud/d1SyncService';
 import { isBasePolicy } from '@/services/commission/commissionBillService';
 import { backupService } from '@/services/backup/backupService';
 import { importService } from '@/services/import/importService';
-import { formatCurrency, formatDate, advanceFupDate, generateUUID, normalizeSearchString, parseDateToISO } from '@/utils/formatters';
+import {
+  formatCurrency,
+  formatDate,
+  advanceFupDate,
+  generateUUID,
+  normalizeSearchString,
+  parseDateToISO,
+  parsePlanTermPpt,
+  calculateMaturityDate,
+  getPolicyMaturityDate,
+  getPolicyLifecycleStatus,
+  type PolicyLifecycleStatus,
+  openPolicyWhatsAppShare,
+} from '@/utils/formatters';
 import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
 import { Modal } from '@/components/shared/Modal';
@@ -101,6 +116,7 @@ export function PoliciesPage() {
   const [addPremium, setAddPremium] = useState('');
   const [addDom, setAddDom] = useState('');
   const [addDob, setAddDob] = useState('');
+  const [addStatus, setAddStatus] = useState<PolicyRecordStatus>('active');
   const [addError, setAddError] = useState('');
 
   // Theme State
@@ -137,108 +153,59 @@ export function PoliciesPage() {
     }
   }, [isRecentlyAddedParam]);
 
-  // Load last added batch from appSettings or identify newly added policies beyond base portfolio
-  const loadLastAddedBatch = async (policyList?: Policy[]) => {
+  // Load last added batch: ONLY policies loaded with the last commission bill
+  const loadLastAddedBatch = async () => {
     try {
       const item = await db.appSettings.get('last_added_batch');
-      if (item && item.value && Array.isArray((item.value as any).policyNumbers)) {
-        const nonBaseNumbers = (item.value as any).policyNumbers.filter((num: string) => !isBasePolicy(num));
-        if (nonBaseNumbers.length > 0) {
-          const sanitizedBatch = {
-            ...(item.value as any),
-            count: nonBaseNumbers.length,
-            policyNumbers: nonBaseNumbers,
-            policies: Array.isArray((item.value as any).policies)
-              ? (item.value as any).policies.filter((p: any) => !isBasePolicy(p.policyNumber))
-              : [],
-          };
-          setLastAddedBatch(sanitizedBatch);
-          return;
-        }
-      }
-
-      // If not stored yet or had base policies, check policies in database for records added beyond the 1,516 base
-      const targetList = policyList || policies;
-      const newlyAdded = targetList.filter((p) => !isBasePolicy(p.policyNumber));
-      if (newlyAdded.length > 0) {
-        const batch = {
-          timestamp: newlyAdded[0].createdAt || new Date().toISOString(),
-          count: newlyAdded.length,
-          policyNumbers: newlyAdded.map((p) => p.policyNumber),
-          policies: newlyAdded.map((p) => ({
-            id: p.id,
-            policyNumber: p.policyNumber,
-            customerName: p.customerName,
-            planCode: p.planCode,
-            originalPlanString: p.originalPlanString,
-            premiumMode: p.premiumMode,
-            firstUnpaidPremiumDate: p.firstUnpaidPremiumDate,
-            commencementDate: p.commencementDate,
-            premiumAmount: p.premiumAmount,
-            createdAt: p.createdAt,
-          })),
-        };
-        setLastAddedBatch(batch);
-        await db.appSettings.put({
-          key: 'last_added_batch',
-          value: batch,
-          updatedAt: new Date().toISOString(),
-        });
+      if (
+        item &&
+        item.value &&
+        Array.isArray((item.value as any).policyNumbers) &&
+        (item.value as any).policyNumbers.length > 0
+      ) {
+        setLastAddedBatch(item.value as any);
+      } else {
+        setLastAddedBatch(null);
       }
     } catch {}
   };
 
-  useEffect(() => {
-    loadLastAddedBatch(policies);
-  }, [policies]);
+  const handleClearNewLabels = async () => {
+    try {
+      await db.appSettings.put({
+        key: 'last_added_batch',
+        value: {
+          timestamp: new Date().toISOString(),
+          count: 0,
+          policyNumbers: [],
+          policies: [],
+        },
+        updatedAt: new Date().toISOString(),
+      });
+      setLastAddedBatch(null);
+      setOnlyRecentlyAdded(false);
+    } catch {}
+  };
 
-  // Listen for cloud sync notifications across devices
   useEffect(() => {
-    const handleSync = () => {
-      loadPolicies();
-      loadLastAddedBatch();
-    };
-    window.addEventListener('lic_cloud_synced', handleSync);
-    return () => window.removeEventListener('lic_cloud_synced', handleSync);
+    loadLastAddedBatch();
   }, []);
 
-  // Trigger background cloud pull on mount to keep data fresh across devices
+  // Initial load
   useEffect(() => {
-    const { agencyCode, pin, pinHash } = d1SyncService.getCredentials();
-    if (agencyCode && (pin || pinHash)) {
-      d1SyncService.pullFromCloud(agencyCode, pin || '')
-        .then((res) => {
-          if (res.policiesCount > 0) {
-            loadPolicies();
-            loadLastAddedBatch();
-          }
-        })
-        .catch(() => {});
-    }
+    loadPolicies(true);
   }, []);
 
-  useEffect(() => {
-    loadPolicies();
-  }, [selectedPlan, selectedMode, selectedStatus, selectedFupMonth, onlyWarnings, sortBy]);
-
-  async function loadPolicies() {
-    setIsLoading(true);
+  async function loadPolicies(showSpinner = false) {
+    if (showSpinner) setIsLoading(true);
     try {
       await ensureDataSynchronized();
-      const filters: PolicyFilterOptions = { sortBy };
-      if (selectedPlan) filters.planCode = selectedPlan;
-      if (selectedMode) filters.premiumMode = selectedMode;
-      if (selectedStatus) filters.recordStatus = selectedStatus as PolicyRecordStatus;
-      if (selectedFupMonth) filters.fupMonth = selectedFupMonth;
-      if (onlyWarnings) filters.hasWarnings = true;
-
-      const data = await policyRepository.search(searchQuery, filters);
+      const data = await policyRepository.getAll();
       setPolicies(data);
-      setCurrentPage(1);
     } catch (err) {
       console.error('Failed to load policies', err);
     } finally {
-      setIsLoading(false);
+      if (showSpinner) setIsLoading(false);
     }
   }
 
@@ -260,31 +227,69 @@ export function PoliciesPage() {
     }
   };
 
-  // Isolate the exact newly added policies (outside the 1,516 base portfolio)
-  const recentlyAddedList = policies.filter((p) => {
-    if (isBasePolicy(p.policyNumber)) return false;
-    if (lastAddedBatch && lastAddedBatch.policyNumbers && lastAddedBatch.policyNumbers.length > 0) {
-      const cleanPNum = p.policyNumber.replace(/[^0-9]/g, '').trim();
-      return lastAddedBatch.policyNumbers.some(
-        (bn) => bn.replace(/[^0-9]/g, '').trim() === cleanPNum
-      );
+  // Status counts across all loaded policies
+  const statusCounts = useMemo(() => {
+    let due = 0;
+    let matured = 0;
+    let claimed = 0;
+    let surrendered = 0;
+    let active = 0;
+    for (const p of policies) {
+      const st = getPolicyLifecycleStatus(p);
+      if (st === 'due') due++;
+      else if (st === 'matured') matured++;
+      else if (st === 'claimed') claimed++;
+      else if (st === 'surrendered') surrendered++;
+      else if (st === 'active') active++;
     }
-    return true;
-  });
+    return { due, matured, claimed, surrendered, active, total: policies.length };
+  }, [policies]);
 
-  // Handle client-side search typing & recently added filter
+  // Isolate ONLY policies loaded with the last commission bill
+  const recentlyAddedList = useMemo(() => {
+    if (!lastAddedBatch || !Array.isArray(lastAddedBatch.policyNumbers) || lastAddedBatch.policyNumbers.length === 0) {
+      return [];
+    }
+    const batchSet = new Set(lastAddedBatch.policyNumbers.map((bn) => String(bn).replace(/[^0-9]/g, '').trim()));
+    return policies.filter((p) => {
+      const cleanPNum = String(p.policyNumber || '').replace(/[^0-9]/g, '').trim();
+      return batchSet.has(cleanPNum);
+    });
+  }, [policies, lastAddedBatch]);
+
+  // Handle client-side search typing, status filters & recently added filter
   const filteredPolicies = policies.filter((p) => {
     if (onlyRecentlyAdded) {
-      // Strictly exclude any base 1,516 policies
-      if (isBasePolicy(p.policyNumber)) return false;
-
-      if (lastAddedBatch && lastAddedBatch.policyNumbers && lastAddedBatch.policyNumbers.length > 0) {
-        const cleanPNum = String(p.policyNumber || '').replace(/[^0-9]/g, '').trim();
-        const inBatch = lastAddedBatch.policyNumbers.some(
-          (bn) => String(bn || '').replace(/[^0-9]/g, '').trim() === cleanPNum
-        );
-        if (!inBatch) return false;
+      if (!lastAddedBatch || !Array.isArray(lastAddedBatch.policyNumbers) || lastAddedBatch.policyNumbers.length === 0) {
+        return false;
       }
+      const cleanPNum = String(p.policyNumber || '').replace(/[^0-9]/g, '').trim();
+      const inBatch = lastAddedBatch.policyNumbers.some(
+        (bn) => String(bn || '').replace(/[^0-9]/g, '').trim() === cleanPNum
+      );
+      if (!inBatch) return false;
+    }
+
+    if (selectedStatus && selectedStatus !== 'all') {
+      const st = getPolicyLifecycleStatus(p);
+      if (st !== selectedStatus) return false;
+    }
+
+    if (selectedPlan && p.planCode !== selectedPlan) {
+      return false;
+    }
+
+    if (selectedMode && (p.premiumMode || '').toLowerCase() !== selectedMode.toLowerCase()) {
+      return false;
+    }
+
+    if (onlyWarnings && (!p.extractionWarnings || p.extractionWarnings.length === 0)) {
+      return false;
+    }
+
+    if (selectedFupMonth) {
+      const iso = parseDateToISO(p.firstUnpaidPremiumDate || '') || p.firstUnpaidPremiumDate || '';
+      if (!iso.startsWith(selectedFupMonth)) return false;
     }
 
     if (!searchQuery.trim()) return true;
@@ -292,7 +297,8 @@ export function PoliciesPage() {
     return (
       String(p.policyNumber || '').toLowerCase().includes(q) ||
       String(p.customerName || '').toLowerCase().includes(q) ||
-      String(p.planCode || '').toLowerCase().includes(q)
+      String(p.planCode || '').toLowerCase().includes(q) ||
+      String(p.premiumMode || '').toLowerCase().includes(q)
     );
   });
 
@@ -367,6 +373,24 @@ export function PoliciesPage() {
   const uniquePlans = Array.from(new Set(policies.map((p) => p.planCode))).filter(Boolean).sort();
   const uniqueModes = Array.from(new Set(policies.map((p) => p.premiumMode))).filter(Boolean).sort();
 
+  const handlePlanChange = (val: string) => {
+    setAddPlan(val);
+    const parsed = parsePlanTermPpt(val);
+    if (parsed.term && addDoc) {
+      const calcDom = calculateMaturityDate(addDoc, parsed.term);
+      if (calcDom) setAddDom(calcDom);
+    }
+  };
+
+  const handleDocChange = (val: string) => {
+    setAddDoc(val);
+    const parsed = parsePlanTermPpt(addPlan);
+    if (parsed.term && val) {
+      const calcDom = calculateMaturityDate(val, parsed.term);
+      if (calcDom) setAddDom(calcDom);
+    }
+  };
+
   const handleCreatePolicy = async (e: React.FormEvent) => {
     e.preventDefault();
     setAddError('');
@@ -387,10 +411,12 @@ export function PoliciesPage() {
         customerId = cust.id;
       }
 
-      const planParts = addPlan.trim().split('/');
-      const planCode = planParts[0] || addPlan.trim();
-      const term = planParts.length >= 2 ? parseInt(planParts[1], 10) : null;
-      const ppt = planParts.length >= 3 ? parseInt(planParts[2], 10) : null;
+      const parsedPlan = parsePlanTermPpt(addPlan.trim());
+      const planCode = parsedPlan.planCode || addPlan.trim();
+      const term = parsedPlan.term;
+      const ppt = parsedPlan.ppt;
+      const calculatedDom = term && addDoc ? calculateMaturityDate(addDoc, term) : null;
+      const maturityDate = addDom || calculatedDom || '';
 
       const newPolicy: Policy = {
         id: generateUUID(),
@@ -398,22 +424,22 @@ export function PoliciesPage() {
         customerId,
         customerName: addCustomerName.trim(),
         planCode,
-        term: isNaN(term as any) ? null : term,
-        premiumPayingTerm: isNaN(ppt as any) ? null : ppt,
+        term,
+        premiumPayingTerm: ppt,
         originalPlanString: addPlan.trim(),
         sumAssured: parseFloat(addSumAssured) || 0,
         commencementDate: addDoc,
         premiumMode: addMode,
         firstUnpaidPremiumDate: addFup,
         premiumAmount: parseFloat(addPremium) || 0,
-        maturityDate: addDom,
+        maturityDate,
         dateOfBirth: addDob || null,
         sourceSerialNumber: null,
         sourceReportDate: 'Manual Entry',
         sourceImportId: null,
         rawExtractedValues: {},
         extractionWarnings: [],
-        recordStatus: 'manual',
+        recordStatus: addStatus || 'active',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -439,6 +465,7 @@ export function PoliciesPage() {
     setAddPremium('');
     setAddDom('');
     setAddDob('');
+    setAddStatus('active');
   };
 
   const handleDeletePolicy = async () => {
@@ -593,6 +620,19 @@ export function PoliciesPage() {
               )}
             </div>
 
+            {/* Manual Refresh Button */}
+            <button
+              type="button"
+              onClick={() => {
+                loadPolicies(true);
+                loadLastAddedBatch();
+              }}
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-100 dark:bg-slate-800 shrink-0 transition"
+              title="Refresh policies list"
+            >
+              <RotateCw className="w-4 h-4" />
+            </button>
+
             {/* Theme Toggle Button */}
             <button
               type="button"
@@ -604,42 +644,140 @@ export function PoliciesPage() {
             </button>
           </div>
 
-          {/* Quick FUP & Mode Filter Pills */}
+          {/* Quick Lifecycle Status & Filter Pills */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs no-scrollbar">
             <button
               onClick={() => {
+                setSelectedStatus('');
                 setOnlyRecentlyAdded(false);
                 setSelectedFupMonth('');
                 setSelectedMode('');
               }}
               className={`px-2.5 py-1 rounded-lg font-medium transition shrink-0 text-xs ${
-                !onlyRecentlyAdded && !selectedFupMonth && !selectedMode
-                  ? 'bg-blue-600 text-white shadow-xs'
+                !selectedStatus && !onlyRecentlyAdded && !selectedFupMonth && !selectedMode
+                  ? 'bg-blue-600 text-white shadow-xs font-bold'
                   : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50'
               }`}
             >
-              All Policies
+              All ({policies.length})
             </button>
+
+            {/* Due Filter */}
             <button
-              onClick={() => setOnlyRecentlyAdded(!onlyRecentlyAdded)}
+              onClick={() => {
+                setSelectedStatus(selectedStatus === 'due' ? '' : 'due');
+                setOnlyRecentlyAdded(false);
+              }}
               className={`px-2.5 py-1 rounded-lg font-medium transition shrink-0 text-xs flex items-center gap-1 ${
-                onlyRecentlyAdded
+                selectedStatus === 'due'
                   ? 'bg-amber-500 text-white shadow-xs font-bold'
-                  : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+                  : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30'
               }`}
             >
-              <Sparkles className="w-3 h-3 text-amber-500" />
-              <span>
-                Recently Added ({recentlyAddedList.length || lastAddedBatch?.count || 10})
-              </span>
+              <Clock className="w-3 h-3 text-amber-500" />
+              <span>Due ({statusCounts.due})</span>
             </button>
+
+            {/* Matured Filter */}
+            <button
+              onClick={() => {
+                setSelectedStatus(selectedStatus === 'matured' ? '' : 'matured');
+                setOnlyRecentlyAdded(false);
+              }}
+              className={`px-2.5 py-1 rounded-lg font-medium transition shrink-0 text-xs flex items-center gap-1 ${
+                selectedStatus === 'matured'
+                  ? 'bg-purple-600 text-white shadow-xs font-bold'
+                  : 'bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/30'
+              }`}
+            >
+              <Calendar className="w-3 h-3 text-purple-500" />
+              <span>Matured ({statusCounts.matured})</span>
+            </button>
+
+            {/* Claimed Filter */}
+            <button
+              onClick={() => {
+                setSelectedStatus(selectedStatus === 'claimed' ? '' : 'claimed');
+                setOnlyRecentlyAdded(false);
+              }}
+              className={`px-2.5 py-1 rounded-lg font-medium transition shrink-0 text-xs flex items-center gap-1 ${
+                selectedStatus === 'claimed'
+                  ? 'bg-sky-600 text-white shadow-xs font-bold'
+                  : 'bg-white dark:bg-slate-800 text-sky-700 dark:text-sky-300 border border-sky-300 dark:border-sky-700 hover:bg-sky-50 dark:hover:bg-sky-950/30'
+              }`}
+            >
+              <FileText className="w-3 h-3 text-sky-500" />
+              <span>Claimed ({statusCounts.claimed})</span>
+            </button>
+
+            {/* Surrendered Filter */}
+            <button
+              onClick={() => {
+                setSelectedStatus(selectedStatus === 'surrendered' ? '' : 'surrendered');
+                setOnlyRecentlyAdded(false);
+              }}
+              className={`px-2.5 py-1 rounded-lg font-medium transition shrink-0 text-xs flex items-center gap-1 ${
+                selectedStatus === 'surrendered'
+                  ? 'bg-slate-700 text-white shadow-xs font-bold'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
+              }`}
+            >
+              <span>Surrendered ({statusCounts.surrendered})</span>
+            </button>
+
+            {/* Active Filter */}
+            <button
+              onClick={() => {
+                setSelectedStatus(selectedStatus === 'active' ? '' : 'active');
+                setOnlyRecentlyAdded(false);
+              }}
+              className={`px-2.5 py-1 rounded-lg font-medium transition shrink-0 text-xs flex items-center gap-1 ${
+                selectedStatus === 'active'
+                  ? 'bg-emerald-600 text-white shadow-xs font-bold'
+                  : 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
+              }`}
+            >
+              <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+              <span>Active ({statusCounts.active})</span>
+            </button>
+
+            {/* Last Bill New Filter (Shown only when last commission bill added policies) */}
+            {lastAddedBatch && lastAddedBatch.count > 0 && (
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => {
+                    setOnlyRecentlyAdded(!onlyRecentlyAdded);
+                    setSelectedStatus('');
+                  }}
+                  className={`px-2.5 py-1 rounded-lg font-medium transition text-xs flex items-center gap-1 ${
+                    onlyRecentlyAdded
+                      ? 'bg-amber-500 text-white shadow-xs font-bold'
+                      : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+                  }`}
+                  title="Show only policies newly added with the last commission bill"
+                >
+                  <Sparkles className="w-3 h-3 text-amber-500" />
+                  <span>Last Bill New ({recentlyAddedList.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearNewLabels}
+                  title="Clear New labels from last bill"
+                  className="px-1.5 py-1 rounded-lg text-[10px] text-slate-400 hover:text-rose-500 border border-slate-200 dark:border-slate-700 hover:border-rose-300 dark:hover:border-rose-800 bg-white dark:bg-slate-800"
+                >
+                  ✕ Clear
+                </button>
+              </div>
+            )}
+
             <button
               onClick={() => {
                 setOnlyRecentlyAdded(false);
+                setSelectedStatus('');
                 setSelectedFupMonth(selectedFupMonth === currentMonthIso ? '' : currentMonthIso);
               }}
               className={`px-2.5 py-1 rounded-lg font-medium transition shrink-0 text-xs flex items-center gap-1 ${
-                !onlyRecentlyAdded && selectedFupMonth === currentMonthIso
+                !onlyRecentlyAdded && !selectedStatus && selectedFupMonth === currentMonthIso
                   ? 'bg-amber-600 text-white shadow-xs'
                   : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/30'
               }`}
@@ -648,9 +786,13 @@ export function PoliciesPage() {
               <span>Due This Month</span>
             </button>
             <button
-              onClick={() => setSelectedFupMonth(selectedFupMonth === nextMonthIso ? '' : nextMonthIso)}
+              onClick={() => {
+                setOnlyRecentlyAdded(false);
+                setSelectedStatus('');
+                setSelectedFupMonth(selectedFupMonth === nextMonthIso ? '' : nextMonthIso);
+              }}
               className={`px-2.5 py-1 rounded-lg font-medium transition shrink-0 text-xs flex items-center gap-1 ${
-                selectedFupMonth === nextMonthIso
+                !onlyRecentlyAdded && !selectedStatus && selectedFupMonth === nextMonthIso
                   ? 'bg-indigo-600 text-white shadow-xs'
                   : 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/30'
               }`}
@@ -701,10 +843,10 @@ export function PoliciesPage() {
                 }}
                 className="text-[11px] font-semibold bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
               >
-                <option value="doc_desc">D.O.C. (Newest First / Desc)</option>
-                <option value="doc_asc">D.O.C. (Oldest First / Asc)</option>
-                <option value="fup_asc">F.U.P. (Due Earliest)</option>
-                <option value="fup_desc">F.U.P. (Due Latest)</option>
+                <option value="doc_desc">Start Date (Newest First)</option>
+                <option value="doc_asc">Start Date (Oldest First)</option>
+                <option value="fup_asc">Next Due Date (Earliest First)</option>
+                <option value="fup_desc">Next Due Date (Latest First)</option>
                 <option value="premium_desc">Premium (High to Low)</option>
                 <option value="serial_asc">Original Serial #</option>
                 <option value="policy_asc">Policy Number</option>
@@ -724,8 +866,8 @@ export function PoliciesPage() {
               <FileText className="w-6 h-6 text-blue-600" />
               <span>Policy Portfolio</span>
             </h1>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              {filteredPolicies.length} {filteredPolicies.length === 1 ? 'policy' : 'policies'} matching criteria
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {filteredPolicies.length} {filteredPolicies.length === 1 ? 'policy' : 'policies'}
             </p>
           </div>
 
@@ -734,8 +876,7 @@ export function PoliciesPage() {
               variant="outline"
               size="sm"
               onClick={() => navigate('/fup-update')}
-              leftIcon={<Receipt className="w-3.5 h-3.5 text-emerald-600" />}
-              className="text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20"
+              className="text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 font-semibold"
             >
               FUP Update
             </Button>
@@ -744,18 +885,24 @@ export function PoliciesPage() {
               size="sm"
               onClick={handleExportAllCsv}
               disabled={policies.length === 0 || isExporting}
-              leftIcon={<Download className="w-3.5 h-3.5" />}
-            >
-              Export All (CSV)
-            </Button>
+              leftIcon={<Download className="w-4 h-4" />}
+              title="Export All"
+              aria-label="Export All"
+            />
             <Button
               variant="outline"
               size="sm"
               onClick={() => setIsFilterOpen(!isFilterOpen)}
               leftIcon={<Filter className="w-4 h-4" />}
               className={activeFilterCount > 0 ? 'border-blue-500 text-blue-600' : ''}
+              title={`Filters ${activeFilterCount > 0 ? `(${activeFilterCount})` : ''}`}
+              aria-label="Filters"
             >
-              Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
+              {activeFilterCount > 0 && (
+                <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 px-1 rounded-full">
+                  {activeFilterCount}
+                </span>
+              )}
             </Button>
             <Button
               variant="primary"
@@ -870,7 +1017,7 @@ export function PoliciesPage() {
 
             <div>
               <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                F.U.P. Month
+                Due Month
               </label>
               <input
                 type="month"
@@ -911,9 +1058,9 @@ export function PoliciesPage() {
         </div>
       )}
 
-      {/* Multi-Selection & Quick Action Bar */}
-      {filteredPolicies.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+      {/* Multi-Selection & Quick Action Bar (Visible only when at least one box is selected) */}
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -925,52 +1072,48 @@ export function PoliciesPage() {
               ) : (
                 <Square className="w-4 h-4 text-slate-400" />
               )}
-              <span>Select all on page ({paginatedPolicies.length})</span>
+              <span>Select all ({paginatedPolicies.length})</span>
             </button>
-            {selectedIds.size > 0 && (
-              <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-full font-semibold">
-                {selectedIds.size} selected
-              </span>
-            )}
+            <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-full font-semibold text-[11px]">
+              {selectedIds.size} selected
+            </span>
           </div>
 
-          {selectedIds.size > 0 && (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => setIsBulkDeleteConfirmOpen(true)}
-                disabled={isDeleting}
-                leftIcon={<Trash2 className="w-3.5 h-3.5" />}
-              >
-                Delete ({selectedIds.size})
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleExportSelectedCsv}
-                disabled={isExporting}
-                leftIcon={<Download className="w-3.5 h-3.5" />}
-              >
-                Export CSV ({selectedIds.size})
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportSelectedJson}
-                disabled={isExporting}
-              >
-                JSON
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectedIds(new Set())}
-              >
-                Clear
-              </Button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => setIsBulkDeleteConfirmOpen(true)}
+              disabled={isDeleting}
+              leftIcon={<Trash2 className="w-3.5 h-3.5" />}
+            >
+              Delete ({selectedIds.size})
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleExportSelectedCsv}
+              disabled={isExporting}
+              leftIcon={<Download className="w-3.5 h-3.5" />}
+            >
+              Export ({selectedIds.size})
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportSelectedJson}
+              disabled={isExporting}
+            >
+              JSON
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedIds(new Set())}
+            >
+              Clear
+            </Button>
+          </div>
         </div>
       )}
 
@@ -995,7 +1138,61 @@ export function PoliciesPage() {
         <div className="space-y-2.5">
           {paginatedPolicies.map((p, idx) => {
             const isSelected = selectedIds.has(p.id);
-            const isNewlyAdded = !isBasePolicy(p.policyNumber) || (lastAddedBatch?.policyNumbers?.includes(p.policyNumber) ?? false);
+            const cleanPNum = String(p.policyNumber || '').replace(/[^0-9]/g, '').trim();
+            const isNewlyAdded = Boolean(
+              lastAddedBatch &&
+              Array.isArray(lastAddedBatch.policyNumbers) &&
+              lastAddedBatch.policyNumbers.some(
+                (bn) => String(bn).replace(/[^0-9]/g, '').trim() === cleanPNum
+              )
+            );
+            const status = getPolicyLifecycleStatus(p);
+
+            let statusBoxCls = 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300';
+            if (isSelected) {
+              statusBoxCls = 'border-blue-500 dark:border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/20 dark:bg-blue-950/20';
+            } else if (status === 'matured') {
+              statusBoxCls = 'border-purple-300 dark:border-purple-800 bg-purple-50/40 dark:bg-purple-950/20 hover:border-purple-400';
+            } else if (status === 'claimed') {
+              statusBoxCls = 'border-sky-300 dark:border-sky-800 bg-sky-50/40 dark:bg-sky-950/20 hover:border-sky-400';
+            } else if (status === 'due') {
+              statusBoxCls = 'border-amber-400 dark:border-amber-700 bg-amber-50/40 dark:bg-amber-950/20 hover:border-amber-500';
+            } else if (status === 'surrendered') {
+              statusBoxCls = 'border-slate-300 dark:border-slate-700 bg-slate-100/60 dark:bg-slate-900/60 hover:border-slate-400 opacity-90';
+            } else if (status === 'lapsed') {
+              statusBoxCls = 'border-rose-300 dark:border-rose-800 bg-rose-50/30 dark:bg-rose-950/20 hover:border-rose-400';
+            } else {
+              statusBoxCls = 'border-emerald-300 dark:border-emerald-800/70 bg-emerald-50/15 dark:bg-emerald-950/10 hover:border-emerald-400';
+            }
+
+            const statusBadges: Record<PolicyLifecycleStatus, { label: string; cls: string }> = {
+              matured: {
+                label: 'Matured',
+                cls: 'bg-purple-100 text-purple-800 dark:bg-purple-900/60 dark:text-purple-200 border-purple-300 dark:border-purple-700',
+              },
+              claimed: {
+                label: 'Claimed',
+                cls: 'bg-sky-100 text-sky-800 dark:bg-sky-900/60 dark:text-sky-200 border-sky-300 dark:border-sky-700',
+              },
+              due: {
+                label: 'Due',
+                cls: 'bg-amber-100 text-amber-900 dark:bg-amber-900/60 dark:text-amber-200 border-amber-300 dark:border-amber-700',
+              },
+              surrendered: {
+                label: 'Surrendered',
+                cls: 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700',
+              },
+              lapsed: {
+                label: 'Lapsed',
+                cls: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300 dark:border-rose-800',
+              },
+              active: {
+                label: 'Active',
+                cls: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+              },
+            };
+            const badge = statusBadges[status] || statusBadges.active;
+
             const itemIndex = isShowAll
               ? idx + 1
               : (safeCurrentPage - 1) * effectivePageSize + idx + 1;
@@ -1003,20 +1200,14 @@ export function PoliciesPage() {
               <div
                 key={p.id}
                 onClick={() => navigate(`/policies/${p.id}`)}
-                className={`bg-white dark:bg-slate-900 border ${
-                  isSelected
-                    ? 'border-blue-500 dark:border-blue-500 ring-2 ring-blue-500/20'
-                    : isNewlyAdded
-                    ? 'border-amber-400/80 dark:border-amber-600/80 hover:border-amber-500 ring-1 ring-amber-400/20'
-                    : 'border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600'
-                } rounded-xl p-3 sm:p-3.5 shadow-xs transition-all duration-150 cursor-pointer flex flex-col justify-between group active:scale-[0.99]`}
+                className={`${statusBoxCls} border rounded-lg p-2 sm:p-2.5 shadow-2xs transition-all duration-150 cursor-pointer flex flex-col justify-between group active:scale-[0.99]`}
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex items-start sm:items-center gap-2.5">
+                  <div className="flex items-start sm:items-center gap-2">
                     <button
                       type="button"
                       onClick={(e) => handleToggleSelect(p.id, e)}
-                      className="p-1 -ml-1 text-slate-400 hover:text-blue-600 transition"
+                      className="p-0.5 text-slate-400 hover:text-blue-600 transition"
                       aria-label={isSelected ? 'Deselect policy' : 'Select policy'}
                     >
                       {isSelected ? (
@@ -1026,106 +1217,103 @@ export function PoliciesPage() {
                       )}
                     </button>
                     <div
-                      className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-mono text-[11px] font-bold shrink-0"
+                      className="w-7 h-7 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-mono text-[10px] font-bold shrink-0"
                       title={`Item #${itemIndex}${p.sourceSerialNumber ? ` (Original S.No: ${p.sourceSerialNumber})` : ''}`}
                     >
                       {itemIndex}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="font-bold font-mono text-sm sm:text-base text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
+                        <span className="font-bold font-mono text-xs sm:text-sm text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
                           {p.policyNumber}
                         </span>
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-bold border ${badge.cls}`}>
+                          {badge.label}
+                        </span>
                         {isNewlyAdded && (
-                          <Badge variant="warning" size="sm" className="text-[10px] py-0 px-1.5 bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 font-bold">
-                            <Sparkles className="w-2.5 h-2.5 mr-0.5 inline" />
+                          <Badge variant="warning" size="sm" className="text-[9px] py-0 px-1.5 bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 font-bold shadow-2xs">
+                            <Sparkles className="w-2 h-2 mr-0.5 inline text-amber-600 dark:text-amber-400" />
                             New
                           </Badge>
                         )}
-                        <Badge variant="info" size="sm" className="text-[10px] py-0 px-1.5">
-                          Plan {p.originalPlanString}
+                        <Badge variant="info" size="sm" className="text-[9px] py-0 px-1.5">
+                          Plan {p.originalPlanString || p.planCode}
                         </Badge>
+                        {/* Shifted Paid Label after Plan label */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPaymentPolicy(p);
+                          }}
+                          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-semibold rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition"
+                          title="Mark premium paid and advance next F.U.P."
+                        >
+                          <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
+                          <span>Paid</span>
+                        </button>
                         {p.extractionWarnings && p.extractionWarnings.length > 0 && (
                           <span title={p.extractionWarnings.join(', ')}>
-                            <Badge variant="warning" size="sm" className="text-[10px] py-0 px-1.5">
-                              <AlertTriangle className="w-2.5 h-2.5 mr-1" />
+                            <Badge variant="warning" size="sm" className="text-[9px] py-0 px-1.5">
+                              <AlertTriangle className="w-2 h-2 mr-0.5" />
                               Warning
                             </Badge>
                           </span>
                         )}
                       </div>
-                      <p className="text-xs sm:text-sm text-slate-800 dark:text-slate-200 mt-0.5 font-semibold break-words leading-snug">
+                      <p className="text-xs text-slate-800 dark:text-slate-200 mt-0.5 font-semibold break-words leading-tight">
                         {p.customerName}
                       </p>
                     </div>
                   </div>
 
-                  {/* Right side stats & Quick Mark Paid & Delete */}
+                  {/* Right side WhatsApp + Premium */}
                   <div className="flex items-center gap-2 self-end sm:self-auto text-right shrink-0">
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setPaymentPolicy(p);
+                        openPolicyWhatsAppShare(p);
                       }}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition shadow-xs"
-                      title="Mark premium paid and advance next F.U.P."
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition shadow-2xs"
+                      title="Share policy details via WhatsApp"
                     >
-                      <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                      <span>Paid</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPolicyToDelete(p);
-                      }}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800 transition shadow-xs"
-                      title="Delete policy record"
-                    >
-                      <Trash2 className="w-3 h-3 text-rose-600 dark:text-rose-400" />
-                      <span className="hidden sm:inline">Delete</span>
+                      <MessageSquare className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                      <span className="hidden sm:inline">WhatsApp</span>
                     </button>
 
                     <div>
-                      <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white block font-mono whitespace-nowrap">
+                      <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white block font-mono whitespace-nowrap leading-tight">
                         {formatCurrency(p.premiumAmount)}
                       </span>
-                      <span className="text-[10px] text-slate-400 block whitespace-nowrap">
+                      <span className="text-[9px] text-slate-400 block whitespace-nowrap leading-tight">
                         {p.premiumMode}
                       </span>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition shrink-0" />
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition shrink-0" />
                   </div>
                 </div>
 
-                {/* Bottom detail pill grid */}
-                <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-                  <div className="min-w-0">
-                    <span className="text-[9px] text-slate-400 block uppercase font-medium">Sum Assured</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 break-words block">
+                {/* Single-line compact detail bar */}
+                <div className="mt-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[10px] text-slate-500">
+                  <span>
+                    <span className="text-slate-400">SA: </span>
+                    <strong className="text-slate-800 dark:text-slate-200">
                       {p.sumAssured === 0 ? '0' : formatCurrency(p.sumAssured)}
-                    </span>
-                  </div>
-                  <div className="min-w-0">
-                    <span className="text-[9px] text-slate-400 block uppercase font-medium">D.O.C.</span>
-                    <span className="font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap block">
-                      {formatDate(p.commencementDate)}
-                    </span>
-                  </div>
-                  <div className="min-w-0">
-                    <span className="text-[9px] text-slate-400 block uppercase font-medium">F.U.P.</span>
-                    <span className="font-semibold text-amber-600 dark:text-amber-400 whitespace-nowrap block">
-                      {formatDate(p.firstUnpaidPremiumDate)}
-                    </span>
-                  </div>
-                  <div className="min-w-0">
-                    <span className="text-[9px] text-slate-400 block uppercase font-medium">D.O.M.</span>
-                    <span className="font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap block">
-                      {formatDate(p.maturityDate)}
-                    </span>
-                  </div>
+                    </strong>
+                  </span>
+                  <span>
+                    <span className="text-slate-400">DOC: </span>
+                    <span className="font-medium text-slate-700 dark:text-slate-300">{formatDate(p.commencementDate)}</span>
+                  </span>
+                  <span>
+                    <span className="text-slate-400">FUP: </span>
+                    <strong className="text-amber-600 dark:text-amber-400">{formatDate(p.firstUnpaidPremiumDate)}</strong>
+                  </span>
+                  <span>
+                    <span className="text-slate-400">DOM: </span>
+                    <span className="font-medium text-slate-700 dark:text-slate-300">{formatDate(getPolicyMaturityDate(p))}</span>
+                  </span>
                 </div>
               </div>
             );
@@ -1286,7 +1474,7 @@ export function PoliciesPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Plan / Term / PPT <span className="text-rose-500">*</span>
@@ -1294,8 +1482,8 @@ export function PoliciesPage() {
               <input
                 type="text"
                 value={addPlan}
-                onChange={(e) => setAddPlan(e.target.value)}
-                placeholder="e.g. 749/15/01"
+                onChange={(e) => handlePlanChange(e.target.value)}
+                placeholder="e.g. 815-21 or 749/15/01"
                 className="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                 required
               />
@@ -1332,6 +1520,24 @@ export function PoliciesPage() {
                 <option value="N/F">N/F</option>
               </select>
             </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Policy Status
+              </label>
+              <select
+                value={addStatus}
+                onChange={(e) => setAddStatus(e.target.value as PolicyRecordStatus)}
+                className="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="active">Active (In Force)</option>
+                <option value="due">Due (Premium Pending)</option>
+                <option value="matured">Matured</option>
+                <option value="claimed">Claimed</option>
+                <option value="surrendered">Surrendered</option>
+                <option value="lapsed">Lapsed</option>
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -1351,7 +1557,7 @@ export function PoliciesPage() {
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                F.U.P. (Next Due Date) <span className="text-rose-500">*</span>
+                Next Due Date (FUP) <span className="text-rose-500">*</span>
               </label>
               <input
                 type="date"
@@ -1366,12 +1572,12 @@ export function PoliciesPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                D.O.C. (Commencement) <span className="text-rose-500">*</span>
+                Start Date (DOC) <span className="text-rose-500">*</span>
               </label>
               <input
                 type="date"
                 value={addDoc}
-                onChange={(e) => setAddDoc(e.target.value)}
+                onChange={(e) => handleDocChange(e.target.value)}
                 className="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               />
@@ -1379,7 +1585,7 @@ export function PoliciesPage() {
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                D.O.M. (Maturity) <span className="text-rose-500">*</span>
+                Maturity Date (DOM) <span className="text-rose-500">*</span>
               </label>
               <input
                 type="date"

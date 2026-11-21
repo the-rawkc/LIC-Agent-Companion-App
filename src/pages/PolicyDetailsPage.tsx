@@ -16,12 +16,13 @@ import {
   Trash2,
   Info,
   Phone,
-  Plus
+  Plus,
+  MessageSquare
 } from 'lucide-react';
 import { policyRepository } from '@/db/repositories/policyRepository';
 import { customerRepository, type CustomerWithSummary } from '@/db/repositories/customerRepository';
 import { reminderRepository, type ReminderWithDetails } from '@/db/repositories/reminderRepository';
-import { formatCurrency, formatDate, advanceFupDate } from '@/utils/formatters';
+import { formatCurrency, formatDate, advanceFupDate, parsePlanTermPpt, calculateMaturityDate, getPolicyMaturityDate, getPolicyLifecycleStatus, openPolicyWhatsAppShare } from '@/utils/formatters';
 import { Badge } from '@/components/shared/Badge';
 import { Button } from '@/components/shared/Button';
 import { Modal } from '@/components/shared/Modal';
@@ -85,7 +86,8 @@ export function PolicyDetailsPage() {
         setEditMode(pol.premiumMode);
         setEditDoc(pol.commencementDate);
         setEditFup(pol.firstUnpaidPremiumDate);
-        setEditDom(pol.maturityDate);
+        const correctDom = getPolicyMaturityDate(pol);
+        setEditDom(correctDom || pol.maturityDate || '');
         setEditDob(pol.dateOfBirth || '');
         setEditStatus(pol.recordStatus);
         setEditNotes(pol.notes || '');
@@ -106,28 +108,48 @@ export function PolicyDetailsPage() {
     }
   }
 
+  const handlePlanChange = (val: string) => {
+    setEditPlan(val);
+    const parsed = parsePlanTermPpt(val);
+    if (parsed.term && editDoc) {
+      const calc = calculateMaturityDate(editDoc, parsed.term);
+      if (calc) setEditDom(calc);
+    }
+  };
+
+  const handleDocChange = (val: string) => {
+    setEditDoc(val);
+    const parsed = parsePlanTermPpt(editPlan);
+    if (parsed.term && val) {
+      const calc = calculateMaturityDate(val, parsed.term);
+      if (calc) setEditDom(calc);
+    }
+  };
+
   const handleUpdatePolicy = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!policy) return;
 
     try {
-      const planParts = editPlan.trim().split('/');
-      const planCode = planParts[0] || editPlan.trim();
-      const term = planParts.length >= 2 ? parseInt(planParts[1], 10) : null;
-      const ppt = planParts.length >= 3 ? parseInt(planParts[2], 10) : null;
+      const parsedPlan = parsePlanTermPpt(editPlan.trim());
+      const planCode = parsedPlan.planCode || editPlan.trim();
+      const term = parsedPlan.term;
+      const ppt = parsedPlan.ppt;
+      const calculatedDom = term && editDoc ? calculateMaturityDate(editDoc, term) : null;
+      const maturityDate = editDom || calculatedDom || '';
 
       await policyRepository.update(policy.id, {
         customerName: editCustomerName.trim(),
         originalPlanString: editPlan.trim(),
         planCode,
-        term: isNaN(term as any) ? null : term,
-        premiumPayingTerm: isNaN(ppt as any) ? null : ppt,
+        term,
+        premiumPayingTerm: ppt,
         sumAssured: parseFloat(editSumAssured) || 0,
         premiumAmount: parseFloat(editPremium) || 0,
         premiumMode: editMode,
         commencementDate: editDoc,
         firstUnpaidPremiumDate: editFup,
-        maturityDate: editDom,
+        maturityDate,
         dateOfBirth: editDob || null,
         recordStatus: editStatus,
         notes: editNotes.trim() || undefined,
@@ -223,7 +245,7 @@ export function PolicyDetailsPage() {
   }
 
   return (
-    <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-5xl mx-auto w-full print:p-0">
+    <div className="flex-1 p-3 sm:p-5 space-y-4 max-w-5xl mx-auto w-full print:p-0">
       {/* Back button */}
       <div className="flex items-center justify-between print:hidden">
         <button
@@ -243,6 +265,16 @@ export function PolicyDetailsPage() {
             className="border-emerald-300 dark:border-emerald-800 bg-emerald-50/80 dark:bg-emerald-950/40 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 font-semibold"
           >
             Mark Premium Paid
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => openPolicyWhatsAppShare(policy, customer?.mobileNumber)}
+            leftIcon={<MessageSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />}
+            className="border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-semibold"
+            title="Share policy details via WhatsApp"
+          >
+            WhatsApp
           </Button>
           <Button
             variant="outline"
@@ -282,21 +314,21 @@ export function PolicyDetailsPage() {
 
       {/* Payment Success Alert */}
       {paymentSuccessNotice && (
-        <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-2xl flex items-center gap-3 text-emerald-800 dark:text-emerald-200 text-xs font-semibold">
-          <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-xl flex items-center gap-3 text-emerald-800 dark:text-emerald-200 text-xs font-semibold">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
           <span>{paymentSuccessNotice}</span>
         </div>
       )}
 
       {/* Warnings Banner if any */}
       {Boolean(policy.extractionWarnings && policy.extractionWarnings.length > 0) && (
-        <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-2xl flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+        <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-xl flex items-start gap-2.5">
+          <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
           <div>
             <h4 className="text-xs font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">
               Extraction Warnings
             </h4>
-            <ul className="mt-1 space-y-0.5 text-xs text-amber-700 dark:text-amber-300 list-disc list-inside">
+            <ul className="mt-0.5 space-y-0.5 text-xs text-amber-700 dark:text-amber-300 list-disc list-inside">
               {(policy.extractionWarnings || []).map((w, idx) => (
                 <li key={idx}>{w}</li>
               ))}
@@ -306,75 +338,83 @@ export function PolicyDetailsPage() {
       )}
 
       {/* Header Card */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 shadow-2xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Policy Number
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                Policy
               </span>
               <Badge variant="info">Plan {policy.originalPlanString}</Badge>
-              <Badge variant={policy.recordStatus === 'active' ? 'success' : 'warning'}>
-                {policy.recordStatus}
-              </Badge>
+              {(() => {
+                const ls = getPolicyLifecycleStatus(policy);
+                const badgeConfig: Record<string, { label: string; cls: string }> = {
+                  matured: { label: 'Matured', cls: 'bg-purple-100 text-purple-800 dark:bg-purple-900/60 dark:text-purple-200 border-purple-300 dark:border-purple-700' },
+                  claimed: { label: 'Claimed', cls: 'bg-sky-100 text-sky-800 dark:bg-sky-900/60 dark:text-sky-200 border-sky-300 dark:border-sky-700' },
+                  due: { label: 'Premium Due', cls: 'bg-amber-100 text-amber-900 dark:bg-amber-900/60 dark:text-amber-200 border-amber-300 dark:border-amber-700' },
+                  surrendered: { label: 'Surrendered', cls: 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700' },
+                  lapsed: { label: 'Lapsed', cls: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300 dark:border-rose-800' },
+                  active: { label: 'Active', cls: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' },
+                };
+                const cfg = badgeConfig[ls] || badgeConfig.active;
+                return (
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${cfg.cls}`}>
+                    {cfg.label}
+                  </span>
+                );
+              })()}
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold font-mono text-slate-900 dark:text-white mt-1">
+            <h1 className="text-xl sm:text-2xl font-extrabold font-mono text-slate-900 dark:text-white mt-0.5">
               {policy.policyNumber}
             </h1>
-            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 mt-1">
+            <p className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200">
               {policy.customerName}
             </p>
           </div>
 
-          <div className="text-left sm:text-right">
-            <span className="text-xs text-slate-400 uppercase tracking-wider block font-medium">
-              Source Report Date
-            </span>
-            <span className="text-sm font-bold text-slate-800 dark:text-slate-200 font-mono block mt-0.5">
-              {policy.sourceReportDate || '29-10-2026'}
-            </span>
-            <span className="text-[10px] text-slate-400 block mt-0.5">
-              (Status reflects date of report)
+          <div className="text-left sm:text-right shrink-0">
+            <span className="text-xs text-slate-400 font-medium">
+              Report Date: <strong className="font-semibold text-slate-700 dark:text-slate-300 font-mono">{policy.sourceReportDate || '29-10-2026'}</strong>
             </span>
           </div>
         </div>
       </div>
 
       {/* 5 Detailed Structural Sections */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
         {/* Section A: Policy Identification */}
-        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-3">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 shadow-2xs space-y-2">
           <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-bold text-xs uppercase tracking-wider">
-            <FileText className="w-4 h-4" />
+            <FileText className="w-3.5 h-3.5" />
             <span>A. Policy Identification</span>
           </div>
 
-          <div className="space-y-2 text-xs">
-            <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+          <div className="space-y-1.5 text-xs">
+            <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
               <span className="text-slate-400">Policy Number</span>
               <span className="font-mono font-bold text-slate-900 dark:text-white">{policy.policyNumber}</span>
             </div>
-            <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
               <span className="text-slate-400">Plan / Term / PPT</span>
               <span className="font-mono font-bold text-slate-900 dark:text-white">{policy.originalPlanString}</span>
             </div>
-            <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
               <span className="text-slate-400">Plan Code</span>
               <span className="font-mono font-medium text-slate-800 dark:text-slate-200">{policy.planCode}</span>
             </div>
-            <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
               <span className="text-slate-400">Policy Term</span>
               <span className="font-medium text-slate-800 dark:text-slate-200">
                 {policy.term ? `${policy.term} Years` : 'Not specified'}
               </span>
             </div>
-            <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
               <span className="text-slate-400">Premium Paying Term</span>
               <span className="font-medium text-slate-800 dark:text-slate-200">
                 {policy.premiumPayingTerm ? `${policy.premiumPayingTerm} Years` : 'Single / Full'}
               </span>
             </div>
-            <div className="flex justify-between py-1.5">
+            <div className="flex justify-between py-1">
               <span className="text-slate-400">List Serial (#)</span>
               <span className="font-mono text-slate-800 dark:text-slate-200">
                 {policy.sourceSerialNumber ? `#${policy.sourceSerialNumber}` : '—'}
@@ -384,10 +424,10 @@ export function PolicyDetailsPage() {
         </div>
 
         {/* Section B: Customer Details */}
-        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-3">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 shadow-2xs space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-xs uppercase tracking-wider">
-              <User className="w-4 h-4" />
+              <User className="w-3.5 h-3.5" />
               <span>B. Customer Information</span>
             </div>
             {customer && (
@@ -400,12 +440,12 @@ export function PolicyDetailsPage() {
             )}
           </div>
 
-          <div className="space-y-2 text-xs">
-            <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+          <div className="space-y-1.5 text-xs">
+            <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
               <span className="text-slate-400">Name</span>
               <span className="font-bold text-slate-900 dark:text-white">{policy.customerName}</span>
             </div>
-            <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
               <span className="text-slate-400">Contact Number</span>
               {customer?.mobileNumber ? (
                 <div className="flex items-center gap-2">
@@ -425,13 +465,13 @@ export function PolicyDetailsPage() {
                 <span className="text-slate-400 italic">No mobile recorded</span>
               )}
             </div>
-            <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
               <span className="text-slate-400">Other Policies</span>
               <span className="font-semibold text-slate-800 dark:text-slate-200">
                 {customer ? `${customer.policyCount - 1} other policy(ies)` : '—'}
               </span>
             </div>
-            <div className="flex justify-between py-1.5">
+            <div className="flex justify-between py-1">
               <span className="text-slate-400">DOB (Recorded)</span>
               <span className="font-medium text-slate-800 dark:text-slate-200">
                 {formatDate(policy.dateOfBirth)}
@@ -441,16 +481,16 @@ export function PolicyDetailsPage() {
         </div>
 
         {/* Section C: Financial Information */}
-        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-3">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 shadow-2xs space-y-2">
           <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-xs uppercase tracking-wider">
-            <IndianRupee className="w-4 h-4" />
+            <IndianRupee className="w-3.5 h-3.5" />
             <span>C. Financial Information</span>
           </div>
 
-          <div className="space-y-2 text-xs">
-            <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+          <div className="space-y-1.5 text-xs">
+            <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
               <span className="text-slate-400">Sum Assured</span>
-              <span className="font-bold text-base text-slate-900 dark:text-white font-mono">
+              <span className="font-bold text-sm sm:text-base text-slate-900 dark:text-white font-mono">
                 {policy.sumAssured === 0 ? (
                   <span className="text-amber-600 dark:text-amber-400">₹0 (As Reported)</span>
                 ) : (
@@ -458,56 +498,49 @@ export function PolicyDetailsPage() {
                 )}
               </span>
             </div>
-            <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
               <span className="text-slate-400">Premium Amount</span>
-              <span className="font-bold text-base text-slate-900 dark:text-white font-mono">
+              <span className="font-bold text-sm sm:text-base text-slate-900 dark:text-white font-mono">
                 {formatCurrency(policy.premiumAmount)}
               </span>
             </div>
-            <div className="flex justify-between py-1.5">
+            <div className="flex justify-between py-1">
               <span className="text-slate-400">Payment Mode</span>
               <Badge variant="default">{policy.premiumMode}</Badge>
             </div>
           </div>
-
-          <div className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl text-[11px] text-slate-500 leading-relaxed">
-            Note: Sum assured and premium represent the amounts recorded on the report. Tax (GST) may be applicable based on LIC plan rules.
-          </div>
         </div>
 
         {/* Section D: Dates & Tracking */}
-        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-3">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 shadow-2xs space-y-2">
           <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-xs uppercase tracking-wider">
-            <Calendar className="w-4 h-4" />
+            <Calendar className="w-3.5 h-3.5" />
             <span>D. Dates & Tracking</span>
           </div>
 
-          <div className="space-y-2 text-xs">
-            <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
-              <span className="text-slate-400">Date of Commencement (D.O.C.)</span>
+          <div className="space-y-1.5 text-xs">
+            <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+              <span className="text-slate-400">Start Date (DOC)</span>
               <span className="font-semibold text-slate-800 dark:text-slate-200 font-mono">
                 {formatDate(policy.commencementDate)}
               </span>
             </div>
-            <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
-              <div>
-                <span className="text-slate-400 block">First Unpaid Premium Date (F.U.P.)</span>
-                <span className="text-[10px] text-slate-400 italic">Reported unpaid marker</span>
-              </div>
+            <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+              <span className="text-slate-400">Next Due Date (FUP)</span>
               <span className="font-bold text-amber-600 dark:text-amber-400 font-mono">
                 {formatDate(policy.firstUnpaidPremiumDate)}
               </span>
             </div>
-            <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
               <span className="text-slate-400">Agent Confirmed Next Due</span>
               <span className="font-bold text-blue-600 dark:text-blue-400 font-mono">
                 {policy.verifiedNextPremiumDate ? formatDate(policy.verifiedNextPremiumDate) : 'Not verified'}
               </span>
             </div>
-            <div className="flex justify-between py-1.5">
-              <span className="text-slate-400">Date of Maturity (D.O.M.)</span>
+            <div className="flex justify-between py-1">
+              <span className="text-slate-400">Maturity Date (DOM)</span>
               <span className="font-semibold text-slate-800 dark:text-slate-200 font-mono">
-                {formatDate(policy.maturityDate)}
+                {formatDate(getPolicyMaturityDate(policy))}
               </span>
             </div>
           </div>
@@ -515,7 +548,7 @@ export function PolicyDetailsPage() {
       </div>
 
       {/* Section E: Notes & Reminders */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 shadow-2xs space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-bold text-xs uppercase tracking-wider">
             <Bell className="w-4 h-4 text-blue-600" />
@@ -612,14 +645,15 @@ export function PolicyDetailsPage() {
               <input
                 type="text"
                 value={editPlan}
-                onChange={(e) => setEditPlan(e.target.value)}
+                onChange={(e) => handlePlanChange(e.target.value)}
+                placeholder="e.g. 815-21 or 833-22"
                 className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-blue-500"
                 required
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Sum Assured (₹)
@@ -661,12 +695,29 @@ export function PolicyDetailsPage() {
                 <option value="N/F">N/F</option>
               </select>
             </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Policy Status
+              </label>
+              <select
+                value={editStatus}
+                onChange={(e) => setEditStatus(e.target.value as PolicyRecordStatus)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="active">Active (In Force)</option>
+                <option value="due">Due (Premium Pending)</option>
+                <option value="matured">Matured</option>
+                <option value="claimed">Claimed</option>
+                <option value="surrendered">Surrendered</option>
+                <option value="lapsed">Lapsed</option>
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                First Unpaid Premium Date (F.U.P.)
+                Next Due Date (FUP)
               </label>
               <input
                 type="date"
@@ -692,19 +743,19 @@ export function PolicyDetailsPage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Date of Commencement (D.O.C.)
+                Start Date (DOC)
               </label>
               <input
                 type="date"
                 value={editDoc}
-                onChange={(e) => setEditDoc(e.target.value)}
+                onChange={(e) => handleDocChange(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-blue-500"
                 required
               />
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Date of Maturity (D.O.M.)
+                Maturity Date (DOM)
               </label>
               <input
                 type="date"

@@ -1,6 +1,6 @@
 import { db, getLegacyDatabase } from '../database';
 import type { Policy, PolicyRecordStatus } from '@/types';
-import { normalizeSearchString, advanceFupDate, generateUUID, parseDateToISO } from '@/utils/formatters';
+import { normalizeSearchString, advanceFupDate, generateUUID, parseDateToISO, getPolicyLifecycleStatus } from '@/utils/formatters';
 import { d1SyncService } from '@/services/cloud/d1SyncService';
 
 export interface PolicyFilterOptions {
@@ -259,22 +259,39 @@ export const policyRepository = {
         collection = collection.filter((p) => p.premiumMode.toLowerCase() === filters.premiumMode?.toLowerCase());
       }
       if (filters.recordStatus) {
-        collection = collection.filter((p) => p.recordStatus === filters.recordStatus);
+        collection = collection.filter((p) => {
+          return p.recordStatus === filters.recordStatus || getPolicyLifecycleStatus(p) === filters.recordStatus;
+        });
       }
       if (filters.commencementYear) {
-        collection = collection.filter((p) => p.commencementDate.startsWith(filters.commencementYear!));
+        collection = collection.filter((p) => {
+          const iso = parseDateToISO(p.commencementDate || '') || p.commencementDate || '';
+          return iso.startsWith(filters.commencementYear!);
+        });
       }
       if (filters.maturityYear) {
-        collection = collection.filter((p) => p.maturityDate.startsWith(filters.maturityYear!));
+        collection = collection.filter((p) => {
+          const iso = parseDateToISO(p.maturityDate || '') || p.maturityDate || '';
+          return iso.startsWith(filters.maturityYear!);
+        });
       }
       if (filters.fupMonth) {
-        collection = collection.filter((p) => (p.firstUnpaidPremiumDate || '').startsWith(filters.fupMonth!));
+        collection = collection.filter((p) => {
+          const iso = parseDateToISO(p.firstUnpaidPremiumDate || '') || p.firstUnpaidPremiumDate || '';
+          return iso.startsWith(filters.fupMonth!);
+        });
       }
       if (filters.fupDateFrom) {
-        collection = collection.filter((p) => (p.firstUnpaidPremiumDate || '') >= filters.fupDateFrom!);
+        collection = collection.filter((p) => {
+          const iso = parseDateToISO(p.firstUnpaidPremiumDate || '') || p.firstUnpaidPremiumDate || '';
+          return iso >= filters.fupDateFrom!;
+        });
       }
       if (filters.fupDateTo) {
-        collection = collection.filter((p) => (p.firstUnpaidPremiumDate || '') <= filters.fupDateTo!);
+        collection = collection.filter((p) => {
+          const iso = parseDateToISO(p.firstUnpaidPremiumDate || '') || p.firstUnpaidPremiumDate || '';
+          return iso <= filters.fupDateTo!;
+        });
       }
       if (filters.hasWarnings !== undefined) {
         collection = collection.filter((p) => 
