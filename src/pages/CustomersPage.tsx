@@ -34,6 +34,7 @@ export function CustomersPage() {
   const [customers, setCustomers] = useState<CustomerWithSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'has_phone' | 'multi_policy'>('all');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [sortBy, setSortBy] = useState<'name_asc' | 'name_desc' | 'policies_desc' | 'premium_desc'>('name_asc');
   const [isLoading, setIsLoading] = useState(true);
 
@@ -260,15 +261,72 @@ export function CustomersPage() {
               aria-label="Export All"
             />
             <Button
+              variant={isFilterOpen || filterType !== 'all' ? 'primary' : 'outline'}
+              size="sm"
+              onClick={() => setIsFilterOpen(!isFilterOpen)}
+              leftIcon={<Filter className="w-4 h-4" />}
+              title="Filter"
+              aria-label="Filter"
+            />
+            <Button
               variant="primary"
               size="sm"
               onClick={() => setIsAddModalOpen(true)}
               leftIcon={<Plus className="w-4 h-4" />}
-              title="Add Customer"
-              aria-label="Add Customer"
-            />
+            >
+              Add Customer
+            </Button>
           </div>
         </div>
+
+        {/* Collapsible Filter Panel */}
+        {isFilterOpen && (
+          <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-slate-500 font-semibold text-[11px]">Filter:</span>
+            <button
+              type="button"
+              onClick={() => setFilterType('all')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${
+                filterType === 'all'
+                  ? 'bg-blue-600 text-white font-semibold'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterType('has_phone')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${
+                filterType === 'has_phone'
+                  ? 'bg-blue-600 text-white font-semibold'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              Has Phone Number
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterType('multi_policy')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${
+                filterType === 'multi_policy'
+                  ? 'bg-blue-600 text-white font-semibold'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              Multiple Policies (&gt;1)
+            </button>
+            {filterType !== 'all' && (
+              <button
+                type="button"
+                onClick={() => setFilterType('all')}
+                className="text-slate-400 hover:text-rose-500 text-[11px] font-semibold ml-auto"
+              >
+                Reset Filter
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Profiles count & Sort Bar */}
         <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">

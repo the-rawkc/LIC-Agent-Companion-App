@@ -176,32 +176,16 @@ export function AppLayout({ children }: AppLayoutProps) {
   ];
 
   const isLandingPage = location.pathname === '/';
-  const isSearchPage = location.pathname === '/policies' || location.pathname === '/customers';
+  const isSearchPage = location.pathname === '/policies' || location.pathname.startsWith('/customers');
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col antialiased overflow-x-hidden w-full max-w-full">
-      {/* Top Header - Rendered strictly in workspace, hidden on search pages so search bar sits directly at top-0 */}
+      {/* Top Header - Rendered strictly in workspace, hidden on search & customer pages so page sits directly at top-0 */}
       {!isLandingPage && !isSearchPage && (
         <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 pt-safe w-full overflow-x-hidden">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-3">
-            {/* Left: Profile Avatar & Brand Title */}
+            {/* Left: Brand Identity & Logo */}
             <div className="flex items-center gap-2 shrink-0">
-              {location.pathname !== '/reminders' && (
-                <button
-                  onClick={() => navigate('/profile')}
-                  title={`View Agent Profile (${agentName})`}
-                  className="flex items-center gap-1.5 p-0.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition tap-effect focus:outline-none"
-                >
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-black text-xs flex items-center justify-center shrink-0 shadow-xs ring-2 ring-amber-400/40 hover:scale-105 transition overflow-hidden">
-                    {agentAvatar ? (
-                      <img src={agentAvatar} alt={agentName} className="w-full h-full object-cover" />
-                    ) : (
-                      agentInitials
-                    )}
-                  </div>
-                </button>
-              )}
-
               <div
                 className="flex items-center gap-1.5 cursor-pointer group tap-effect"
                 onClick={() => navigate('/dashboard')}

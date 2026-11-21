@@ -169,17 +169,22 @@ export function CustomerDetailsPage() {
   }
 
   return (
-    <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-5xl mx-auto w-full">
-      {/* Back button */}
-      <button
-        onClick={() => navigate('/customers')}
-        className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        <span>Back to Customers</span>
-      </button>
+    <div className="flex-1 min-h-screen flex flex-col w-full bg-slate-50 dark:bg-slate-950">
+      {/* Clean Top Navigation Bar with Back button at the very top */}
+      <div className="sticky top-0 z-30 pt-safe bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-2xs w-full">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-3">
+          <button
+            onClick={() => navigate('/customers')}
+            className="inline-flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-700 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400 transition"
+          >
+            <ArrowLeft className="w-4 h-4 text-blue-600" />
+            <span>Back to Customers</span>
+          </button>
+        </div>
+      </div>
 
-      {/* Profile Header Card */}
+      <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-5 max-w-5xl mx-auto w-full">
+        {/* Profile Header Card */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div className="flex items-start gap-3">
@@ -635,6 +640,7 @@ export function CustomerDetailsPage() {
         message={deleteError || `Are you sure you want to delete profile for "${customer.displayName}"?`}
         confirmLabel="Delete"
       />
+    </div>
     </div>
   );
 }
