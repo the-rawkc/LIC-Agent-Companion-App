@@ -28,36 +28,61 @@ export function isBasePolicy(policyNumber: string | null | undefined): boolean {
 }
 
 /**
- * Infer probable premium mode from the interval between Risk Date (DOC) and Paid Due Date
+ * Check if multiple consecutive installment rows in the commission bill reveal the exact mode
+ */
+export function inferModeFromInstallmentRows(rows: RawCommissionRow[]): PremiumMode | null {
+  if (rows.length < 2) return null;
+  const sortedDates = rows
+    .map((r) => parseDateToISO(r.dueDt))
+    .filter((d): d is string => Boolean(d))
+    .sort();
+
+  if (sortedDates.length >= 2) {
+    const d1 = new Date(sortedDates[0]);
+    const d2 = new Date(sortedDates[1]);
+    const diffMonths = (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
+    if (diffMonths === 1) return 'Monthly';
+    if (diffMonths === 3) return 'Quarterly';
+    if (diffMonths === 6) return 'Half-Yearly';
+    if (diffMonths === 12) return 'Yearly';
+  }
+  return null;
+}
+
+/**
+ * Infer premium mode from interval between Risk Date (DOC) and Paid Due Date.
  */
 export function inferModeFromDates(riskDateIso: string | null, dueDateIso: string | null): PremiumMode {
-  if (!riskDateIso || !dueDateIso) return 'Half-Yearly';
+  if (!riskDateIso || !dueDateIso) return 'N/F';
 
   const risk = new Date(riskDateIso);
   const due = new Date(dueDateIso);
-  if (isNaN(risk.getTime()) || isNaN(due.getTime())) return 'Half-Yearly';
+  if (isNaN(risk.getTime()) || isNaN(due.getTime())) return 'N/F';
 
   const monthsDiff = (due.getFullYear() - risk.getFullYear()) * 12 + (due.getMonth() - risk.getMonth());
-  if (monthsDiff <= 0) return 'Half-Yearly';
+  if (monthsDiff <= 0) return 'N/F';
 
-  if (monthsDiff % 12 === 0) return 'Yearly';
-  if (monthsDiff % 6 === 0) return 'Half-Yearly';
-  if (monthsDiff % 3 === 0) return 'Quarterly';
+  const cycle = monthsDiff % 12;
+  if (cycle === 0) return 'Yearly';
+  if (cycle === 3 || cycle === 9) return 'Quarterly';
+  if (cycle === 6) return 'Half-Yearly';
   return 'Monthly';
 }
 
 /**
- * Normalize mode string to one of the standard app modes
+ * Normalize mode string to one of the standard app modes.
+ * Checks Quarterly before Half-Yearly and returns N/F if not specified.
  */
 export function normalizeMode(rawMode: string | undefined): PremiumMode {
-  if (!rawMode) return 'Half-Yearly';
+  if (!rawMode) return 'N/F';
   const m = rawMode.toLowerCase().trim();
-  if (m.includes('half') || m === 'hly' || m === 'h') return 'Half-Yearly';
+  if (m === 'n/f' || m === 'nf' || m === 'na' || m === '') return 'N/F';
   if (m.includes('quarter') || m === 'qly' || m === 'q') return 'Quarterly';
+  if (m.includes('half') || m === 'hly' || m === 'h') return 'Half-Yearly';
   if (m.includes('year') || m === 'yly' || m === 'y') return 'Yearly';
   if (m.includes('month') || m === 'mly' || m === 'm' || m.includes('ecs') || m.includes('nach')) return 'Monthly';
   if (m.includes('single') || m === 'sgl') return 'Single';
-  return 'Half-Yearly';
+  return 'N/F';
 }
 
 export interface CommitCommissionUpdatesResult {
@@ -132,11 +157,13 @@ export const commissionBillService = {
       const existing =
         dbPoliciesByNumber.get(cleanPolNo) || dbPoliciesByNumber.get(cleanPolNo.replace(/^0+/, ''));
 
-      let effectiveMode: PremiumMode = 'Half-Yearly';
+      let effectiveMode: PremiumMode = 'N/F';
       let currentFup: string | null = null;
       let policyFound = false;
       let existingPolicyId: string | undefined;
       let customerName = latestRow.phName || `Customer of ${cleanPolNo}`;
+
+      const billMode = inferModeFromInstallmentRows(rows);
 
       if (existing) {
         policyFound = true;
@@ -147,13 +174,17 @@ export const commissionBillService = {
         const existingModeNorm = normalizeMode(existing.premiumMode);
         if (existing.premiumMode && !['n/f', 'nf', 'na'].includes(existing.premiumMode.toLowerCase())) {
           effectiveMode = existingModeNorm;
+        } else if (billMode) {
+          effectiveMode = billMode;
         } else {
-          // If existing mode is NF / NA, infer from dates or default
           effectiveMode = inferModeFromDates(riskDateIso || existing.commencementDate, paidDueDateIso);
         }
       } else {
-        // Not in DB - infer mode from dates
-        effectiveMode = inferModeFromDates(riskDateIso, paidDueDateIso);
+        if (billMode) {
+          effectiveMode = billMode;
+        } else {
+          effectiveMode = inferModeFromDates(riskDateIso, paidDueDateIso);
+        }
       }
 
       // Calculate projected next FUP from the latest paid due date
@@ -324,10 +355,10 @@ export const commissionBillService = {
             }
 
             const parsedPlan = parsePlanTermPpt(item.planTerm);
-            const planCode = parsedPlan.planCode || (item.planTerm ? item.planTerm.split(/[-/]/)[0] : '');
+            const planCode = parsedPlan.planCode || '';
             const term = parsedPlan.term;
             const ppt = parsedPlan.ppt;
-            const commencementDate = item.riskDate || item.paidDueDate;
+            const commencementDate = item.riskDate || '';
             const maturityDate = term && commencementDate ? (calculateMaturityDate(commencementDate, term) || '') : '';
 
             const newPolicyId = generateUUID();
@@ -339,11 +370,11 @@ export const commissionBillService = {
               planCode,
               term,
               premiumPayingTerm: ppt,
-              originalPlanString: item.planTerm || planCode,
+              originalPlanString: item.planTerm || planCode || '',
               sumAssured: 0, // Sum Assured is not present in commission bill; only fill true present values, no random numbers
               commencementDate,
-              premiumMode: item.mode,
-              firstUnpaidPremiumDate: item.calculatedNewFup,
+              premiumMode: item.mode || 'N/F',
+              firstUnpaidPremiumDate: item.calculatedNewFup || item.paidDueDate,
               premiumAmount: item.premiumAmount || 0,
               maturityDate,
               dateOfBirth: null,

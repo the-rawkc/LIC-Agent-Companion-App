@@ -376,23 +376,25 @@ export const authService = {
 
       if (!hasValidCurrentProfile) {
         const mergedProfile = {
-          fullName: legacyProfile?.fullName || account?.agentName || 'LIC Financial Advisor',
+          ...curVal,
+          fullName: curVal?.fullName || legacyProfile?.fullName || account?.agentName || 'LIC Financial Advisor',
           agencyCode: sanitized,
-          branchName: legacyProfile?.branchName || 'Main City Branch',
-          branchCode: legacyProfile?.branchCode || '',
-          division: legacyProfile?.division || '',
-          mobileNumber: legacyProfile?.mobileNumber || account?.mobileNumber || '',
-          whatsappNumber: legacyProfile?.whatsappNumber || account?.mobileNumber || '',
-          email: legacyProfile?.email || '',
-          clubMembership: legacyProfile?.clubMembership || "Chairman's Club Member",
-          developmentOfficerName: legacyProfile?.developmentOfficerName || '',
-          developmentOfficerMobile: legacyProfile?.developmentOfficerMobile || '',
-          agencyStartDate: legacyProfile?.agencyStartDate || '2018-04-01',
-          officeAddress: legacyProfile?.officeAddress || '',
+          branchName: curVal?.branchName || legacyProfile?.branchName || 'Main City Branch',
+          branchCode: curVal?.branchCode || legacyProfile?.branchCode || '',
+          division: curVal?.division || legacyProfile?.division || '',
+          mobileNumber: curVal?.mobileNumber || legacyProfile?.mobileNumber || account?.mobileNumber || '',
+          whatsappNumber: curVal?.whatsappNumber || legacyProfile?.whatsappNumber || account?.mobileNumber || '',
+          email: curVal?.email || legacyProfile?.email || '',
+          clubMembership: curVal?.clubMembership || legacyProfile?.clubMembership || "Chairman's Club Member",
+          developmentOfficerName: curVal?.developmentOfficerName || legacyProfile?.developmentOfficerName || '',
+          developmentOfficerMobile: curVal?.developmentOfficerMobile || legacyProfile?.developmentOfficerMobile || '',
+          agencyStartDate: curVal?.agencyStartDate || legacyProfile?.agencyStartDate || '2018-04-01',
+          officeAddress: curVal?.officeAddress || legacyProfile?.officeAddress || '',
           whatsappSignature:
+            curVal?.whatsappSignature ||
             legacyProfile?.whatsappSignature ||
             'With warm regards,\nLIC Life Insurance Advisor\nLife Insurance Corporation of India',
-          avatarUrl: legacyProfile?.avatarUrl || undefined,
+          avatarUrl: curVal?.avatarUrl || legacyProfile?.avatarUrl || undefined,
           updatedAt: new Date().toISOString(),
         };
 

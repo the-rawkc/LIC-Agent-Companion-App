@@ -51,7 +51,7 @@ export const customerRepository = {
 
     // Find next upcoming date requiring attention (either FUP or maturity)
     const upcomingDates = policies
-      .flatMap((p) => [p.verifiedNextPremiumDate || p.firstUnpaidPremiumDate, p.maturityDate])
+      .flatMap((p) => [p.firstUnpaidPremiumDate, p.maturityDate])
       .filter((d): d is string => Boolean(d))
       .sort();
 
@@ -102,7 +102,7 @@ export const customerRepository = {
       const totalRecordedPremium = cPolicies.reduce((sum, p) => sum + p.premiumAmount, 0);
       
       const upcomingDates = cPolicies
-        .flatMap((p) => [p.verifiedNextPremiumDate || p.firstUnpaidPremiumDate, p.maturityDate])
+        .flatMap((p) => [p.firstUnpaidPremiumDate, p.maturityDate])
         .filter((d): d is string => Boolean(d))
         .sort();
 
@@ -276,6 +276,25 @@ export const customerRepository = {
     };
 
     await db.customers.put(updated);
+
+    // Keep policy customerName and DOB synchronized so search never returns mismatched old details
+    if (updates.displayName && updates.displayName.trim() !== existing.displayName) {
+      const newName = updates.displayName.trim();
+      await db.policies.where('customerId').equals(id).modify((p) => {
+        p.customerName = newName;
+        p.updatedAt = now;
+      });
+    }
+
+    if (updates.dateOfBirth) {
+      const dobVal = updates.dateOfBirth;
+      await db.policies.where('customerId').equals(id).modify((p) => {
+        if (!p.dateOfBirth) {
+          p.dateOfBirth = dobVal || null;
+          p.updatedAt = now;
+        }
+      });
+    }
 
     await db.auditLogs.add({
       id: generateUUID(),

@@ -37,6 +37,7 @@ export function CustomerDetailsPage() {
   const [editMobile, setEditMobile] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editAddress, setEditAddress] = useState('');
+  const [editDob, setEditDob] = useState('');
   const [editNotes, setEditNotes] = useState('');
 
   // Add Reminder Modal
@@ -66,6 +67,7 @@ export function CustomerDetailsPage() {
         setEditMobile(data.mobileNumber || '');
         setEditEmail(data.email || '');
         setEditAddress(data.address || '');
+        setEditDob(data.dateOfBirth || (data.policies.find((p) => p.dateOfBirth)?.dateOfBirth) || '');
         setEditNotes(data.notes || '');
 
         const rems = await reminderRepository.getByCustomerId(customerId);
@@ -93,6 +95,7 @@ export function CustomerDetailsPage() {
         mobileNumber: editMobile.trim() || undefined,
         email: editEmail.trim() || undefined,
         address: editAddress.trim() || undefined,
+        dateOfBirth: editDob || null,
         notes: editNotes.trim() || undefined,
       });
 
@@ -204,28 +207,23 @@ export function CustomerDetailsPage() {
               {/* Contact Information Quick Bar */}
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 {customer.mobileNumber ? (
-                  <>
-                    <a
-                      href={`tel:${customer.mobileNumber}`}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold hover:bg-emerald-100 transition"
-                    >
-                      <Phone className="w-3.5 h-3.5" />
-                      <span>{customer.mobileNumber}</span>
-                    </a>
-                    <a
-                      href={`https://wa.me/91${customer.mobileNumber.replace(/\D/g, '')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold hover:bg-emerald-100 transition"
-                      title="Share policy details via WhatsApp"
-                    >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      <span>Share</span>
-                    </a>
-                  </>
+                  <a
+                    href={`tel:${customer.mobileNumber}`}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold hover:bg-emerald-100 transition"
+                  >
+                    <Phone className="w-3.5 h-3.5" />
+                    <span>{customer.mobileNumber}</span>
+                  </a>
                 ) : (
                   <span className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-lg border border-amber-200 dark:border-amber-800">
                     No phone number recorded
+                  </span>
+                )}
+
+                {(customer.dateOfBirth || customer.policies.some((p) => p.dateOfBirth)) && (
+                  <span className="inline-flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                    <span>DOB: {formatDate(customer.dateOfBirth || customer.policies.find((p) => p.dateOfBirth)?.dateOfBirth)}</span>
                   </span>
                 )}
 
@@ -504,6 +502,18 @@ export function CustomerDetailsPage() {
               onChange={(e) => setEditMobile(e.target.value)}
               className="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="e.g. 9876543210"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              Date of Birth (DOB)
+            </label>
+            <input
+              type="date"
+              value={editDob}
+              onChange={(e) => setEditDob(e.target.value)}
+              className="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 

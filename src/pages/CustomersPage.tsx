@@ -483,15 +483,6 @@ export function CustomersPage() {
                       <Phone className="w-3 h-3" />
                       <span>{c.mobileNumber}</span>
                     </a>
-                    <a
-                      href={`https://wa.me/91${c.mobileNumber.replace(/\D/g, '')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-1 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition"
-                      title="Share / Message"
-                    >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                    </a>
                   </div>
                 ) : (
                   <span className="text-[11px] text-slate-400 italic">No phone recorded</span>

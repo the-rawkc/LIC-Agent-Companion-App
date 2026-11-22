@@ -58,6 +58,34 @@ export const policyRepository = {
     if (!existing) throw new Error(`Policy with ID ${id} not found.`);
 
     const now = new Date().toISOString();
+
+    // Re-link customer if customerName was changed to prevent stale duplicate boxes in search
+    if (updates.customerName && updates.customerName.trim() !== existing.customerName) {
+      const newName = updates.customerName.trim();
+      const normName = normalizeSearchString(newName);
+      let targetCust = await db.customers.where('normalizedName').equals(normName).first();
+      if (!targetCust) {
+        const custId = generateUUID();
+        targetCust = {
+          id: custId,
+          displayName: newName,
+          normalizedName: normName,
+          createdAt: now,
+          updatedAt: now,
+        };
+        await db.customers.add(targetCust);
+      }
+      updates.customerId = targetCust.id;
+    }
+
+    if (updates.dateOfBirth) {
+      const custId = updates.customerId || existing.customerId;
+      const cust = await db.customers.get(custId);
+      if (cust && !cust.dateOfBirth) {
+        await db.customers.update(custId, { dateOfBirth: updates.dateOfBirth, updatedAt: now });
+      }
+    }
+
     const updatedPolicy: Policy = {
       ...existing,
       ...updates,
@@ -65,6 +93,13 @@ export const policyRepository = {
     };
 
     await db.policies.put(updatedPolicy);
+
+    if (existing.customerId && updates.customerId && existing.customerId !== updates.customerId) {
+      const remainingCount = await db.policies.where('customerId').equals(existing.customerId).count();
+      if (remainingCount === 0) {
+        await db.customers.delete(existing.customerId);
+      }
+    }
 
     await db.auditLogs.add({
       id: generateUUID(),

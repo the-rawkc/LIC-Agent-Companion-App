@@ -378,6 +378,30 @@ export const d1SyncService = {
           });
         }
       } catch {}
+
+      try {
+        const stored = localStorage.getItem('lic_companion_current_agent');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed.agencyCode === sanitized) {
+            if (cloudProfile.fullName) parsed.agentName = cloudProfile.fullName;
+            if (cloudProfile.mobileNumber) parsed.mobileNumber = cloudProfile.mobileNumber;
+            localStorage.setItem('lic_companion_current_agent', JSON.stringify(parsed));
+          }
+        }
+        const regStored = localStorage.getItem('lic_companion_registered_agents');
+        if (regStored) {
+          const regList = JSON.parse(regStored);
+          if (Array.isArray(regList)) {
+            const ag = regList.find((a: any) => a.agencyCode === sanitized);
+            if (ag) {
+              if (cloudProfile.fullName) ag.agentName = cloudProfile.fullName;
+              if (cloudProfile.mobileNumber) ag.mobileNumber = cloudProfile.mobileNumber;
+              localStorage.setItem('lic_companion_registered_agents', JSON.stringify(regList));
+            }
+          }
+        }
+      } catch {}
     }
 
     // 1. If cloud is empty and this was an explicit reset from server, mirror 0 state locally

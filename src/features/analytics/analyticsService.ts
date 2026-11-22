@@ -64,7 +64,7 @@ export const analyticsService = {
       }
 
       // Check FUP
-      const checkFupDate = p.verifiedNextPremiumDate || p.firstUnpaidPremiumDate;
+      const checkFupDate = p.firstUnpaidPremiumDate;
       if (checkFupDate && checkFupDate !== '2099-12-31') {
         const diffDays = getDaysDifference(checkFupDate, referenceDate);
         // If overdue or due within next 45 days

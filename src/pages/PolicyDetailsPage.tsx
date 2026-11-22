@@ -56,7 +56,6 @@ export function PolicyDetailsPage() {
   const [editDob, setEditDob] = useState('');
   const [editStatus, setEditStatus] = useState<PolicyRecordStatus>('active');
   const [editNotes, setEditNotes] = useState('');
-  const [verifiedDueDate, setVerifiedDueDate] = useState('');
 
   // Add Reminder Modal
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
@@ -91,7 +90,6 @@ export function PolicyDetailsPage() {
         setEditDob(pol.dateOfBirth || '');
         setEditStatus(pol.recordStatus);
         setEditNotes(pol.notes || '');
-        setVerifiedDueDate(pol.verifiedNextPremiumDate || '');
 
         const cust = await customerRepository.getWithSummary(pol.customerId);
         if (cust) setCustomer(cust);
@@ -153,8 +151,11 @@ export function PolicyDetailsPage() {
         dateOfBirth: editDob || null,
         recordStatus: editStatus,
         notes: editNotes.trim() || undefined,
-        verifiedNextPremiumDate: verifiedDueDate || null,
       });
+
+      if (editDob && customer && !customer.dateOfBirth) {
+        await customerRepository.update(customer.id, { dateOfBirth: editDob });
+      }
 
       setIsEditModalOpen(false);
       await loadPolicyDetails(policy.id);
@@ -448,20 +449,9 @@ export function PolicyDetailsPage() {
             <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
               <span className="text-slate-400">Contact Number</span>
               {customer?.mobileNumber ? (
-                <div className="flex items-center gap-2">
-                  <a href={`tel:${customer.mobileNumber}`} className="text-blue-600 font-medium">
-                    {customer.mobileNumber}
-                  </a>
-                  <a
-                    href={`https://wa.me/91${customer.mobileNumber.replace(/\D/g, '')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-emerald-600 font-medium"
-                    title="Share via WhatsApp"
-                  >
-                    Share
-                  </a>
-                </div>
+                <a href={`tel:${customer.mobileNumber}`} className="text-blue-600 font-medium">
+                  {customer.mobileNumber}
+                </a>
               ) : (
                 <span className="text-slate-400 italic">No mobile recorded</span>
               )}
@@ -530,12 +520,6 @@ export function PolicyDetailsPage() {
               <span className="text-slate-400">Next Due Date (FUP)</span>
               <span className="font-bold text-amber-600 dark:text-amber-400 font-mono">
                 {formatDate(policy.firstUnpaidPremiumDate)}
-              </span>
-            </div>
-            <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-              <span className="text-slate-400">Agent Confirmed Next Due</span>
-              <span className="font-bold text-blue-600 dark:text-blue-400 font-mono">
-                {policy.verifiedNextPremiumDate ? formatDate(policy.verifiedNextPremiumDate) : 'Not verified'}
               </span>
             </div>
             <div className="flex justify-between py-1">
@@ -730,13 +714,13 @@ export function PolicyDetailsPage() {
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Verified Next Payment Date (Agent confirmed)
+                Date of Birth (DOB)
               </label>
               <input
                 type="date"
-                value={verifiedDueDate}
-                onChange={(e) => setVerifiedDueDate(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-blue-400 dark:border-blue-600 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-blue-500"
+                value={editDob}
+                onChange={(e) => setEditDob(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>

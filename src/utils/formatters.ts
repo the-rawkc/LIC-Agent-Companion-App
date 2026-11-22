@@ -386,98 +386,157 @@ export function getPolicyLifecycleStatus(policy: {
   return 'active';
 }
 
+export interface ReminderShareSettings {
+  includePolicyNumber: boolean;
+  includeCustomerName: boolean;
+  includePlan: boolean;
+  includeSumAssured: boolean;
+  includePremium: boolean;
+  includeDueDate: boolean;
+  includeMaturityDate: boolean;
+  includeStatus: boolean;
+  includeAgentDetails: boolean;
+}
+
+export const DEFAULT_SHARE_SETTINGS: ReminderShareSettings = {
+  includePolicyNumber: true,
+  includeCustomerName: true,
+  includePlan: true,
+  includeSumAssured: true,
+  includePremium: true,
+  includeDueDate: true,
+  includeMaturityDate: true,
+  includeStatus: true,
+  includeAgentDetails: true,
+};
+
 /**
- * Generate a clean WhatsApp text representation of available policy details
- * Clearly labels the status as DUE if premium is due
+ * Generate a clean text representation of available policy details
+ * Filters details based on user's customizable reminder share settings
  */
-export function generatePolicyWhatsAppMessage(policy: {
-  policyNumber: string;
-  customerName?: string;
-  planCode?: string;
-  policyTerm?: number | null;
-  premiumPayingTerm?: number | null;
-  sumAssured?: number;
-  premiumAmount?: number;
-  premiumMode?: string;
-  commencementDate?: string;
-  maturityDate?: string;
-  firstUnpaidPremiumDate?: string;
-  recordStatus?: string;
-  originalPlanString?: string;
-}): string {
+export function generatePolicyWhatsAppMessage(
+  policy: {
+    policyNumber: string;
+    customerName?: string;
+    planCode?: string;
+    policyTerm?: number | null;
+    premiumPayingTerm?: number | null;
+    sumAssured?: number;
+    premiumAmount?: number;
+    premiumMode?: string;
+    commencementDate?: string;
+    maturityDate?: string;
+    firstUnpaidPremiumDate?: string;
+    recordStatus?: string;
+    originalPlanString?: string;
+  },
+  settings?: Partial<ReminderShareSettings>,
+  agentInfo?: { name?: string; mobile?: string }
+): string {
+  const cfg = { ...DEFAULT_SHARE_SETTINGS, ...settings };
   const status = getPolicyLifecycleStatus(policy);
   const isDue = status === 'due';
 
   const lines: string[] = [];
   lines.push(`*LIC Policy Details*`);
   lines.push(`────────────────────────────`);
-  lines.push(`📋 *Policy No:* ${policy.policyNumber}`);
-  if (policy.customerName) {
+
+  if (cfg.includePolicyNumber) {
+    lines.push(`📋 *Policy No:* ${policy.policyNumber}`);
+  }
+  if (cfg.includeCustomerName && policy.customerName) {
     lines.push(`👤 *Policyholder:* ${policy.customerName}`);
   }
 
-  const planParts: string[] = [];
-  if (policy.planCode) planParts.push(`Plan: ${policy.planCode}`);
-  if (policy.policyTerm) planParts.push(`Term: ${policy.policyTerm} yrs`);
-  if (policy.premiumPayingTerm) planParts.push(`PPT: ${policy.premiumPayingTerm} yrs`);
-  if (planParts.length > 0) {
-    lines.push(`📄 *Plan / Term:* ${planParts.join(' | ')}`);
+  if (cfg.includePlan) {
+    const planParts: string[] = [];
+    if (policy.planCode) planParts.push(`Plan: ${policy.planCode}`);
+    if (policy.policyTerm) planParts.push(`Term: ${policy.policyTerm} yrs`);
+    if (policy.premiumPayingTerm) planParts.push(`PPT: ${policy.premiumPayingTerm} yrs`);
+    if (planParts.length > 0) {
+      lines.push(`📄 *Plan / Term:* ${planParts.join(' | ')}`);
+    }
   }
 
-  if (policy.sumAssured && policy.sumAssured > 0) {
+  if (cfg.includeSumAssured && policy.sumAssured && policy.sumAssured > 0) {
     lines.push(`💰 *Sum Assured:* ${formatCurrency(policy.sumAssured)}`);
   }
 
-  if (policy.premiumAmount && policy.premiumAmount > 0) {
+  if (cfg.includePremium && policy.premiumAmount && policy.premiumAmount > 0) {
     lines.push(`💳 *Premium:* ${formatCurrency(policy.premiumAmount)} (${policy.premiumMode || 'Yearly'})`);
   }
 
-  if (policy.commencementDate) {
-    lines.push(`📅 *D.O.C. (Commencement):* ${formatDate(policy.commencementDate)}`);
+  if (cfg.includeDueDate && policy.firstUnpaidPremiumDate) {
+    lines.push(`⏳ *Next Due Date:* ${formatDate(policy.firstUnpaidPremiumDate)}`);
   }
 
-  const dom = getPolicyMaturityDate(policy);
-  if (dom) {
-    lines.push(`🎯 *D.O.M. (Maturity):* ${formatDate(dom)}`);
+  if (cfg.includeMaturityDate) {
+    const dom = getPolicyMaturityDate(policy);
+    if (dom) {
+      lines.push(`🎯 *Maturity Date:* ${formatDate(dom)}`);
+    }
   }
 
-  if (policy.firstUnpaidPremiumDate) {
-    lines.push(`⏳ *F.U.P. Date:* ${formatDate(policy.firstUnpaidPremiumDate)}`);
+  if (cfg.includeStatus) {
+    lines.push(`────────────────────────────`);
+    if (isDue) {
+      lines.push(`⚠️ *STATUS: PREMIUM DUE*`);
+      lines.push(`_Kindly pay the premium at the earliest to ensure uninterrupted life cover and benefits._`);
+    } else if (status === 'matured') {
+      lines.push(`🎓 *STATUS: MATURED*`);
+    } else if (status === 'claimed') {
+      lines.push(`🛡️ *STATUS: CLAIMED*`);
+    } else if (status === 'surrendered') {
+      lines.push(`📋 *STATUS: SURRENDERED*`);
+    } else {
+      lines.push(`✅ *STATUS: ACTIVE*`);
+    }
   }
 
-  lines.push(`────────────────────────────`);
-  if (isDue) {
-    lines.push(`⚠️ *STATUS: PREMIUM DUE*`);
-    lines.push(`_Kindly pay the premium at the earliest to ensure uninterrupted life cover and benefits._`);
-  } else if (status === 'matured') {
-    lines.push(`🎓 *STATUS: MATURED*`);
-  } else if (status === 'claimed') {
-    lines.push(`🛡️ *STATUS: CLAIMED*`);
-  } else if (status === 'surrendered') {
-    lines.push(`📋 *STATUS: SURRENDERED*`);
-  } else {
-    lines.push(`✅ *STATUS: ACTIVE*`);
+  if (cfg.includeAgentDetails && agentInfo && (agentInfo.name || agentInfo.mobile)) {
+    lines.push(`────────────────────────────`);
+    if (agentInfo.name) lines.push(`*Advisor:* ${agentInfo.name}`);
+    if (agentInfo.mobile) lines.push(`*Contact:* ${agentInfo.mobile}`);
   }
 
   return lines.join('\n');
 }
 
 /**
- * Open WhatsApp with pre-filled policy details
+ * Share text using native App Chooser (navigator.share) so user decides which app to send with.
+ * Falls back to generic WhatsApp share without pre-filled number so user chooses contact manually.
+ */
+export async function sharePolicyMessage(
+  text: string,
+  title: string = 'LIC Policy Details'
+): Promise<void> {
+  if (typeof navigator !== 'undefined' && navigator.share) {
+    try {
+      await navigator.share({
+        title,
+        text,
+      });
+      return;
+    } catch (err: any) {
+      if (err.name === 'AbortError') return; // User dismissed share sheet
+    }
+  }
+
+  // Fallback: Opens WhatsApp without pre-filling the number so user searches and selects contact manually
+  const encodedText = encodeURIComponent(text);
+  const url = `https://api.whatsapp.com/send?text=${encodedText}`;
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+/**
+ * Open Share dialog with pre-filled policy details formatted with custom settings
  */
 export function openPolicyWhatsAppShare(
   policy: Parameters<typeof generatePolicyWhatsAppMessage>[0],
-  mobileNumber?: string | null
+  _mobileNumber?: string | null,
+  settings?: Partial<ReminderShareSettings>,
+  agentInfo?: { name?: string; mobile?: string }
 ): void {
-  const text = generatePolicyWhatsAppMessage(policy);
-  const encodedText = encodeURIComponent(text);
-  let url = `https://wa.me/?text=${encodedText}`;
-  if (mobileNumber) {
-    const cleanDigits = mobileNumber.replace(/\D/g, '');
-    if (cleanDigits.length >= 10) {
-      const formattedNumber = cleanDigits.length === 10 ? `91${cleanDigits}` : cleanDigits;
-      url = `https://wa.me/${formattedNumber}?text=${encodedText}`;
-    }
-  }
-  window.open(url, '_blank', 'noopener,noreferrer');
+  const text = generatePolicyWhatsAppMessage(policy, settings, agentInfo);
+  sharePolicyMessage(text, `LIC Policy ${policy.policyNumber}`);
 }

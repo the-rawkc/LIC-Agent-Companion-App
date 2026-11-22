@@ -51,6 +51,16 @@ export function ProfilePage() {
     try {
       const current = authService.getCurrentAgent();
       if (current?.agencyCode) {
+        if (typeof navigator !== 'undefined' && navigator.onLine) {
+          const creds = d1SyncService.getCredentials();
+          if (creds.pin || creds.pinHash) {
+            try {
+              await d1SyncService.pullFromCloud(current.agencyCode, creds.pin || '');
+            } catch (syncErr) {
+              console.warn('Profile cloud pull notice:', syncErr);
+            }
+          }
+        }
         await authService.restoreOrMigrateProfile(current.agencyCode);
       }
       const data = await profileRepository.getProfile();

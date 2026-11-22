@@ -623,8 +623,9 @@ export function CommissionBillPage() {
                             onChange={(e) => handleModeChange(item.id, e.target.value as PremiumMode)}
                             className="text-xs py-1 px-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                           >
-                            <option value="Half-Yearly">Half-Yearly (+6m)</option>
+                            <option value="N/F">Not Specified (Select)</option>
                             <option value="Quarterly">Quarterly (+3m)</option>
+                            <option value="Half-Yearly">Half-Yearly (+6m)</option>
                             <option value="Yearly">Yearly (+12m)</option>
                             <option value="Monthly">Monthly (+1m)</option>
                             <option value="Single">Single (No FUP)</option>

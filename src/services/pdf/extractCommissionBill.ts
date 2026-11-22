@@ -25,7 +25,7 @@ export function isCommissionHeaderOrFooter(text: string): boolean {
  * S.No (opt) | PH Name | PolicyNo | Pln/Tm | DueDt | Risk Date | CBO | Adj.Date | Premium | Commn.
  */
 export const COMMISSION_LINE_REGEX =
-  /^\s*(?:(\d{1,5})\s+)?([A-Za-z\s.'/-]+?)\s+(\d{8,10})\s+(\d+[-/]\d+|\d+)\s+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\s+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\s+(\S+)\s+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\s+([\d,]+(?:\.\d{1,2})?)\s+([\d,]+(?:\.\d{1,2})?)\s*$/;
+  /^\s*(?:(\d{1,5})\s+)?([A-Za-z\s.'/-]+?)\s+(\d{8,10})\s+(\d+(?:[-/]\d+){0,3})\s+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\s+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\s+(\S+)\s+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\s+([\d,]+(?:\.\d{1,2})?)\s+([\d,]+(?:\.\d{1,2})?)\s*$/;
 
 export function parseCommissionLine(rawLine: string, pageNumber: number = 1): RawCommissionRow | null {
   const match = rawLine.match(COMMISSION_LINE_REGEX);
@@ -78,7 +78,7 @@ export function parseCommissionTokens(tokens: string[], pageNumber: number = 1, 
   // Plan/Term is usually right after policyNo
   let planTerm = '';
   let remainingTokens = afterTokens;
-  if (/^(\d+[-/]\d+|\d+)$/.test(afterTokens[0])) {
+  if (/^(\d+(?:[-/]\d+){0,3})$/.test(afterTokens[0])) {
     planTerm = afterTokens[0];
     remainingTokens = afterTokens.slice(1);
   }
