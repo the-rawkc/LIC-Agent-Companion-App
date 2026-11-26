@@ -152,14 +152,13 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const navItems = [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/customers', label: 'Customers', icon: Users },
     { to: '/policies', label: 'Policies', icon: FileText },
+    { to: '/fup-update', label: 'FUP Update', icon: ArrowUpRight },
     { to: '/reminders', label: 'Reminders', icon: Bell },
   ];
 
   const desktopNavItems = [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/customers', label: 'Customers', icon: Users },
     { to: '/policies', label: 'Policies', icon: FileText },
     { to: '/fup-update', label: 'FUP Update', icon: ArrowUpRight, isHighlight: true },
     { to: '/reminders', label: 'Reminders', icon: Bell },
@@ -176,11 +175,11 @@ export function AppLayout({ children }: AppLayoutProps) {
   ];
 
   const isLandingPage = location.pathname === '/';
-  const isSearchPage = location.pathname === '/policies' || location.pathname.startsWith('/customers');
+  const isSearchPage = location.pathname === '/policies';
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col antialiased overflow-x-hidden w-full max-w-full">
-      {/* Top Header - Rendered strictly in workspace, hidden on search & customer pages so page sits directly at top-0 */}
+      {/* Top Header - Rendered strictly in workspace, hidden on policies page so page sits directly at top-0 */}
       {!isLandingPage && !isSearchPage && (
         <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 pt-safe w-full overflow-x-hidden">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-3">
@@ -207,7 +206,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <button
               onClick={() => setIsSearchOpen(true)}
               className="hidden md:flex flex-1 max-w-md mx-3 flex items-center justify-between px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200/70 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-400 border border-slate-200/80 dark:border-slate-700/60 transition text-xs sm:text-sm select-none tap-effect"
-              aria-label="Search policies and customers"
+              aria-label="Search policies and clients"
             >
               <div className="flex items-center gap-2 truncate">
                 <Search className="w-4 h-4 text-slate-400 shrink-0" />
@@ -223,7 +222,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               {/* Mobile Search Button */}
               <button
                 onClick={() => setIsSearchOpen(true)}
-                title="Global Search (Policies & Customers)"
+                title="Global Search"
                 className="md:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition tap-effect"
                 aria-label="Search"
               >

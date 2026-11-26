@@ -14,6 +14,10 @@ export interface RawExtractedRow {
   premium?: string;
   dom?: string;
   dob?: string;
+  mobile?: string;
+  alternateMobile?: string;
+  address?: string;
+  email?: string;
   pageNumber?: number;
   rawText?: string;
 }
@@ -21,8 +25,12 @@ export interface RawExtractedRow {
 export interface Policy {
   id: string;
   policyNumber: string; // Original string preserved
-  customerId: string;
+  customerId?: string;
   customerName: string;
+  mobileNumber?: string;
+  alternateNumber?: string;
+  email?: string;
+  address?: string;
   planCode: string;
   term: number | null;
   premiumPayingTerm: number | null;
@@ -121,6 +129,10 @@ export interface StagedPolicyRow {
   serialNumber?: number | null;
   policyNumber: string;
   customerName: string;
+  mobile?: string;
+  alternateMobile?: string;
+  address?: string;
+  email?: string;
   planCode: string;
   term: number | null;
   ppt: number | null;

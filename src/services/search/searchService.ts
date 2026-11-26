@@ -25,7 +25,9 @@ export const searchService = {
     // Count policies per customer
     const policyCountByCustomer = new Map<string, number>();
     for (const p of policies) {
-      policyCountByCustomer.set(p.customerId, (policyCountByCustomer.get(p.customerId) || 0) + 1);
+      if (p.customerId) {
+        policyCountByCustomer.set(p.customerId, (policyCountByCustomer.get(p.customerId) || 0) + 1);
+      }
     }
 
     // Match Customers (only customers who have active policies)
@@ -47,9 +49,12 @@ export const searchService = {
     const matchingPolicies = policies
       .filter((p) => {
         const numMatch = p.policyNumber.toLowerCase().includes(q);
-        const nameMatch = normalizeSearchString(p.customerName).includes(q);
-        const planMatch = p.planCode.toLowerCase().includes(q);
-        return numMatch || nameMatch || planMatch;
+        const nameMatch = normalizeSearchString(p.customerName || '').includes(q);
+        const mobileMatch = p.mobileNumber ? p.mobileNumber.includes(trimmed) : false;
+        const altMobileMatch = p.alternateNumber ? p.alternateNumber.includes(trimmed) : false;
+        const planMatch = (p.planCode || '').toLowerCase().includes(q) || (p.originalPlanString || '').toLowerCase().includes(q);
+        const addressMatch = p.address ? normalizeSearchString(p.address).includes(q) : false;
+        return numMatch || nameMatch || mobileMatch || altMobileMatch || planMatch || addressMatch;
       })
       .slice(0, maxResults);
 

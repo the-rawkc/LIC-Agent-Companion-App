@@ -172,7 +172,7 @@ export function DashboardPage() {
                   Reinstalled or switching phone?
                 </h2>
                 <p className="text-xs text-slate-600 dark:text-slate-300">
-                  Restore all your previously saved policies and customers with your <strong>Agency Code</strong>.
+                  Restore all your previously saved policies with your <strong>Agency Code</strong>.
                 </p>
               </div>
             </div>
@@ -207,11 +207,11 @@ export function DashboardPage() {
               onClick={() => navigate('/policies')}
             />
             <StatCard
-              title="Unique Customers"
-              value={stats.totalCustomers}
-              subtitle="Insured individuals"
-              icon={<Users className="w-5 h-5 text-indigo-600" />}
-              onClick={() => navigate('/customers')}
+              title="Total Sum Assured"
+              value={formatCurrency(stats.totalSumAssured)}
+              subtitle="Life cover under management"
+              icon={<CheckCircle2 className="w-5 h-5 text-indigo-600" />}
+              onClick={() => navigate('/policies')}
             />
             <StatCard
               title="Recorded Premium Sum"
@@ -438,13 +438,13 @@ export function DashboardPage() {
           {/* Quick Actions Footer Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <button
-              onClick={() => navigate('/customers')}
-              className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600 transition flex items-center gap-3 text-left shadow-xs"
+              onClick={() => navigate('/policies')}
+              className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600 transition flex items-center gap-3 text-left shadow-xs cursor-pointer"
             >
-              <Users className="w-5 h-5 text-blue-600 shrink-0" />
+              <FileText className="w-5 h-5 text-blue-600 shrink-0" />
               <div>
-                <p className="text-xs font-bold text-slate-900 dark:text-white">Directory</p>
-                <p className="text-[11px] text-slate-400">View customer list</p>
+                <p className="text-xs font-bold text-slate-900 dark:text-white">All Policies</p>
+                <p className="text-[11px] text-slate-400">View policies list</p>
               </div>
             </button>
             <button

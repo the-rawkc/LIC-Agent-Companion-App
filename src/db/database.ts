@@ -42,6 +42,11 @@ export class LICDatabase extends Dexie {
     this.version(3).stores({
       auditLogs: 'id, entityType, entityId, action, timestamp, [entityType+action]',
     });
+
+    // Version 4: Policy with mobileNumber index
+    this.version(4).stores({
+      policies: 'id, policyNumber, customerId, customerName, mobileNumber, planCode, commencementDate, firstUnpaidPremiumDate, maturityDate, recordStatus, updatedAt, [customerId+recordStatus]',
+    });
   }
 }
 
@@ -301,7 +306,47 @@ export async function ensureDataSynchronized(): Promise<void> {
       }
     }
 
-    // 2. ALWAYS purge all orphan customers with 0 policies across all active and legacy instances
+    // 2. Migrate any existing customer mobile/email/address/DOB to individual policies
+    const activePolicies = await active.policies.toArray();
+    const activeCustomers = await active.customers.toArray();
+    if (activeCustomers.length > 0 && activePolicies.length > 0) {
+      const custMap = new Map(activeCustomers.map((c) => [c.id, c]));
+      const toUpdate: Policy[] = [];
+      for (const p of activePolicies) {
+        if (p.customerId && custMap.has(p.customerId)) {
+          const c = custMap.get(p.customerId)!;
+          let changed = false;
+          if (!p.mobileNumber && c.mobileNumber) {
+            p.mobileNumber = c.mobileNumber;
+            changed = true;
+          }
+          if (!p.alternateNumber && c.alternateNumber) {
+            p.alternateNumber = c.alternateNumber;
+            changed = true;
+          }
+          if (!p.email && c.email) {
+            p.email = c.email;
+            changed = true;
+          }
+          if (!p.address && c.address) {
+            p.address = c.address;
+            changed = true;
+          }
+          if (!p.dateOfBirth && c.dateOfBirth) {
+            p.dateOfBirth = c.dateOfBirth;
+            changed = true;
+          }
+          if (changed) {
+            toUpdate.push(p);
+          }
+        }
+      }
+      if (toUpdate.length > 0) {
+        await active.policies.bulkPut(toUpdate);
+      }
+    }
+
+    // 3. ALWAYS purge all orphan customers with 0 policies across all active and legacy instances
     await purgeOrphanCustomersFromDb(active);
     if (legacy.name !== active.name) {
       await purgeOrphanCustomersFromDb(legacy);

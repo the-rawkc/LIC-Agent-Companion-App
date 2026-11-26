@@ -163,6 +163,9 @@ export const importService = {
               ...existingPolicy,
               customerId: customer.id,
               customerName: cleanName,
+              mobileNumber: row.mobile || existingPolicy.mobileNumber,
+              address: row.address || existingPolicy.address,
+              email: row.email || existingPolicy.email,
               planCode: row.planCode,
               term: row.term ?? existingPolicy.term,
               premiumPayingTerm: row.ppt ?? existingPolicy.premiumPayingTerm,
@@ -205,6 +208,9 @@ export const importService = {
           policyNumber: row.policyNumber,
           customerId: customer.id,
           customerName: cleanName,
+          mobileNumber: row.mobile || undefined,
+          address: row.address || undefined,
+          email: row.email || undefined,
           planCode: row.planCode,
           term: row.term,
           premiumPayingTerm: row.ppt,
@@ -357,7 +363,7 @@ export const importService = {
         needsUpdate = true;
       }
 
-      const linkedCust = customerMap.get(p.customerId);
+      const linkedCust = p.customerId ? customerMap.get(p.customerId) : undefined;
       if (linkedCust && linkedCust.displayName !== cleanName) {
         linkedCust.displayName = cleanName;
         linkedCust.normalizedName = cleanName.toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();

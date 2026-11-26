@@ -127,6 +127,9 @@ export function normalizeAndValidateExtractedRow(
     premium,
     dom: parsedDom || rawDom,
     dob: parsedDob,
+    mobile: raw.mobile,
+    address: raw.address,
+    email: raw.email,
   };
 
   return {

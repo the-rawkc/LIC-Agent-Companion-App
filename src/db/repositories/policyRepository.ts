@@ -39,6 +39,28 @@ export const policyRepository = {
     return await db.policies.where('customerId').equals(customerId).toArray();
   },
 
+  async getOtherPolicies(policy: Policy): Promise<Policy[]> {
+    const all = await db.policies.toArray();
+    const currentId = policy.id;
+    const currentPolicyNumber = (policy.policyNumber || '').trim();
+    const currentMobile = (policy.mobileNumber || '').trim().replace(/\D/g, '');
+    const currentName = normalizeSearchString(policy.customerName || '');
+
+    return all.filter((p) => {
+      if (p.id === currentId || p.policyNumber.trim() === currentPolicyNumber) return false;
+      // Match by mobile number if recorded
+      const otherMobile = (p.mobileNumber || '').trim().replace(/\D/g, '');
+      if (currentMobile.length >= 7 && otherMobile.length >= 7 && currentMobile === otherMobile) {
+        return true;
+      }
+      // Match by normalized customer name if meaningful
+      if (currentName && currentName.length > 2 && normalizeSearchString(p.customerName || '') === currentName) {
+        return true;
+      }
+      return false;
+    });
+  },
+
   async create(policy: Policy): Promise<string> {
     await db.policies.add(policy);
     await db.auditLogs.add({
@@ -78,12 +100,16 @@ export const policyRepository = {
       updates.customerId = targetCust.id;
     }
 
-    if (updates.dateOfBirth) {
-      const custId = updates.customerId || existing.customerId;
-      const cust = await db.customers.get(custId);
-      if (cust && !cust.dateOfBirth) {
-        await db.customers.update(custId, { dateOfBirth: updates.dateOfBirth, updatedAt: now });
-      }
+    const custId = updates.customerId || existing.customerId;
+    if (custId) {
+      const custUpdates: Record<string, any> = { updatedAt: now };
+      if (updates.customerName) custUpdates.displayName = updates.customerName.trim();
+      if (updates.mobileNumber !== undefined) custUpdates.mobileNumber = updates.mobileNumber;
+      if (updates.alternateNumber !== undefined) custUpdates.alternateNumber = updates.alternateNumber;
+      if (updates.email !== undefined) custUpdates.email = updates.email;
+      if (updates.address !== undefined) custUpdates.address = updates.address;
+      if (updates.dateOfBirth !== undefined) custUpdates.dateOfBirth = updates.dateOfBirth;
+      await db.customers.update(custId, custUpdates).catch(() => {});
     }
 
     const updatedPolicy: Policy = {

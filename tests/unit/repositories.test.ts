@@ -327,4 +327,108 @@ describe('Database Repositories & Business Logic', () => {
     expect(retrieved.agencyCode).toBe('09876543');
     expect(retrieved.avatarUrl).toBe(customPhoto);
   });
+
+  it('updates customer details directly on policy and finds other policies for same client', async () => {
+    const pol1: Policy = {
+      id: 'pol-a',
+      policyNumber: '111111111',
+      customerId: 'cust-a',
+      customerName: 'Anil Kumar',
+      mobileNumber: '9876500000',
+      address: '123 Market Road',
+      email: 'anil@example.com',
+      planCode: '814',
+      term: 20,
+      premiumPayingTerm: 20,
+      originalPlanString: '814-20',
+      sumAssured: 500000,
+      commencementDate: '2024-01-01',
+      premiumMode: 'Yearly',
+      firstUnpaidPremiumDate: '2025-01-01',
+      premiumAmount: 25000,
+      maturityDate: '2044-01-01',
+      dateOfBirth: '1985-05-15',
+      sourceSerialNumber: 1,
+      sourceReportDate: '2026-10-29',
+      sourceImportId: null,
+      rawExtractedValues: {},
+      extractionWarnings: [],
+      recordStatus: 'active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const pol2: Policy = {
+      id: 'pol-b',
+      policyNumber: '222222222',
+      customerId: 'cust-b',
+      customerName: 'Anil Kumar',
+      mobileNumber: '9876500000',
+      planCode: '914',
+      term: 15,
+      premiumPayingTerm: 15,
+      originalPlanString: '914-15',
+      sumAssured: 300000,
+      commencementDate: '2023-01-01',
+      premiumMode: 'Half-Yearly',
+      firstUnpaidPremiumDate: '2025-07-01',
+      premiumAmount: 12000,
+      maturityDate: '2038-01-01',
+      dateOfBirth: '1985-05-15',
+      sourceSerialNumber: 2,
+      sourceReportDate: '2026-10-29',
+      sourceImportId: null,
+      rawExtractedValues: {},
+      extractionWarnings: [],
+      recordStatus: 'active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const pol3: Policy = {
+      id: 'pol-c',
+      policyNumber: '333333333',
+      customerId: 'cust-c',
+      customerName: 'Sunita Sharma',
+      mobileNumber: '9111100000',
+      planCode: '815',
+      term: 21,
+      premiumPayingTerm: 21,
+      originalPlanString: '815-21',
+      sumAssured: 200000,
+      commencementDate: '2022-01-01',
+      premiumMode: 'Yearly',
+      firstUnpaidPremiumDate: '2025-01-01',
+      premiumAmount: 10000,
+      maturityDate: '2043-01-01',
+      dateOfBirth: '1990-08-20',
+      sourceSerialNumber: 3,
+      sourceReportDate: '2026-10-29',
+      sourceImportId: null,
+      rawExtractedValues: {},
+      extractionWarnings: [],
+      recordStatus: 'active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await policyRepository.create(pol1);
+    await policyRepository.create(pol2);
+    await policyRepository.create(pol3);
+
+    // Test other policies lookup for pol1 (should find pol2, not pol1 or pol3)
+    const others = await policyRepository.getOtherPolicies(pol1);
+    expect(others).toHaveLength(1);
+    expect(others[0].policyNumber).toBe('222222222');
+
+    // Test updating customer details directly on policy
+    await policyRepository.update('pol-a', {
+      mobileNumber: '9999988888',
+      address: '456 New Colony, Delhi',
+    });
+
+    const updated = await policyRepository.getById('pol-a');
+    expect(updated?.mobileNumber).toBe('9999988888');
+    expect(updated?.address).toBe('456 New Colony, Delhi');
+  });
 });

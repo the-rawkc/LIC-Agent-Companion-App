@@ -17,10 +17,11 @@ import {
   Info,
   Phone,
   Plus,
-  MessageSquare
+  MessageSquare,
+  Mail,
+  MapPin
 } from 'lucide-react';
 import { policyRepository } from '@/db/repositories/policyRepository';
-import { customerRepository, type CustomerWithSummary } from '@/db/repositories/customerRepository';
 import { reminderRepository, type ReminderWithDetails } from '@/db/repositories/reminderRepository';
 import { formatCurrency, formatDate, advanceFupDate, parsePlanTermPpt, calculateMaturityDate, getPolicyMaturityDate, getPolicyLifecycleStatus, openPolicyWhatsAppShare } from '@/utils/formatters';
 import { Badge } from '@/components/shared/Badge';
@@ -34,7 +35,7 @@ export function PolicyDetailsPage() {
   const navigate = useNavigate();
 
   const [policy, setPolicy] = useState<Policy | null>(null);
-  const [customer, setCustomer] = useState<CustomerWithSummary | null>(null);
+  const [otherPolicies, setOtherPolicies] = useState<Policy[]>([]);
   const [reminders, setReminders] = useState<ReminderWithDetails[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -46,6 +47,10 @@ export function PolicyDetailsPage() {
   // Edit Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editCustomerName, setEditCustomerName] = useState('');
+  const [editMobile, setEditMobile] = useState('');
+  const [editAlternateMobile, setEditAlternateMobile] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editAddress, setEditAddress] = useState('');
   const [editPlan, setEditPlan] = useState('');
   const [editSumAssured, setEditSumAssured] = useState('');
   const [editPremium, setEditPremium] = useState('');
@@ -79,6 +84,10 @@ export function PolicyDetailsPage() {
       if (pol) {
         setPolicy(pol);
         setEditCustomerName(pol.customerName);
+        setEditMobile(pol.mobileNumber || '');
+        setEditAlternateMobile(pol.alternateNumber || '');
+        setEditEmail(pol.email || '');
+        setEditAddress(pol.address || '');
         setEditPlan(pol.originalPlanString);
         setEditSumAssured(pol.sumAssured.toString());
         setEditPremium(pol.premiumAmount.toString());
@@ -91,8 +100,8 @@ export function PolicyDetailsPage() {
         setEditStatus(pol.recordStatus);
         setEditNotes(pol.notes || '');
 
-        const cust = await customerRepository.getWithSummary(pol.customerId);
-        if (cust) setCustomer(cust);
+        const others = await policyRepository.getOtherPolicies(pol);
+        setOtherPolicies(others);
 
         const rems = await reminderRepository.getByPolicyId(pol.id);
         setReminders(rems);
@@ -138,6 +147,10 @@ export function PolicyDetailsPage() {
 
       await policyRepository.update(policy.id, {
         customerName: editCustomerName.trim(),
+        mobileNumber: editMobile.trim() || undefined,
+        alternateNumber: editAlternateMobile.trim() || undefined,
+        email: editEmail.trim() || undefined,
+        address: editAddress.trim() || undefined,
         originalPlanString: editPlan.trim(),
         planCode,
         term,
@@ -153,10 +166,6 @@ export function PolicyDetailsPage() {
         notes: editNotes.trim() || undefined,
       });
 
-      if (editDob && customer && !customer.dateOfBirth) {
-        await customerRepository.update(customer.id, { dateOfBirth: editDob });
-      }
-
       setIsEditModalOpen(false);
       await loadPolicyDetails(policy.id);
     } catch (err) {
@@ -170,7 +179,7 @@ export function PolicyDetailsPage() {
 
     try {
       await reminderRepository.create({
-        customerId: policy.customerId,
+        customerId: policy.customerId || policy.id,
         policyId: policy.id,
         title: reminderTitle.trim(),
         description: `Policy ${policy.policyNumber} follow-up`,
@@ -270,7 +279,7 @@ export function PolicyDetailsPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => openPolicyWhatsAppShare(policy, customer?.mobileNumber)}
+            onClick={() => openPolicyWhatsAppShare(policy, policy.mobileNumber)}
             leftIcon={<MessageSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />}
             className="border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-semibold"
             title="Share policy details"
@@ -429,44 +438,110 @@ export function PolicyDetailsPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-xs uppercase tracking-wider">
               <User className="w-3.5 h-3.5" />
-              <span>B. Customer Information</span>
+              <span>B. Customer / Policyholder Details</span>
             </div>
-            {customer && (
-              <button
-                onClick={() => navigate(`/customers/${customer.id}`)}
-                className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium"
-              >
-                View Profile →
-              </button>
-            )}
+            <button
+              onClick={() => setIsEditModalOpen(true)}
+              className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+            >
+              <Edit2 className="w-3 h-3" />
+              <span>Edit Details</span>
+            </button>
           </div>
 
           <div className="space-y-1.5 text-xs">
             <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-              <span className="text-slate-400">Name</span>
+              <span className="text-slate-400">Policyholder Name</span>
               <span className="font-bold text-slate-900 dark:text-white">{policy.customerName}</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-              <span className="text-slate-400">Contact Number</span>
-              {customer?.mobileNumber ? (
-                <a href={`tel:${customer.mobileNumber}`} className="text-blue-600 font-medium">
-                  {customer.mobileNumber}
+              <span className="text-slate-400">Mobile Number</span>
+              {policy.mobileNumber ? (
+                <div className="flex items-center gap-2">
+                  <a
+                    href={`tel:${policy.mobileNumber}`}
+                    className="text-blue-600 dark:text-blue-400 font-semibold font-mono hover:underline flex items-center gap-1"
+                  >
+                    <Phone className="w-3 h-3" />
+                    <span>{policy.mobileNumber}</span>
+                  </a>
+                  <button
+                    onClick={() => openPolicyWhatsAppShare(policy, policy.mobileNumber)}
+                    className="text-[10px] text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                    title="Send WhatsApp message"
+                  >
+                    <MessageSquare className="w-3 h-3" />
+                    <span>WhatsApp</span>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setIsEditModalOpen(true)}
+                  className="text-slate-400 italic hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
+                >
+                  + Add Mobile
+                </button>
+              )}
+            </div>
+            {policy.alternateNumber && (
+              <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+                <span className="text-slate-400">Alternate Number</span>
+                <a
+                  href={`tel:${policy.alternateNumber}`}
+                  className="text-blue-600 dark:text-blue-400 font-semibold font-mono hover:underline flex items-center gap-1"
+                >
+                  <Phone className="w-3 h-3" />
+                  <span>{policy.alternateNumber}</span>
+                </a>
+              </div>
+            )}
+            <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+              <span className="text-slate-400">Email Address</span>
+              {policy.email ? (
+                <a
+                  href={`mailto:${policy.email}`}
+                  className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                >
+                  <Mail className="w-3 h-3" />
+                  <span>{policy.email}</span>
                 </a>
               ) : (
-                <span className="text-slate-400 italic">No mobile recorded</span>
+                <span className="text-slate-400 italic">No email recorded</span>
               )}
             </div>
             <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-              <span className="text-slate-400">Other Policies</span>
-              <span className="font-semibold text-slate-800 dark:text-slate-200">
-                {customer ? `${customer.policyCount - 1} other policy(ies)` : '—'}
+              <span className="text-slate-400">Date of Birth (DOB)</span>
+              <span className="font-medium text-slate-800 dark:text-slate-200">
+                {policy.dateOfBirth ? formatDate(policy.dateOfBirth) : <span className="text-slate-400 italic">Not recorded</span>}
               </span>
             </div>
-            <div className="flex justify-between py-1">
-              <span className="text-slate-400">DOB (Recorded)</span>
-              <span className="font-medium text-slate-800 dark:text-slate-200">
-                {formatDate(policy.dateOfBirth)}
+            <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+              <span className="text-slate-400">Address</span>
+              <span className="font-medium text-slate-800 dark:text-slate-200 text-right max-w-[65%]">
+                {policy.address || <span className="text-slate-400 italic">No address recorded</span>}
               </span>
+            </div>
+            <div className="flex items-start justify-between py-1">
+              <span className="text-slate-400 shrink-0 mt-0.5">Other Policies</span>
+              <div className="text-right">
+                {otherPolicies.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5 justify-end">
+                    {otherPolicies.map((op) => (
+                      <button
+                        key={op.id}
+                        type="button"
+                        onClick={() => navigate(`/policies/${op.id}`)}
+                        className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-mono font-bold bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 transition active:scale-95 cursor-pointer shadow-2xs"
+                        title={`View policy ${op.policyNumber} (${op.customerName})`}
+                      >
+                        {op.policyNumber}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-slate-400 italic">No other policies</span>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -595,8 +670,8 @@ export function PolicyDetailsPage() {
       <Modal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
-        title="Edit Policy Record"
-        maxWidth="md"
+        title="Edit Policy & Policyholder Details"
+        maxWidth="lg"
         onSubmit={handleUpdatePolicy}
         footer={
           <>
@@ -609,159 +684,232 @@ export function PolicyDetailsPage() {
           </>
         }
       >
-        <div className="space-y-3.5">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Customer Name
-              </label>
-              <input
-                type="text"
-                value={editCustomerName}
-                onChange={(e) => setEditCustomerName(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-blue-500"
-                required
-              />
+        <div className="space-y-4 max-h-[75vh] overflow-y-auto px-1 py-0.5">
+          {/* Policyholder Information Section */}
+          <div className="bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5" />
+              <span>1. Customer / Policyholder Information</span>
+            </h4>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Policyholder Name *
+                </label>
+                <input
+                  type="text"
+                  value={editCustomerName}
+                  onChange={(e) => setEditCustomerName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Date of Birth (DOB)
+                </label>
+                <input
+                  type="date"
+                  value={editDob}
+                  onChange={(e) => setEditDob(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Mobile Number
+                </label>
+                <input
+                  type="tel"
+                  value={editMobile}
+                  onChange={(e) => setEditMobile(e.target.value)}
+                  placeholder="e.g. 9876543210"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Alternate Number
+                </label>
+                <input
+                  type="tel"
+                  value={editAlternateMobile}
+                  onChange={(e) => setEditAlternateMobile(e.target.value)}
+                  placeholder="e.g. 9876543211"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  placeholder="e.g. client@example.com"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Plan/Term/PPT
+                Residential / Postal Address
               </label>
-              <input
-                type="text"
-                value={editPlan}
-                onChange={(e) => handlePlanChange(e.target.value)}
-                placeholder="e.g. 815-21 or 833-22"
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-blue-500"
-                required
+              <textarea
+                value={editAddress}
+                onChange={(e) => setEditAddress(e.target.value)}
+                placeholder="House/Street, Village/City, District, Pincode"
+                rows={2}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Sum Assured (₹)
-              </label>
-              <input
-                type="number"
-                value={editSumAssured}
-                onChange={(e) => setEditSumAssured(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Premium (₹)
-              </label>
-              <input
-                type="number"
-                value={editPremium}
-                onChange={(e) => setEditPremium(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Mode
-              </label>
-              <select
-                value={editMode}
-                onChange={(e) => setEditMode(e.target.value as PremiumMode)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="Yearly">Yearly</option>
-                <option value="Half-Yearly">Half-Yearly</option>
-                <option value="Quarterly">Quarterly</option>
-                <option value="Monthly">Monthly</option>
-                <option value="Single">Single</option>
-                <option value="N/F">N/F</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Policy Status
-              </label>
-              <select
-                value={editStatus}
-                onChange={(e) => setEditStatus(e.target.value as PolicyRecordStatus)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="active">Active (In Force)</option>
-                <option value="due">Due (Premium Pending)</option>
-                <option value="matured">Matured</option>
-                <option value="claimed">Claimed</option>
-                <option value="surrendered">Surrendered</option>
-                <option value="lapsed">Lapsed</option>
-              </select>
-            </div>
-          </div>
+          {/* Policy Information Section */}
+          <div className="bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5" />
+              <span>2. Policy Details</span>
+            </h4>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Next Due Date (FUP)
-              </label>
-              <input
-                type="date"
-                value={editFup}
-                onChange={(e) => setEditFup(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Date of Birth (DOB)
-              </label>
-              <input
-                type="date"
-                value={editDob}
-                onChange={(e) => setEditDob(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Plan/Term/PPT *
+                </label>
+                <input
+                  type="text"
+                  value={editPlan}
+                  onChange={(e) => handlePlanChange(e.target.value)}
+                  placeholder="e.g. 815-21 or 833-22"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Start Date (DOC)
-              </label>
-              <input
-                type="date"
-                value={editDoc}
-                onChange={(e) => handleDocChange(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-blue-500"
-                required
-              />
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Policy Status
+                </label>
+                <select
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value as PolicyRecordStatus)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="active">Active (In Force)</option>
+                  <option value="due">Due (Premium Pending)</option>
+                  <option value="matured">Matured</option>
+                  <option value="claimed">Claimed</option>
+                  <option value="surrendered">Surrendered</option>
+                  <option value="lapsed">Lapsed</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Maturity Date (DOM)
-              </label>
-              <input
-                type="date"
-                value={editDom}
-                onChange={(e) => setEditDom(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-          </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Agent Notes
-            </label>
-            <textarea
-              value={editNotes}
-              onChange={(e) => setEditNotes(e.target.value)}
-              rows={2}
-              className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-blue-500"
-            />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Sum Assured (₹) *
+                </label>
+                <input
+                  type="number"
+                  value={editSumAssured}
+                  onChange={(e) => setEditSumAssured(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Premium (₹) *
+                </label>
+                <input
+                  type="number"
+                  value={editPremium}
+                  onChange={(e) => setEditPremium(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Premium Mode
+                </label>
+                <select
+                  value={editMode}
+                  onChange={(e) => setEditMode(e.target.value as PremiumMode)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="Yearly">Yearly</option>
+                  <option value="Half-Yearly">Half-Yearly</option>
+                  <option value="Quarterly">Quarterly</option>
+                  <option value="Monthly">Monthly</option>
+                  <option value="Single">Single</option>
+                  <option value="N/F">N/F</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Start Date (DOC) *
+                </label>
+                <input
+                  type="date"
+                  value={editDoc}
+                  onChange={(e) => handleDocChange(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Next Due Date (FUP) *
+                </label>
+                <input
+                  type="date"
+                  value={editFup}
+                  onChange={(e) => setEditFup(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Maturity Date (DOM) *
+                </label>
+                <input
+                  type="date"
+                  value={editDom}
+                  onChange={(e) => setEditDom(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Agent Notes
+              </label>
+              <textarea
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                rows={2}
+                placeholder="Any special remarks or policy comments"
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
           </div>
         </div>
       </Modal>

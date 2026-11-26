@@ -67,7 +67,7 @@ export function AppRouter() {
         path="/customers"
         element={
           <ProtectedRoute>
-            <CustomersPage />
+            <Navigate to="/policies" replace />
           </ProtectedRoute>
         }
       />
@@ -75,7 +75,7 @@ export function AppRouter() {
         path="/customers/:id"
         element={
           <ProtectedRoute>
-            <CustomerDetailsPage />
+            <Navigate to="/policies" replace />
           </ProtectedRoute>
         }
       />

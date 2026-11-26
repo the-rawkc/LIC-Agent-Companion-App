@@ -113,7 +113,7 @@ export function RemindersPage() {
               existingKeySet.add(key);
               displayList.push({
                 id: `due_${p.id}`,
-                customerId: p.customerId,
+                customerId: p.customerId || p.id,
                 policyId: p.id,
                 title: `Premium Due: Policy ${p.policyNumber}`,
                 description: `Installment Premium of ${formatCurrency(p.premiumAmount)} is due for ${p.customerName} (${p.premiumMode || 'Yearly'}).`,
@@ -141,7 +141,7 @@ export function RemindersPage() {
               existingKeySet.add(key);
               displayList.push({
                 id: `mat_${p.id}`,
-                customerId: p.customerId,
+                customerId: p.customerId || p.id,
                 policyId: p.id,
                 title: `Maturity Coming Up: Policy ${p.policyNumber}`,
                 description: `Policy matures on ${formatDate(p.maturityDate)} for ${p.customerName}. Plan: ${p.originalPlanString || p.planCode}.`,
@@ -199,14 +199,15 @@ export function RemindersPage() {
 
   const handleCreateReminder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle.trim() || !newDueDate || !newCustomerId) return;
+    if (!newTitle.trim() || !newDueDate) return;
 
     try {
+      const selectedPolicy = policies.find((p) => p.id === newPolicyId);
       await reminderRepository.create({
-        customerId: newCustomerId,
+        customerId: selectedPolicy?.customerId || selectedPolicy?.id || 'general',
         policyId: newPolicyId || undefined,
         title: newTitle.trim(),
-        description: newDescription.trim() || 'Follow-up task',
+        description: newDescription.trim() || (selectedPolicy ? `Follow-up for ${selectedPolicy.customerName} (Policy ${selectedPolicy.policyNumber})` : 'Follow-up task'),
         dueDate: newDueDate,
         reminderType: newType,
         status: 'pending',
@@ -565,45 +566,21 @@ export function RemindersPage() {
         <div className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Select Customer *
+              Select Policy (Optional)
             </label>
             <select
-              value={newCustomerId}
-              onChange={(e) => {
-                setNewCustomerId(e.target.value);
-                setNewPolicyId('');
-              }}
+              value={newPolicyId}
+              onChange={(e) => setNewPolicyId(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-blue-500"
-              required
             >
-              <option value="">-- Choose Customer --</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.displayName} {c.mobileNumber ? `(${c.mobileNumber})` : ''}
+              <option value="">-- General Task (No Policy Linked) --</option>
+              {policies.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.policyNumber} — {p.customerName} (₹{p.premiumAmount})
                 </option>
               ))}
             </select>
           </div>
-
-          {newCustomerId && availableCustomerPolicies.length > 0 && (
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Link to Policy (Optional)
-              </label>
-              <select
-                value={newPolicyId}
-                onChange={(e) => setNewPolicyId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">-- None (General Customer Task) --</option>
-                {availableCustomerPolicies.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.policyNumber} (Plan: {p.planCode}, Premium: ₹{p.premiumAmount})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">

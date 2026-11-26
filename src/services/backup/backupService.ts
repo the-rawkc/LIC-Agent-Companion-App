@@ -266,6 +266,10 @@ export const backupService = {
       'F.U.P.',
       'D.O.M.',
       'D.O.B.',
+      'Mobile Number',
+      'Alternate Mobile',
+      'Email',
+      'Address',
       'Status',
     ];
 
@@ -287,6 +291,10 @@ export const backupService = {
       escapeCsv(formatDate(p.firstUnpaidPremiumDate)),
       escapeCsv(formatDate(p.maturityDate)),
       escapeCsv(p.dateOfBirth ? formatDate(p.dateOfBirth) : ''),
+      escapeCsv(p.mobileNumber || ''),
+      escapeCsv(p.alternateNumber || ''),
+      escapeCsv(p.email || ''),
+      escapeCsv(p.address || ''),
       escapeCsv(p.recordStatus),
     ].join(','));
 
@@ -318,7 +326,9 @@ export const backupService = {
     const policies = await db.policies.toArray();
     const policyCountMap = new Map<string, number>();
     for (const p of policies) {
-      policyCountMap.set(p.customerId, (policyCountMap.get(p.customerId) || 0) + 1);
+      if (p.customerId) {
+        policyCountMap.set(p.customerId, (policyCountMap.get(p.customerId) || 0) + 1);
+      }
     }
 
     const headers = ['Customer Name', 'Mobile Number', 'Email', 'Address', 'Policies Count', 'Notes'];

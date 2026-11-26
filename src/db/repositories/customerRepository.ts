@@ -187,7 +187,7 @@ export const customerRepository = {
         // Check if any policy has matching name but unlinked customerId
         const nameNorm = normalizeSearchString(c.displayName || '');
         const matchingPolicy = allPolicies.find(
-          (p) => normalizeSearchString(p.customerName || '') === nameNorm && !customerIdsToDelete.has(p.customerId)
+          (p) => normalizeSearchString(p.customerName || '') === nameNorm && Boolean(p.customerId && !customerIdsToDelete.has(p.customerId))
         );
         if (matchingPolicy) {
           policiesToUpdate.push({ id: matchingPolicy.id, customerId: c.id });

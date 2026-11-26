@@ -73,6 +73,9 @@ export type ColumnKey =
   | 'premium'
   | 'dom'
   | 'dob'
+  | 'mobile'
+  | 'address'
+  | 'email'
   | 'sNo';
 
 export const UNIFORM_COLUMN_LABELS: Record<ColumnKey, string> = {
@@ -94,6 +97,9 @@ export const UNIFORM_COLUMN_LABELS: Record<ColumnKey, string> = {
   fup: 'F.U.P. (Next Due Date)',
   dom: 'D.O.M. (Maturity Date)',
   dob: 'D.O.B. (Date of Birth)',
+  mobile: 'Mobile Number',
+  address: 'Address',
+  email: 'Email',
 };
 
 interface ColumnDef {
@@ -594,6 +600,65 @@ const COLUMN_DEFS: ColumnDef[] = [
       /plan/i,
     ],
   },
+
+  // 12. Mobile / Phone Number
+  {
+    key: 'mobile',
+    priority: 85,
+    exact: [
+      'mobile',
+      'mobile no',
+      'mobile no.',
+      'mobile number',
+      'contact',
+      'contact no',
+      'contact number',
+      'phone',
+      'phone no',
+      'phone number',
+      'cell',
+      'cell no',
+    ],
+    patterns: [
+      /\bmobile\b/i,
+      /\bphone\b/i,
+      /\bcontact(\s*no)?\b/i,
+    ],
+    negativePatterns: [/agent/i, /branch/i],
+  },
+
+  // 13. Address
+  {
+    key: 'address',
+    priority: 80,
+    exact: [
+      'address',
+      'addr',
+      'customer address',
+      'residence',
+      'residence address',
+    ],
+    patterns: [
+      /\baddr(ess)?\b/i,
+    ],
+    negativePatterns: [/agent/i, /branch/i, /email/i],
+  },
+
+  // 14. Email
+  {
+    key: 'email',
+    priority: 80,
+    exact: [
+      'email',
+      'e-mail',
+      'email id',
+      'email address',
+    ],
+    patterns: [
+      /\be-?mail\b/i,
+    ],
+    negativePatterns: [/agent/i, /branch/i],
+  },
 ];
 
 /**
@@ -897,6 +962,9 @@ export async function extractPoliciesFromExcel(
       premium: bestColumnMap.premium !== undefined ? formatCell(row[bestColumnMap.premium]) : '',
       dom: bestColumnMap.dom !== undefined ? formatCell(row[bestColumnMap.dom]) : '',
       dob: bestColumnMap.dob !== undefined ? formatCell(row[bestColumnMap.dob]) : '',
+      mobile: bestColumnMap.mobile !== undefined ? formatCell(row[bestColumnMap.mobile]) : '',
+      address: bestColumnMap.address !== undefined ? formatCell(row[bestColumnMap.address]) : '',
+      email: bestColumnMap.email !== undefined ? formatCell(row[bestColumnMap.email]) : '',
     };
 
     // Only include row if at least policy number or customer name is present
